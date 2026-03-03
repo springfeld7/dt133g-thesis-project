@@ -6,25 +6,26 @@ reporting mechanism for tracking changes via original source coordinates.
 """
 
 from abc import ABC, abstractmethod
-from typing import TypedDict, List, Optional, Tuple
+from typing import Any, Dict, TypedDict, List, Tuple
 from .mutation_types import MutationAction
 from ..node import Node
 
 
-class MutationRecord(TypedDict, total=False):
+class MutationRecord(TypedDict):
     """
     Schema for recording a single mutation on a CST node.
 
     Attributes:
-        node_id (Optional[Tuple[int, int]]): The (row, col) start_point of the
-            node in the original source file. None for synthetic nodes.
-        action (MutationAction): The mutation type (RENAME, DELETE, MOVE, TYPE_CHANGE, INSERT).
-        metadata (dict): Operation-specific data (e.g., new_text, destination_path).
+        node_id (Tuple[int, int]): The unique identifier for the node.
+            - For original nodes: The (row, col) start_point.
+            - For synthetic nodes: A unique negative coordinate .
+        action (MutationAction): The mutation type (RENAME, DELETE, MOVE, INSERT).
+        metadata (Dict[str, Any]): Operation-specific data (e.g., 'new_text').
     """
 
-    node_id: Optional[Tuple[int, int]]
+    node_id: Tuple[int, int]
     action: MutationAction
-    metadata: dict
+    metadata: Dict[str, Any]
 
 
 class MutationRule(ABC):

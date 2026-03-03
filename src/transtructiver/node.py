@@ -31,7 +31,7 @@ class Node:
         end_point: tuple[int, int],
         type: str,
         text: Optional[str] = None,
-        children: Optional[List[Node]] = None
+        children: Optional[List[Node]] = None,
     ):
         """
         Initialize a new Node.
@@ -113,7 +113,7 @@ class Node:
             function_definition: add
         """
         prefix = "  " * indent
-        if (self.type is not 'newline') and (self.type is not 'whitespace'):
+        if (self.type != "newline") and (self.type != "whitespace"):
             line = f"{prefix}{self.type}"
 
             if self.text and not self.text == self.type:

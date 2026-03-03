@@ -12,8 +12,8 @@ def main():
     parser = Parser()
     cst, discard_reason = parser.parse(
         """
-def func(x, y):
-    x = 1
+def func():
+    return x
 """,
         "python",
     )

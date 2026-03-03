@@ -44,7 +44,7 @@ def _byte_to_point(byte_offset: int, line_starts: list[int]) -> tuple[int, int]:
         if byte_offset < start:
             break
         row = i
-    
+
     # Column is the offset from the start of the line
     col = byte_offset - line_starts[row]
     return (row, col)
@@ -73,7 +73,55 @@ def _point_to_byte(point: Point, line_starts: list[int], code_len: int) -> int:
     return min(line_starts[row] + col, code_len)
 
 
-def _space_nodes(source_bytes: bytes, start_byte: int, end_byte: int, line_starts: list[int]) -> list[Node]:
+def _flush_whitespace(
+    current_ws: str, current_start_byte: int, current_byte: int, line_starts: list[int]
+) -> Node | None:
+    """Flush accumulated whitespace into a Node.
+
+    Args:
+        current_ws (str): The accumulated whitespace string.
+        current_start_byte (int): Byte offset where whitespace starts.
+        current_byte (int): Current byte offset.
+        line_starts (list[int]): List of byte offsets for each line.
+
+    Returns:
+        Node | None: A whitespace Node if current_ws is non-empty, None otherwise.
+    """
+    if current_ws:
+        ws_start = _byte_to_point(current_start_byte, line_starts)
+        ws_end = _byte_to_point(current_byte, line_starts)
+        return Node(
+            start_point=ws_start,
+            end_point=ws_end,
+            type="whitespace",
+            text=current_ws,
+        )
+    return None
+
+
+def _create_gap_nodes(
+    start_point: Point, end_point: Point, source_bytes: bytes, line_starts: list[int], code_len: int
+) -> list[Node]:
+    """Create whitespace nodes for the gap between two points.
+
+    Args:
+        start_point (Point): The start point of the gap.
+        end_point (Point): The end point of the gap.
+        source_bytes (bytes): The full source bytes.
+        line_starts (list[int]): List of byte offsets for each line.
+        code_len (int): Total length of source code in bytes.
+
+    Returns:
+        list[Node]: List of whitespace/newline nodes for the gap.
+    """
+    gap_start_byte = _point_to_byte(start_point, line_starts, code_len)
+    gap_end_byte = _point_to_byte(end_point, line_starts, code_len)
+    return _space_nodes(source_bytes, gap_start_byte, gap_end_byte, line_starts)
+
+
+def _space_nodes(
+    source_bytes: bytes, start_byte: int, end_byte: int, line_starts: list[int]
+) -> list[Node]:
     """Create whitespace/newline nodes for a byte range.
 
     Splits the byte range into individual whitespace and newline nodes,
@@ -89,7 +137,7 @@ def _space_nodes(source_bytes: bytes, start_byte: int, end_byte: int, line_start
     Returns:
         list[Node]: List of whitespace/newline nodes for the range.
     """
-    
+
     if end_byte <= start_byte:
         return []
 
@@ -101,47 +149,37 @@ def _space_nodes(source_bytes: bytes, start_byte: int, end_byte: int, line_start
     current_ws = ""
     current_start_byte = start_byte
     current_byte = start_byte
-    
+
     for char in text:
         if char == "\n":
             # Flush any accumulated whitespace first
-            if current_ws:
-                ws_start = _byte_to_point(current_start_byte, line_starts)
-                ws_end = _byte_to_point(current_byte, line_starts)
-                nodes.append(Node(
-                    start_point=ws_start,
-                    end_point=ws_end,
-                    type="whitespace",
-                    text=current_ws,
-                ))
-                current_ws = ""
+            ws_node = _flush_whitespace(current_ws, current_start_byte, current_byte, line_starts)
+            if ws_node:
+                nodes.append(ws_node)
             # Add newline node
             nl_start = _byte_to_point(current_byte, line_starts)
             nl_end = _byte_to_point(current_byte + 1, line_starts)
-            nodes.append(Node(
-                start_point=nl_start,
-                end_point=nl_end,
-                type="newline",
-                text="\n",
-            ))
+            nodes.append(
+                Node(
+                    start_point=nl_start,
+                    end_point=nl_end,
+                    type="newline",
+                    text="\n",
+                )
+            )
             current_byte += 1
             current_start_byte = current_byte
+            current_ws = ""
         else:
             # Accumulate whitespace
             current_ws += char
             current_byte += 1
-    
+
     # Flush any remaining whitespace
-    if current_ws:
-        ws_start = _byte_to_point(current_start_byte, line_starts)
-        ws_end = _byte_to_point(current_byte, line_starts)
-        nodes.append(Node(
-            start_point=ws_start,
-            end_point=ws_end,
-            type="whitespace",
-            text=current_ws,
-        ))
-    
+    ws_node = _flush_whitespace(current_ws, current_start_byte, current_byte, line_starts)
+    if ws_node:
+        nodes.append(ws_node)
+
     return nodes
 
 
@@ -184,9 +222,9 @@ def convert_node(
 
         for child in ts_node.children:
             # Convert Point span to bytes and create whitespace nodes if gap exists
-            gap_start_byte = _point_to_byte(previous_end_point, line_starts, code_len)
-            gap_end_byte = _point_to_byte(child.start_point, line_starts, code_len)
-            ws_nodes = _space_nodes(source_bytes, gap_start_byte, gap_end_byte, line_starts)
+            ws_nodes = _create_gap_nodes(
+                previous_end_point, child.start_point, source_bytes, line_starts, code_len
+            )
             children.extend(ws_nodes)
 
             # Recursively convert child node
@@ -194,9 +232,9 @@ def convert_node(
             previous_end_point = child.end_point
 
         # Create whitespace nodes for trailing gap
-        gap_start_byte = _point_to_byte(previous_end_point, line_starts, code_len)
-        gap_end_byte = _point_to_byte(ts_node.end_point, line_starts, code_len)
-        ws_nodes = _space_nodes(source_bytes, gap_start_byte, gap_end_byte, line_starts)
+        ws_nodes = _create_gap_nodes(
+            previous_end_point, ts_node.end_point, source_bytes, line_starts, code_len
+        )
         children.extend(ws_nodes)
 
     return Node(

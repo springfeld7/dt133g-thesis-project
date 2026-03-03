@@ -22,6 +22,7 @@ MEANINGFUL_NODE_TYPES = [
     "suite",
     "lambda",
     "list_comprehension",
+    "identifier",
 ]
 
 TRIVIAL_NODE_TYPES = [
@@ -60,6 +61,15 @@ class Parser:
         Returns:
             bool: True if the node type matches any trivial pattern.
         """
+        # # Return statements with meaningful values are not trivial
+        # if node.type == "return_statement":
+        #     # Check if the return value is meaningful (not just a simple identifier)
+        #     if node.named_child_count > 0:
+        #         return_value = node.named_children[0]
+        #         # If the return value is meaningful (expression, call, etc.), not trivial
+        #         if self.is_meaningful(return_value):
+        #             return False
+
         return any(t in node.type for t in TRIVIAL_NODE_TYPES)
 
     def is_meaningful(self, node: TSNode) -> bool:
@@ -101,7 +111,9 @@ class Parser:
         target = body if body else node
 
         for child in target.named_children:
-            if self.is_meaningful(child) and not self.is_trivial(child):
+            if (self.is_meaningful(child) and not self.is_trivial(child)) or (
+                "return" in child.type and child.named_child_count > 0
+            ):
                 return True
 
         return False
@@ -134,10 +146,10 @@ class Parser:
         if all(child.is_error for child in root.children):
             return "root_error_only"
 
-        if not any(self.has_meaningful_structure(child) for child in root.children):
+        if any(self.has_meaningful_structure(child) for child in root.children):
+            return None
+        else:
             return "no_meaningful_structure"
-
-        return None
 
     # ------------------------------------------------------------
     # Parse

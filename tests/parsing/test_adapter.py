@@ -404,7 +404,7 @@ class TestConvertNodeWhitespace:
         ts_parser = TSParser()
         ts_parser.language = get_language("python")
         return ts_parser
-    
+
     def test_convert_node_generates_whitespace_nodes(self, parser_setup: TSParser):
         """Test that convert_node generates whitespace nodes."""
         code = """
@@ -422,7 +422,7 @@ def func():
         # Tree should contain whitespace nodes
         whitespace_nodes = [n for n in node.traverse() if n.type == "whitespace"]
         assert len(whitespace_nodes) > 0
-    
+
     def test_convert_node_generates_newline_nodes(self, parser_setup: TSParser):
         """Test that convert_node generates newline nodes."""
         code = """

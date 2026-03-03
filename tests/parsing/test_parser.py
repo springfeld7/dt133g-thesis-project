@@ -29,6 +29,7 @@ def make_node(
         children=children,
         named_children=named_children,
         child_count=child_count,
+        named_child_count=len(named_children),
         is_error=is_error,
     )
 
@@ -55,11 +56,6 @@ class TestParserTrivialNodeDetection:
     def parser(self):
         """Create a parser instance for testing."""
         return Parser()
-
-    def test_is_trivial_return_statement(self, parser):
-        """Test that return statements are identified as trivial."""
-        node = make_node("return_statement")
-        assert parser.is_trivial(node) is True
 
     def test_is_trivial_break_statement(self, parser):
         """Test that break statements are identified as trivial."""
@@ -141,10 +137,10 @@ class TestParserMeaningfulNodeDetection:
         node = make_node("suite")
         assert parser.is_meaningful(node) is True
 
-    def test_is_meaningful_non_meaningful_type(self, parser):
+    def test_is_meaningful_identifier(self, parser):
         """Test that non-meaningful types are not identified as meaningful."""
         node = make_node("identifier")
-        assert parser.is_meaningful(node) is False
+        assert parser.is_meaningful(node) is True
 
     def test_is_meaningful_operator_token(self, parser):
         """Test that operators are not meaningful."""
@@ -208,6 +204,21 @@ class TestParserHasMeaningfulStructure:
         body = make_node("compound_statement", named_children=[expr])
         func_node = make_node("function_definition", children=[body])
 
+        assert parser.has_meaningful_structure(func_node) is True
+
+    def test_has_meaningful_structure_empty_return(self, parser):
+        """Test function with empty return statement."""
+        ret = make_node("return_statement")
+        body = make_node("compound_statement", named_children=[ret])
+        func_node = make_node("function_definition", children=[body])
+        assert parser.has_meaningful_structure(func_node) is False
+
+    def test_has_meaningful_structure_return_assignment(self, parser):
+        """Test function with empty return statement."""
+        expr = make_node("expression")
+        ret = make_node("return_statement", named_children=[expr])
+        body = make_node("compound_statement", named_children=[ret])
+        func_node = make_node("function_definition", children=[body])
         assert parser.has_meaningful_structure(func_node) is True
 
 

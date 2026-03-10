@@ -28,7 +28,7 @@ def find_leaf(ts_node: TSNode) -> TSNode:
     for child in ts_node.children:
         leaf: TSNode = find_leaf(child)
         return leaf
-    
+
     return ts_node
 
 

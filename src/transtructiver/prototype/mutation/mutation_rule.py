@@ -1,45 +1,69 @@
-"""Mutation rules for transforming Abstract/Concrete Syntax Trees.
+"""mutation_rule.py
 
-This module defines concrete mutation rules that can be applied to transform
-syntax trees. Each rule implements a specific transformation strategy.
+Defines the MutationRule abstract base class and the MutationRecord schema.
+This module provides the interface for CST mutations and the 
+reporting mechanism for tracking changes via original source coordinates.
 """
 
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Tuple
+from .mutation_types import MutationAction
+from dataclasses import dataclass
+from .mutation_types import MutationAction, validate_action_metadata
+from ..node import Node
 
-class RenameIdentifiersRule:
-    """A mutation rule that renames all identifiers in the tree.
 
-    This rule applies a prefix "x_" to all identifier nodes in a syntax tree.
-    It recursively traverses the tree and modifies each identifier's text.
+@dataclass(frozen=True)
+class MutationRecord:
+    """
+    A record of a single source code transformation.
 
-    Example:
-        Before: Node(type='identifier', text='add')
-        After:  Node(type='identifier', text='x_add')
+    Attributes:
+        node_id (Tuple[int, int]): The unique coordinate identifier for the target
+            node (Original: (row, col) | Synthetic: negative coordinates).
+        action (MutationAction): The transformation type applied to the node.
+        metadata (Dict[str, Any]): Action-specific data required for verification,
+            validated against the action's schema.
     """
 
-    def apply(self, node):
-        """Apply the rename transformation to an identifier node and its descendants.
+    node_id: Tuple[int, int]
+    action: MutationAction
+    metadata: Dict[str, Any]
 
-        This method recursively traverses the syntax tree and prefixes all identifier
-        nodes with "x_". Non-identifier nodes are passed through unchanged but their
-        children are still processed.
+    def __post_init__(self):
+        """Enforce the mutation contract upon instantiation."""
+        validate_action_metadata(self.action, self.metadata)
+
+
+class MutationRule(ABC):
+    """
+    Interface for CST mutation logic.
+
+    Subclasses implement the apply method to modify a Tree-Sitter tree
+    and return change records used for manifest generation.
+    """
+
+    def __init__(self):
+        self.name = self.__class__.__name__
+
+    @abstractmethod
+    def apply(self, root: Node) -> List[MutationRecord]:
+        """
+        Applies a mutation to the CST and returns a log of modifications.
 
         Args:
-            node (Node): The root node to transform. Can be any node type.
+            root (Any): The root node of the tree to be mutated.
 
         Returns:
-            Node: The same node with identifiers renamed (modified in place).
-
-        Example:
-            >>> rule = RenameIdentifiersRule()
-            >>> tree = Node('identifier', text='x')
-            >>> result = rule.apply(tree)
-            >>> result.text
-            'x_x'
+            List[MutationRecord]: Records of all modifications made.
         """
-        if node.type == "identifier" and node.text is not None:
-            node.text = "x_" + node.text
+        pass
 
-        for child in node.children:
-            self.apply(child)
+    def __repr__(self) -> str:
+        """
+        Returns a string representation of the mutation rule.
 
-        return node
+        Used for debugging and logging to identify the specific rule
+        class being applied (e.g., '<ControlFlowFlattening>').
+        """
+        return f"<{self.name}>"

@@ -140,18 +140,12 @@ class TestPythonAnnotator:
         annotated = annotate_python(node)
 
         # Find function_definition node
-        func_defs = [
-            n for n in annotated.traverse() if n.type == "function_definition"
-        ]
+        func_defs = [n for n in annotated.traverse() if n.type == "function_definition"]
         assert len(func_defs) == 1
 
         # Function name should have semantic label
         func_def = func_defs[0]
-        function_names = [
-            n
-            for n in func_def.traverse()
-            if n.semantic_label == "function_name"
-        ]
+        function_names = [n for n in func_def.traverse() if n.semantic_label == "function_name"]
         assert len(function_names) == 1
 
     def test_annotate_variable_assignment(self, python_parser: TSParser):
@@ -161,10 +155,7 @@ class TestPythonAnnotator:
         annotated = annotate_python(node)
 
         # Find identifiers with variable_name label
-        var_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "variable_name"
-        ]
+        var_names = [n for n in annotated.traverse() if n.semantic_label == "variable_name"]
         assert len(var_names) == 1
 
     def test_annotate_class_name(self, python_parser: TSParser):
@@ -174,10 +165,7 @@ class TestPythonAnnotator:
         annotated = annotate_python(node)
 
         # Find class names
-        class_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "class_name"
-        ]
+        class_names = [n for n in annotated.traverse() if n.semantic_label == "class_name"]
         assert len(class_names) == 1
 
     def test_annotate_parameter_names(self, python_parser: TSParser):
@@ -187,10 +175,7 @@ class TestPythonAnnotator:
         annotated = annotate_python(node)
 
         # Find parameter names
-        param_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "parameter_name"
-        ]
+        param_names = [n for n in annotated.traverse() if n.semantic_label == "parameter_name"]
         assert len(param_names) == 2
 
     def test_annotate_global_variable(self, python_parser: TSParser):
@@ -201,7 +186,8 @@ class TestPythonAnnotator:
 
         # Find identifiers in global statement
         global_vars = [
-            n for n in annotated.traverse()
+            n
+            for n in annotated.traverse()
             if n.type == "identifier" and n.parent and n.parent.type == "global_statement"
         ]
         assert len(global_vars) == 1
@@ -214,10 +200,7 @@ class TestPythonAnnotator:
         annotated = annotate_python(node)
 
         # Type identifiers should have type_name label
-        type_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "type_name"
-        ]
+        type_names = [n for n in annotated.traverse() if n.semantic_label == "type_name"]
         assert len(type_names) == 1
 
     def test_annotate_whitespace_and_newlines_skipped(self, python_parser: TSParser):
@@ -230,8 +213,7 @@ class TestPythonAnnotator:
         whitespace_with_labels = [
             n
             for n in annotated.traverse()
-            if n.type in ("whitespace", "newline")
-            and n.semantic_label is not None
+            if n.type in ("whitespace", "newline") and n.semantic_label is not None
         ]
         assert len(whitespace_with_labels) == 0
 
@@ -250,10 +232,7 @@ public class Foo {
         annotated = annotate_java(node)
 
         # Find method names
-        function_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "function_name"
-        ]
+        function_names = [n for n in annotated.traverse() if n.semantic_label == "function_name"]
         assert len(function_names) == 1
 
     def test_annotate_class_name(self, java_parser: TSParser):
@@ -263,10 +242,7 @@ public class Foo {
         annotated = annotate_java(node)
 
         # Find class names
-        class_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "class_name"
-        ]
+        class_names = [n for n in annotated.traverse() if n.semantic_label == "class_name"]
         assert len(class_names) == 1
 
     def test_annotate_type_identifier(self, java_parser: TSParser):
@@ -281,10 +257,7 @@ public class Foo {
         annotated = annotate_java(node)
 
         # Type identifiers should be labeled
-        type_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "type_name"
-        ]
+        type_names = [n for n in annotated.traverse() if n.semantic_label == "type_name"]
         assert len(type_names) >= 1
 
     def test_annotate_field_access(self, java_parser: TSParser):
@@ -300,10 +273,7 @@ public class Foo {
         annotated = annotate_java(node)
 
         # Field/property access
-        var_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "property_name"
-        ]
+        var_names = [n for n in annotated.traverse() if n.semantic_label == "property_name"]
         assert len(var_names) == 1
 
     def test_annotate_method_invocation(self, java_parser: TSParser):
@@ -319,10 +289,7 @@ public class Foo {
         annotated = annotate_java(node)
 
         # Method calls should create function names
-        function_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "function_name"
-        ]
+        function_names = [n for n in annotated.traverse() if n.semantic_label == "function_name"]
         assert len(function_names) == 2
 
     def test_annotate_formal_parameter(self, java_parser: TSParser):
@@ -336,10 +303,7 @@ public class Foo {
         annotated = annotate_java(node)
 
         # Parameters should be labeled
-        param_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "parameter_name"
-        ]
+        param_names = [n for n in annotated.traverse() if n.semantic_label == "parameter_name"]
         assert len(param_names) == 2
 
 
@@ -353,10 +317,7 @@ class TestCppAnnotator:
         annotated = annotate_cpp(node)
 
         # Find function names
-        function_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "function_name"
-        ]
+        function_names = [n for n in annotated.traverse() if n.semantic_label == "function_name"]
         assert len(function_names) == 1
 
     def test_annotate_type_identifier(self, cpp_parser: TSParser):
@@ -375,10 +336,7 @@ int main() {
         annotated = annotate_cpp(node)
 
         # Type identifiers (custom types like struct/class)
-        type_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "type_name"
-        ]
+        type_names = [n for n in annotated.traverse() if n.semantic_label == "type_name"]
         assert len(type_names) == 1
 
     def test_annotate_variable_reference(self, cpp_parser: TSParser):
@@ -388,10 +346,7 @@ int main() {
         annotated = annotate_cpp(node)
 
         # Variable names should exist
-        var_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "variable_name"
-        ]
+        var_names = [n for n in annotated.traverse() if n.semantic_label == "variable_name"]
         assert len(var_names) == 3
 
     def test_annotate_field_identifier(self, cpp_parser: TSParser):
@@ -411,10 +366,7 @@ int main() {
         annotated = annotate_cpp(node)
 
         # Field/property access
-        property_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "property_name"
-        ]
+        property_names = [n for n in annotated.traverse() if n.semantic_label == "property_name"]
         assert len(property_names) == 1
 
     def test_annotate_namespace_identifier(self, cpp_parser: TSParser):
@@ -424,10 +376,7 @@ int main() {
         annotated = annotate_cpp(node)
 
         # Namespace names
-        namespace_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "namespace_name"
-        ]
+        namespace_names = [n for n in annotated.traverse() if n.semantic_label == "namespace_name"]
         assert len(namespace_names) == 1
 
     def test_annotate_class_name_in_destructor(self, cpp_parser: TSParser):
@@ -442,10 +391,7 @@ public:
         annotated = annotate_cpp(node)
 
         # Class names
-        class_names = [
-            n for n in annotated.traverse()
-            if n.semantic_label == "class_name"
-        ]
+        class_names = [n for n in annotated.traverse() if n.semantic_label == "class_name"]
         assert len(class_names) == 2
 
 
@@ -568,9 +514,7 @@ class Calculator:
 
         # Find all semantic labels
         all_labels = {
-            n.semantic_label
-            for n in annotated.traverse()
-            if n.semantic_label is not None
+            n.semantic_label for n in annotated.traverse() if n.semantic_label is not None
         }
 
         # Should have various annotation types
@@ -596,9 +540,7 @@ public class Hello {
 
         # Should have annotations
         all_labels = {
-            n.semantic_label
-            for n in annotated.traverse()
-            if n.semantic_label is not None
+            n.semantic_label for n in annotated.traverse() if n.semantic_label is not None
         }
         assert len(all_labels) > 0
 
@@ -620,8 +562,6 @@ int main() {
 
         # Should have annotations
         all_labels = {
-            n.semantic_label
-            for n in annotated.traverse()
-            if n.semantic_label is not None
+            n.semantic_label for n in annotated.traverse() if n.semantic_label is not None
         }
         assert len(all_labels) > 0

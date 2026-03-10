@@ -31,8 +31,8 @@ def adapt(ts_node: TSNode, source_bytes: bytes) -> Node:
     """
     # Step 1: Convert Tree-sitter node to internal Node representation
     node = convert_node(ts_node, source_bytes)
-    
+
     # Step 2: Apply semantic annotations based on language
     annotated_node = annotate(node)
-    
+
     return annotated_node

@@ -1,7 +1,7 @@
 """Unit tests for the RenameIdentifiersRule mutation rule."""
 
 import pytest
-from transtructiver.mutation.rule.identifier_renaming.rename_identifiers import (
+from transtructiver.mutation.rules.identifier_renaming.rename_identifiers import (
     RenameIdentifiersRule,
 )
 from transtructiver.node import Node

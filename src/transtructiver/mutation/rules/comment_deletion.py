@@ -39,7 +39,7 @@ class CommentDeletionRule(MutationRule):
         records: List[MutationRecord] = []
 
         for child in list(root.children):
-            if child.type == "comment":
+            if child.semantic_label == "comment":
                 # Remove comment from tree
                 root.remove_child(child)
 

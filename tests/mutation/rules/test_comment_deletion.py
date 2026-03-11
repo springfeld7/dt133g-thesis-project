@@ -55,6 +55,23 @@ def make_tree_without_comments():
     return Node((0, 0), (0, 0), "program", children=[Node((1, 0), (1, 3), "identifier", text="x")])
 
 
+def label_comments(root: Node) -> Node:
+    """
+    Traverse the tree and set semantic_label='comment' for all nodes
+    whose type is 'comment'.
+
+    Args:
+        root (Node): Root of the CST.
+
+    Returns:
+        Node: The same root with comment nodes labeled.
+    """
+    for node in root.traverse():
+        if node.type == "comment":
+            node.semantic_label = "comment"
+    return root
+
+
 def collect_node_types(root: Node):
     """Return a list of all node types in the tree (preorder traversal)."""
     return [node.type for node in root.traverse()]
@@ -65,20 +82,20 @@ def collect_node_types(root: Node):
 
 @pytest.fixture
 def comment_rule():
-    """Fixture providing a reusable CommentDeletionRule instance."""
+    """Fixture providing a reusable CommentDeletion instance."""
     return CommentDeletionRule()
 
 
 @pytest.fixture
 def sample_tree():
     """Fresh CST with comments for testing."""
-    return make_tree_with_comments()
+    return label_comments(make_tree_with_comments())
 
 
 @pytest.fixture
 def comments_only_tree():
     """CST containing only comment nodes."""
-    return make_tree_with_only_comments()
+    return label_comments(make_tree_with_only_comments())
 
 
 @pytest.fixture

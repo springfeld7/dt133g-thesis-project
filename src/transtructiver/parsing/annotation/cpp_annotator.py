@@ -32,7 +32,7 @@ def _annotate_node(node: Node) -> None:
     if node.type == "comment":
         if node.text is None:
             return
-        
+
         if node.text.startswith("//"):
             node.semantic_label = "line_comment"
         elif node.text.startswith("//*") or node.text.endswith("*/"):

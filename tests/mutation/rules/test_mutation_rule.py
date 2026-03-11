@@ -20,7 +20,7 @@ from src.transtructiver.mutation.mutation_types import MutationAction
 def test_cannot_instantiate_abc():
     """Ensure that the MutationRule ABC cannot be instantiated directly."""
     with pytest.raises(TypeError):
-        MutationRule()
+        MutationRule()  # type: ignore[abstract]
 
 
 def test_concrete_rule_implementation():
@@ -42,7 +42,7 @@ def test_concrete_rule_implementation():
     rule = RenameVariableRule()
     assert rule.name == "RenameVariableRule"
 
-    results = rule.apply(None)
+    results = rule.apply(None)  # type: ignore[abstract]
     assert isinstance(results[0], MutationRecord)
     assert results[0].node_id == (10, 5)
     assert results[0].action == MutationAction.RENAME
@@ -62,7 +62,7 @@ def test_synthetic_node_record():
             ]
 
     rule = InsertDeadCodeRule()
-    results = rule.apply(None)
+    results = rule.apply(None)  # type: ignore[abstract]
 
     assert results[0].node_id[0] < 0
     assert results[0].action == MutationAction.INSERT

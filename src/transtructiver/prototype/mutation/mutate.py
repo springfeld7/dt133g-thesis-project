@@ -8,7 +8,7 @@ Usage:
 """
 
 from ..mock.mock_cst import cst
-from .mutation_rule import RenameIdentifiersRule
+from .rule.rename_identifiers import RenameIdentifiersRule
 from .mutation_engine import MutationEngine
 
 
@@ -31,10 +31,10 @@ def main():
     cst.pretty()
 
     engine = MutationEngine([RenameIdentifiersRule()])
-    mutated = engine.applyMutations(cst)
+    engine.applyMutations(cst)
 
     print("\nAfter mutation:")
-    mutated.pretty()
+    cst.pretty()
 
 
 if __name__ == "__main__":

@@ -1,25 +1,39 @@
-"""Test cases for the adapter module.
+"""Test cases for the converter module.
 
 Tests cover the conversion of Tree-sitter nodes to local Node structures,
 including edge cases with various node types, Unicode content, and tree structures.
 """
 
 import pytest
-from tree_sitter import Node as TSNode, Parser as TSParser, Point
+from tree_sitter import Node as TSNode, Parser as TSParser
 from tree_sitter_language_pack import get_language
-from src.transtructiver.parsing.adapter import convert_node
+
 from src.transtructiver.node import Node
+from src.transtructiver.parsing.converter import convert_node
+
+
+@pytest.fixture
+def parser_setup() -> TSParser:
+    """Setup parser for Python tests."""
+    ts_parser = TSParser()
+    ts_parser.language = get_language("python")
+    return ts_parser
+
+
+def find_leaf(ts_node: TSNode) -> TSNode:
+    """Return the first leaf node in a Tree-sitter subtree."""
+    if ts_node.child_count == 0:
+        return ts_node
+
+    for child in ts_node.children:
+        leaf: TSNode = find_leaf(child)
+        return leaf
+
+    return ts_node
 
 
 class TestConvertNodeBasics:
     """Test suite for basic convert_node functionality."""
-
-    @pytest.fixture
-    def parser_setup(self) -> TSParser:
-        """Setup parser for tests."""
-        ts_parser = TSParser()
-        ts_parser.language = get_language("python")
-        return ts_parser
 
     def test_convert_leaf_node_with_text(self, parser_setup: TSParser):
         """Test converting a leaf node preserves its text content."""
@@ -66,16 +80,6 @@ def add(a, b):
         source_bytes = bytes(code, "utf8")
         tree = parser_setup.parse(source_bytes)
 
-        # Find a leaf node
-        def find_leaf(n):
-            if n.child_count == 0:
-                return n
-            for child in n.children:
-                result = find_leaf(child)
-                if result:
-                    return result
-            return None
-
         leaf = find_leaf(tree.root_node)
         node = convert_node(leaf, source_bytes)
 
@@ -84,13 +88,6 @@ def add(a, b):
 
 class TestConvertNodeHierarchy:
     """Test suite for node hierarchy conversion."""
-
-    @pytest.fixture
-    def parser_setup(self) -> TSParser:
-        """Setup parser for tests."""
-        ts_parser = TSParser()
-        ts_parser.language = get_language("python")
-        return ts_parser
 
     def test_convert_node_recursive_structure(self, parser_setup: TSParser):
         """Test that recursive conversion creates proper tree structure."""
@@ -160,13 +157,6 @@ class Calculator:
 class TestConvertNodeEdgeCases:
     """Test suite for edge cases in node conversion."""
 
-    @pytest.fixture
-    def parser_setup(self) -> TSParser:
-        """Setup parser for tests."""
-        ts_parser = TSParser()
-        ts_parser.language = get_language("python")
-        return ts_parser
-
     def test_convert_node_with_unicode_content(self, parser_setup: TSParser):
         """Test converting nodes with Unicode content via escapes."""
         code = """
@@ -211,15 +201,6 @@ variable_name = "\u3053\u3093\u306b\u3061\u306f"
         code = "x"
         source_bytes = bytes(code, "utf8")
         tree = parser_setup.parse(source_bytes)
-
-        def find_leaf(n):
-            if n.child_count == 0:
-                return n
-            for child in n.children:
-                result = find_leaf(child)
-                if result:
-                    return result
-            return None
 
         leaf = find_leaf(tree.root_node)
         node = convert_node(leaf, source_bytes)
@@ -292,13 +273,6 @@ content
 class TestConvertNodeTextExtraction:
     """Test suite for text extraction in convert_node."""
 
-    @pytest.fixture
-    def parser_setup(self) -> TSParser:
-        """Setup parser for tests."""
-        ts_parser = TSParser()
-        ts_parser.language = get_language("python")
-        return ts_parser
-
     def test_extract_text_from_correct_byte_range(self, parser_setup: TSParser):
         """Test that text is extracted from correct byte positions."""
         code = "variable_name = 42"
@@ -317,15 +291,6 @@ class TestConvertNodeTextExtraction:
         code = "abc = xyz"
         source_bytes = bytes(code, "utf8")
         tree = parser_setup.parse(source_bytes)
-
-        def find_leaf(n):
-            if n.child_count == 0:
-                return n
-            for child in n.children:
-                result = find_leaf(child)
-                if result:
-                    return result
-            return None
 
         leaf = find_leaf(tree.root_node)
         node = convert_node(leaf, source_bytes)
@@ -397,13 +362,6 @@ public class Foo {
 
 class TestConvertNodeWhitespace:
     """Test suite for whitespace handling in convert_node."""
-
-    @pytest.fixture
-    def parser_setup(self) -> TSParser:
-        """Setup parser for tests."""
-        ts_parser = TSParser()
-        ts_parser.language = get_language("python")
-        return ts_parser
 
     def test_convert_node_generates_whitespace_nodes(self, parser_setup: TSParser):
         """Test that convert_node generates whitespace nodes."""

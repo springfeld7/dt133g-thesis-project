@@ -23,6 +23,7 @@ class Node:
         is_named (bool): Whether the node is a named node in the grammar.
         start_point (tuple[int, int]): Starting position as (row, column).
         end_point (tuple[int, int]): Ending position as (row, column).
+        semantic_label (str, optional): Semantic label for the node (e.g., "function_name", "variable_name").
     """
 
     def __init__(
@@ -32,7 +33,7 @@ class Node:
         type: str,
         text: Optional[str] = None,
         children: Optional[List[Node]] = None,
-    ):
+    ) -> None:
         """
         Initialize a new Node.
 
@@ -49,8 +50,11 @@ class Node:
         self.type = type
         self.children = children or []
         self.text = text
+        self.parent: Optional[Node] = None
+        self.semantic_label: Optional[str] = None
+        self.field: Optional[str] = None
 
-    def add_child(self, child: Node):
+    def add_child(self, child: Node) -> None:
         """
         Add a child node to this node.
 
@@ -100,7 +104,7 @@ class Node:
         """
         return f"Node(type={self.type}, text={self.text})"
 
-    def pretty(self, indent: int = 0):
+    def pretty(self, indent: int = 0) -> None:
         """
         Print a human-readable tree representation of this node and its children.
 
@@ -114,9 +118,12 @@ class Node:
         """
         prefix = "  " * indent
         if (self.type != "newline") and (self.type != "whitespace"):
-            line = f"{prefix}{self.type}"
+            if self.field:
+                line = f"{prefix}('{self.field}') {self.type}"
+            else:
+                line = f"{prefix}{self.type}"
 
-            if self.text and not self.text == self.type:
+            if self.text:
                 line += f": {self.text}"
 
             print(line)

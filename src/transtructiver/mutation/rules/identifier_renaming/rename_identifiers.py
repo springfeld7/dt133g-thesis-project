@@ -9,7 +9,7 @@ MutationRecord entries for each rename action.
 
 from ._rename_appendage import _build_appendage_name
 from ....node import Node
-from ...mutation_rule import MutationRecord, MutationRule
+from ..mutation_rule import MutationRecord, MutationRule
 from ...mutation_types import MutationAction
 from ....parsing.annotation.annotator import ROOT_TO_LANGUAGE
 

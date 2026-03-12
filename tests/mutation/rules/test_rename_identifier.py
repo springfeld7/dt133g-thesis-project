@@ -5,7 +5,7 @@ from transtructiver.mutation.rules.identifier_renaming.rename_identifiers import
     RenameIdentifiersRule,
 )
 from transtructiver.node import Node
-from transtructiver.mutation.mutation_rule import MutationRecord
+from transtructiver.mutation.rules.mutation_rule import MutationRecord
 from transtructiver.mutation.mutation_types import MutationAction
 
 

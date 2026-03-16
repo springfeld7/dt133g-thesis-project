@@ -161,16 +161,7 @@ class WhitespaceNormalizationRule(MutationRule):
             new_ws.parent = root
             root.children.insert(idx + 1, new_ws)
 
-            records.append(
-                MutationRecord(
-                    node_id=child.end_point,
-                    action=MutationAction.INSERT,
-                    metadata={
-                        "new_val": " ",
-                        "node_type": "whitespace",
-                    },
-                )
-            )
+            records.append(self.record_insert(child.end_point, " ", "whitespace"))
         return records
 
     def _normalize_whitespace(self, node: Node) -> List[MutationRecord]:

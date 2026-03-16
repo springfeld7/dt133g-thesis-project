@@ -5,7 +5,7 @@ Defines the InsertVerificationStrategy for validating node additions.
 
 from typing import List, Optional
 
-from src.transtructiver.mutation.mutation_types import MutationAction
+from ...mutation.mutation_types import MutationAction
 from ...mutation.mutation_manifest import ManifestEntry
 from ...node import Node
 from .verification_strategy import VerificationStrategy

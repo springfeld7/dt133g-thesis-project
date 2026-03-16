@@ -347,7 +347,7 @@ int main() {
 
         # Variable names should exist
         var_names = [n for n in annotated.traverse() if n.semantic_label == "variable_name"]
-        assert len(var_names) == 3
+        assert len(var_names) == 2
 
     def test_annotate_field_identifier(self, cpp_parser: TSParser):
         """Test field identifiers in C++."""

@@ -1,0 +1,196 @@
+import importlib
+import json
+
+import pytest
+
+
+@pytest.mark.parametrize("module_name", ["transtructiver.cli", "transtructiver.prototype.cli"])
+def test_load_checkpoint_returns_zero_when_resume_disabled(tmp_path, module_name):
+    module = importlib.import_module(module_name)
+    checkpoint_path = tmp_path / "checkpoint.json"
+    checkpoint_path.write_text('{"next_index": 42}', encoding="utf-8")
+
+    assert module._load_checkpoint(str(checkpoint_path), resume=False) == 0
+
+
+@pytest.mark.parametrize("module_name", ["transtructiver.cli", "transtructiver.prototype.cli"])
+def test_load_checkpoint_reads_next_index(tmp_path, module_name):
+    module = importlib.import_module(module_name)
+    checkpoint_path = tmp_path / "checkpoint.json"
+    checkpoint_path.write_text('{"next_index": 7}', encoding="utf-8")
+
+    assert module._load_checkpoint(str(checkpoint_path), resume=True) == 7
+
+
+@pytest.mark.parametrize("module_name", ["transtructiver.cli", "transtructiver.prototype.cli"])
+def test_validate_rules_flags_unsupported(module_name):
+    module = importlib.import_module(module_name)
+
+    unsupported = module._validate_rules(["rename-identifier", "does-not-exist"])
+
+    assert unsupported == ["does-not-exist"]
+
+
+@pytest.mark.parametrize("module_name", ["transtructiver.cli", "transtructiver.prototype.cli"])
+def test_run_pipeline_happy_path_writes_artifacts_and_summary(monkeypatch, tmp_path, module_name):
+    module = importlib.import_module(module_name)
+
+    class DummyNode:
+        def __init__(self, code):
+            self.code = code
+
+        def clone(self):
+            return DummyNode(self.code)
+
+        def to_code(self):
+            return self.code
+
+    class FakeParser:
+        def parse(self, code, language):
+            return DummyNode("original_code"), None
+
+    class FakeManifest:
+        def to_dict(self):
+            return [{"node_id": [0, 0], "history": [], "metadata": {}}]
+
+    class FakeEngine:
+        def __init__(self):
+            self.manifest = FakeManifest()
+
+        def apply_mutations(self, node):
+            node.code = "mutated_code"
+
+    class FakeVerifier:
+        def __init__(self):
+            self.errors = []
+
+        def verify(self, orig, mut, manifest):
+            return True
+
+    class FakeOutputManager:
+        instance = None
+
+        def __init__(self, *args, **kwargs):
+            self.summary_writer = object()
+            self.manifest_calls = []
+            self.dataset_calls = []
+            FakeOutputManager.instance = self
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def write_manifest(self, idx, snippet_id, entries):
+            self.manifest_calls.append((idx, snippet_id, entries))
+
+        def write_dataset_row(self, idx, snippet_id, original_code, mutated_code):
+            self.dataset_calls.append((idx, snippet_id, original_code, mutated_code))
+
+        def output_paths_summary(self):
+            return ("manifest.jsonl", "augmented_dataset.parquet", "summary_log.csv")
+
+    summary_calls = []
+    totals_calls = []
+    save_calls = []
+
+    def fake_write_summary(**kwargs):
+        summary_calls.append(kwargs)
+
+    def fake_write_summary_totals(**kwargs):
+        totals_calls.append(kwargs)
+
+    def fake_save_checkpoint(path, next_index, stats):
+        save_calls.append(
+            (path, next_index, stats.parsed_ok, stats.verified_ok, stats.verified_fail)
+        )
+
+    monkeypatch.setattr(module, "Parser", FakeParser)
+    monkeypatch.setattr(
+        module, "_iter_snippets", lambda *args, **kwargs: [(0, "print(1)", "python")]
+    )
+    monkeypatch.setattr(module, "_build_engine", lambda *args, **kwargs: FakeEngine())
+    monkeypatch.setattr(module, "SIVerifier", FakeVerifier)
+    monkeypatch.setattr(module, "OutputManager", FakeOutputManager)
+    monkeypatch.setattr(module, "_save_checkpoint", fake_save_checkpoint)
+    monkeypatch.setattr(module.summary_logger, "write_summary", fake_write_summary)
+    monkeypatch.setattr(module.summary_logger, "write_summary_totals", fake_write_summary_totals)
+    monkeypatch.setattr(module, "_prototype_log", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_prototype_pretty", lambda *_args, **_kwargs: None)
+
+    checkpoint_path = tmp_path / "checkpoint.json"
+    options = module.PipelineOptions(checkpoint_path=str(checkpoint_path), checkpoint_every=1000)
+
+    module.run_pipeline(
+        filepath="dummy.parquet",
+        rules=["rename-identifier"],
+        output_dir=str(tmp_path),
+        rename_options=module.RenameRuleOptions(level=1, targets=["variable"]),
+        pipeline_options=options,
+    )
+
+    manager = FakeOutputManager.instance
+    assert manager is not None
+    assert len(manager.manifest_calls) == 1
+    assert len(manager.dataset_calls) == 1
+
+    assert summary_calls[0]["snippet_id"] == "row_0"
+    assert summary_calls[0]["verified"] is True
+    assert summary_calls[0]["writer"] is manager.summary_writer
+
+    assert totals_calls[0]["parsed_ok"] == 1
+    assert totals_calls[0]["verified_ok"] == 1
+    assert totals_calls[0]["verified_fail"] == 0
+
+    assert len(save_calls) == 1
+    assert save_calls[0][1] == 1
+
+
+@pytest.mark.parametrize("module_name", ["transtructiver.cli", "transtructiver.prototype.cli"])
+def test_run_pipeline_raises_for_unsupported_rule(tmp_path, module_name):
+    module = importlib.import_module(module_name)
+
+    with pytest.raises(ValueError):
+        module.run_pipeline(
+            filepath="dummy.parquet",
+            rules=["unsupported-rule"],
+            output_dir=str(tmp_path),
+        )
+
+
+@pytest.mark.parametrize("module_name", ["transtructiver.cli", "transtructiver.prototype.cli"])
+def test_run_pipeline_integration_writes_real_outputs(monkeypatch, tmp_path, module_name):
+    module = importlib.import_module(module_name)
+
+    snippet = "def add(a, b):\n    return a + b\n"
+    monkeypatch.setattr(module, "_iter_snippets", lambda *args, **kwargs: [(0, snippet, "python")])
+    monkeypatch.setattr(module, "_prototype_log", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_prototype_pretty", lambda *_args, **_kwargs: None)
+
+    output_dir = tmp_path / "out"
+    checkpoint_path = tmp_path / "checkpoint.json"
+    options = module.PipelineOptions(checkpoint_path=str(checkpoint_path), checkpoint_every=1000)
+
+    module.run_pipeline(
+        filepath="ignored.parquet",
+        rules=["rename-identifier"],
+        output_dir=str(output_dir),
+        pipeline_options=options,
+    )
+
+    manifest_file = output_dir / "manifest.jsonl"
+    dataset_file = output_dir / "augmented_dataset.parquet"
+    summary_file = output_dir / "summary_log.csv"
+
+    assert manifest_file.exists()
+    assert dataset_file.exists()
+    assert summary_file.exists()
+    assert checkpoint_path.exists()
+
+    manifest_row = json.loads(manifest_file.read_text(encoding="utf-8").splitlines()[0])
+    assert manifest_row["snippet_id"] == "row_0"
+
+    summary_rows = summary_file.read_text(encoding="utf-8").splitlines()
+    assert summary_rows[0].startswith("row_0,")
+    assert summary_rows[1].startswith("TOTAL,")

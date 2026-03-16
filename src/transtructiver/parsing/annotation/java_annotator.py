@@ -13,7 +13,7 @@ Annotation approach:
 """
 
 from ...node import Node
-from .annotator import ROOT_TO_LANGUAGE, get_naming_ancestor_label, get_unified_type_label
+from .annotator import NAMING_ANCESTOR_LABELS, get_unified_type_label
 from .annotation_utils import walk
 
 
@@ -39,8 +39,7 @@ def _annotate_node(node: Node) -> None:
 
     parent = node.parent
     if parent is None:
-        if node.type in ROOT_TO_LANGUAGE:
-            node.semantic_label = "root"
+        node.semantic_label = "root"
         return
 
     if node.type in ("identifier", "type_identifier"):
@@ -106,6 +105,10 @@ def _annotate_identifier(node: Node) -> None:
             node.semantic_label = "function_name"
         return
 
+    # Fallback for snippet fragments where declaration context is missing.
+    # This keeps unresolved identifiers eligible for scoped renaming.
+    node.semantic_label = "variable_name"
+
 
 def _try_label_from_naming_ancestor(node: Node) -> bool:
     """Try to label a node based on its naming ancestor.
@@ -121,9 +124,6 @@ def _try_label_from_naming_ancestor(node: Node) -> bool:
     Returns:
         bool: True if the node was successfully labeled, False otherwise.
     """
-    if node.field not in ("name", "declarator"):
-        return False
-
     naming_ancestor = _find_nearest_naming_ancestor(node)
     if naming_ancestor is not None:
         label = _label_for_naming_ancestor(naming_ancestor.type)
@@ -151,23 +151,9 @@ def _find_nearest_naming_ancestor(node: Node) -> Node | None:
         Node | None: The nearest naming ancestor, or None if no relevant
             context is found.
     """
-    naming_context_types = {
-        "method_declaration",
-        "annotation_type_element_declaration",
-        "formal_parameter",
-        "variable_declarator",
-        "class_declaration",
-        "constructor_declaration",
-        "compact_constructor_declaration",
-        "record_declaration",
-        "interface_declaration",
-        "annotation_type_declaration",
-        "enum_declaration",
-    }
-
     current = node.parent
     while current is not None:
-        if current.type in naming_context_types:
+        if current.type in NAMING_ANCESTOR_LABELS["java"]:
             return current
         if _is_naming_boundary(current):
             return None
@@ -208,7 +194,8 @@ def _label_for_naming_ancestor(ancestor_type: str) -> str | None:
         str | None: The semantic label (variable_name, parameter_name,
             function_name, class_name, etc.), or None if not recognized.
     """
-    return get_naming_ancestor_label("java", ancestor_type)
+    # return get_naming_ancestor_label("java", ancestor_type)
+    return NAMING_ANCESTOR_LABELS["java"].get(ancestor_type)
 
 
 def _has_operator(parent: Node, operator: str) -> bool:

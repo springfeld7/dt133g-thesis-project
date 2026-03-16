@@ -9,8 +9,6 @@ MutationRecord entries for each rename action.
 
 from ....node import Node
 from ..mutation_rule import MutationRecord, MutationRule
-from ...mutation_types import MutationAction
-from ....parsing.annotation.annotator import ROOT_TO_LANGUAGE
 from ._scope_manager import ScopeManager
 from ._name_generator import NameGenerator
 
@@ -27,6 +25,9 @@ class RenameIdentifiersRule(MutationRule):
     - ``NameGenerator``: base name and suffix generation
     - ``apply()``: CST traversal and MutationRecord emission
     """
+
+    # CLI rule name (used by the auto-discovery in cli.py).
+    rule_name = "rename-identifier"
 
     # Public target keywords mapped to the semantic labels produced by annotation.
     _TARGET_TO_LABEL = {
@@ -51,7 +52,6 @@ class RenameIdentifiersRule(MutationRule):
 
     # Node field names treated as declarations rather than references.
     _DECLARATION_FIELDS = {
-        "left",
         "name",
         "declarator",
         "parameter",
@@ -66,7 +66,6 @@ class RenameIdentifiersRule(MutationRule):
             level: Naming strategy level passed to :class:`NameGenerator`.
             targets: Optional rename target keywords such as ``variable``,
                 ``parameter``, ``property``, ``function``, or ``class``.
-                When omitted, the default targets are variables and parameters.
         """
         super().__init__()
         self.level = level
@@ -95,12 +94,15 @@ class RenameIdentifiersRule(MutationRule):
 
     def _is_declaration_identifier(self, node: Node) -> bool:
         """Return whether the identifier creates or updates scope bindings."""
+        if node.parent and "assignment" in node.parent.type:
+            if node.field == "left":
+                return True
         return node.field in self._DECLARATION_FIELDS
 
     def _is_renamable_identifier(self, node: Node) -> bool:
         """Return whether the identifier is eligible for renaming."""
         return (
-            node.type == "identifier"
+            "identifier" in node.type
             and bool(node.text)
             and node.semantic_label in self.allowed_labels
         )
@@ -199,16 +201,16 @@ class RenameIdentifiersRule(MutationRule):
             A list of MutationRecord entries for performed rename actions.
 
         Raises:
-            ValueError: If the root node type is not a supported language root.
+            ValueError: If root.language is missing.
         """
         if root is None:
             return []
 
-        language = ROOT_TO_LANGUAGE.get(root.type)
+        language = root.language.lower() if root.language else None
         if language is None:
             raise ValueError(
-                f"Unsupported root type '{root.type}'. "
-                f"Supported: {list(ROOT_TO_LANGUAGE.keys())}"
+                "No language found on root node. "
+                "Set root.language before applying RenameIdentifiersRule."
             )
 
         self._scope.reset()
@@ -227,6 +229,22 @@ class RenameIdentifiersRule(MutationRule):
                 self._scope.enter_scope()
                 stack.append((node, True))
 
+            # If a binding is already known for this identifier in the current
+            # scope stack, rename it regardless of semantic label coverage.
+            # This keeps declaration/reference renames consistent even when
+            # # a reference node was not annotated as variable_name/parameter_name.
+            if (
+                "identifier" in node.type
+                and node.text
+                and not self._is_declaration_identifier(node)
+            ):
+                existing = self._scope.resolve(node.text)
+                if existing is not None and existing != node.text:
+                    records.append(self.record_rename(node, existing))
+                    for child in reversed(node.children):
+                        stack.append((child, False))
+                    continue
+
             if not self._is_renamable_identifier(node) or not node.text:
                 for child in reversed(node.children):
                     stack.append((child, False))
@@ -235,9 +253,7 @@ class RenameIdentifiersRule(MutationRule):
             # Rename after scope setup so declarations and references resolve consistently.
             original_name = node.text
             new_name = self._resolve_name(node, original_name, language)
-            node.text = new_name
-            metadata = {"new_val": new_name}
-            records.append(MutationRecord(node.start_point, MutationAction.RENAME, metadata))
+            records.append(self.record_rename(node, new_name))
 
             for child in reversed(node.children):
                 stack.append((child, False))

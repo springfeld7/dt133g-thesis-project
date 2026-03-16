@@ -7,6 +7,7 @@ identity checks, strategy dispatch, and edge cases.
 import csv
 import pytest
 from src.transtructiver.verification.si_verifier import SIVerifier
+from src.transtructiver.reporting.summary_logger import write_summary
 from src.transtructiver.node import Node
 from src.transtructiver.mutation.mutation_manifest import MutationManifest
 from src.transtructiver.mutation.mutation_types import MutationAction
@@ -269,7 +270,7 @@ def test_write_summary_creates_file(verifier, tmp_path):
     snippet_id = "snippet_1"
     verified = True
 
-    verifier.write_summary(snippet_id, verified, log_path=str(log_file))
+    write_summary(snippet_id, verified, errors=verifier.errors, log_path=str(log_file))
 
     # File should exist
     assert log_file.exists()

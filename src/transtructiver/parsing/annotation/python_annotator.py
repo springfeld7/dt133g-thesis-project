@@ -14,7 +14,7 @@ Annotation approach:
 """
 
 from ...node import Node
-from .annotator import ROOT_TO_LANGUAGE, get_naming_ancestor_label, get_unified_type_label
+from .annotator import NAMING_ANCESTOR_LABELS, get_unified_type_label
 from .annotation_utils import walk
 
 
@@ -36,8 +36,7 @@ def _annotate_node(node: Node) -> None:
 
     parent = node.parent
     if parent is None:
-        if node.type in ROOT_TO_LANGUAGE:
-            node.semantic_label = "root"
+        node.semantic_label = "root"
         return
 
     if node.type == "string" and parent.type in ("module", "block"):
@@ -105,6 +104,11 @@ def _annotate_identifier(node: Node) -> None:
 
     if parent.type == "attribute":
         _annotate_attribute_identifier(node, parent)
+        return
+
+    # Fallback for snippet fragments where declaration context is missing.
+    # This keeps unresolved identifiers eligible for scoped renaming.
+    node.semantic_label = "variable_name"
 
 
 def _annotate_attribute_identifier(node: Node, parent: Node) -> None:
@@ -166,24 +170,11 @@ def _find_nearest_naming_ancestor(node: Node) -> Node | None:
         Node | None: The nearest naming ancestor, or None if no relevant
             context is found.
     """
-    naming_context_types = {
-        "function_definition",
-        "parameters",
-        "typed_parameter",
-        "default_parameter",
-        "typed_default_parameter",
-        "class_definition",
-        "global_statement",
-        "nonlocal_statement",
-        "argument_list",
-        "type",
-    }
-
     parent = node.parent
     if parent is None:
         return None
 
-    if parent.type in naming_context_types:
+    if parent.type in NAMING_ANCESTOR_LABELS["python"]:
         return parent
 
     return None
@@ -208,7 +199,7 @@ def _label_for_naming_ancestor(node: Node, naming_ancestor: Node) -> str | None:
         return (
             "class_name" if node.parent and node.parent.field == "superclasses" else "variable_name"
         )
-    return get_naming_ancestor_label("python", naming_ancestor.type)
+    return NAMING_ANCESTOR_LABELS["python"].get(naming_ancestor.type)
 
 
 def annotate_python(node: Node) -> Node:

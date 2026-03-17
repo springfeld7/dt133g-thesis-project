@@ -154,7 +154,7 @@ class WhitespaceNormalizationRule(MutationRule):
         # Insert a space if needed and not already present
         if (is_trigger_before or is_trigger_after) and next_node.type != "whitespace":
             new_ws = Node(
-                start_point=(-1, -1),
+                start_point=child.end_point,
                 end_point=(-1, -1),
                 type="whitespace",
                 text=" ",
@@ -162,7 +162,10 @@ class WhitespaceNormalizationRule(MutationRule):
             new_ws.parent = root
             root.children.insert(idx + 1, new_ws)
 
-            records.append(self.record_insert(child.end_point, " ", "whitespace"))
+            records.append(
+                self.record_insert(new_ws.start_point, new_text=" ", new_type="whitespace")
+            )
+
         return records
 
     def _normalize_whitespace(self, node: Node) -> List[MutationRecord]:

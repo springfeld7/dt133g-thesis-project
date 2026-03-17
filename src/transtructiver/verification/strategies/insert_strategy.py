@@ -37,9 +37,9 @@ class InsertVerificationStrategy(VerificationStrategy):
             ]
 
         # Inserted nodes must have negative line numbers to avoid collision
-        if mut.start_point[0] >= 0:
+        if mut.end_point[0] > 0:
             return [
-                f"Logic Error: Inserted node {mut.type} has non-synthetic coordinates at {mut.start_point}"
+                f"Logic Error: Inserted node {mut.type} has non-synthetic coordinates at {mut.end_point}"
             ]
 
         # Authorization Check: Ensure the manifest history contains an INSERT
@@ -47,6 +47,11 @@ class InsertVerificationStrategy(VerificationStrategy):
             last_action = entry.history[-1]["action"]
             return [
                 f"Unauthorized insertion: Manifest expected {last_action} for node at {mut.start_point}"
+            ]
+        # Verify that the synthetic node's anchor matches the manifest entry
+        if entry.original_id != mut.start_point:
+            return [
+                f"Mismatch: node anchor {mut.start_point} does not match manifest {entry.original_id}"
             ]
 
         return []

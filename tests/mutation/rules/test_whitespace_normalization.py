@@ -216,7 +216,9 @@ def test_inserted_node_properties(whitespace_rule):
 
     assert inserted_node.type == "whitespace"
     assert inserted_node.text == " "
-    assert inserted_node.start_point == (-1, -1)
+    assert inserted_node.end_point == (-1, -1)
+    # Verify insertion point matches the comma's end_point
+    assert inserted_node.start_point == tree.children[1].end_point
     assert inserted_node.parent == tree
 
 

@@ -8,7 +8,6 @@ uniform code formatting.
 
 from typing import List
 
-from transtructiver.prototype import node
 from .mutation_rule import MutationRule, MutationRecord
 from ..mutation_types import MutationAction
 from ...node import Node

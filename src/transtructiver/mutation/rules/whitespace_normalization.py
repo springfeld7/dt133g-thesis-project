@@ -45,6 +45,7 @@ class WhitespaceNormalizationRule(MutationRule):
         Args:
             base_unit (int): Number of spaces per indentation level.
         """
+        super().__init__()
         self.base_unit = base_unit
 
     def _is_indentation(self, node: Node) -> bool:

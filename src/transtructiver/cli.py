@@ -1,3 +1,4 @@
+
 """Command-line interface for the TranStructIVer pipeline.
 
 This module provides the entry point for running the complete transformation
@@ -8,6 +9,11 @@ Outputs written per run (inside ``--output-dir``):
     * ``augmented_dataset.parquet`` — original/mutated code pairs
     * ``summary_log.csv``      — semantics-preservation pass/fail log
 """
+
+# Python version precheck
+import sys
+if sys.version_info < (3, 14):
+    sys.exit("Error: Python 3.14 or higher is required. Please upgrade your interpreter.")
 
 import argparse
 import importlib

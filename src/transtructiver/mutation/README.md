@@ -17,6 +17,8 @@ This directory contains modular mutation rules for transforming Concrete Syntax 
 - `action`: a `MutationAction` describing the type of transformation
 - `metadata`: a dictionary with action-specific data, validated against the action's schema
 
+> **Note:** Mutation rules and tests require Python 3.14 or higher. For setup and troubleshooting, see the [main project README](../../../../README.md).
+
 ### Example Skeleton
 
 ```python

@@ -1,6 +1,6 @@
-# Transtructiver
+# TranStructIVer
 
-Transtructiver is a modular framework for code mutation, semantic annotation, and verification across multiple programming languages.
+TranStructIVer (Transformation and Structural Isomorphism Verification) is a modular framework for code mutation, semantic annotation, and verification across multiple programming languages.
 
 > **Note:** This project requires Python 3.14 or higher. You can check your version with:
 > ```sh
@@ -57,13 +57,13 @@ Run the CLI:
 - **With pip/venv:**
     ```sh
     # Run the CLI with options
-    python -m src.transtructiver.cli [options]
+    python -m transtructiver.cli [options]
 
     # See the CLI help
-    python -m src.transtructiver.cli --help
+    python -m transtructiver.cli --help
 
     # Example with a config file
-    python -m src.transtructiver.cli <path-to-dataset> --config transtructiver.config.yaml
+    python -m transtructiver.cli <path-to-dataset> --config transtructiver.config.yaml
     ```
 
 **Config file:**  

@@ -37,9 +37,7 @@ languages within transformation pipelines.
 
 import random
 from abc import ABC, abstractmethod
-from tempfile import template
 from typing import ClassVar, List, Any, Optional
-from unittest import case
 
 # Configuration for DeadCodeLexicon
 # These values define the range and characteristics of the random values generated for dead code lexicon

@@ -6,7 +6,7 @@ assignment statements, identity modifications, opaque predicates, and unreachabl
 """
 
 import random
-from typing import List, Any, Optional
+from typing import Any
 from .dead_code_lexicon import DeadCodeLexicon
 
 
@@ -17,9 +17,6 @@ class PythonLexicon(DeadCodeLexicon):
     Maintains internal state during a code generation transaction to ensure
     that identity operations (modifications) are compatible with the
     variable's assigned data type.
-
-    Attributes:
-        _current_type (Optional[str]): Tracks the type of the current variable for type-safe modifications.
     """
 
     # Subclass-specific population of base-class lists
@@ -39,11 +36,11 @@ class PythonLexicon(DeadCodeLexicon):
         "while False",
         "while 0",
         "while 1 == 2",
-        "for _ in []",
-        "for _ in ()",
-        "for _ in set()",
-        "for _ in range(0)",
-        "for _ in {}.values()",
+        "for {var} in []",
+        "for {var} in ()",
+        "for {var} in set()",
+        "for {var} in range(0)",
+        "for {var} in {}.values()",
     ]
 
     FAKE_USE_PATTERNS = [
@@ -74,7 +71,6 @@ class PythonLexicon(DeadCodeLexicon):
             rng (random.Random): A seeded random instance for deterministic generation.
         """
         super().__init__(rng)
-        self._current_type: Optional[str] = None
 
     def generate_random_value(self) -> Any:
         """
@@ -87,7 +83,7 @@ class PythonLexicon(DeadCodeLexicon):
         Raises:
             RuntimeError: If an unsupported type is generated.
         """
-        self._current_type = self.rng.choice(["int", "float", "str"])
+        self._current_type = self._rng.choice(["int", "float", "str"])
 
         match self._current_type:
             case "int":
@@ -114,33 +110,6 @@ class PythonLexicon(DeadCodeLexicon):
         val_repr = repr(value) if isinstance(value, str) else value
         return f"{var_name} = {val_repr}"
 
-    def _get_meaningless_modification(self, var_name: str) -> str:
-        """
-        Generates a type-safe identity operation for the current variable.
-
-        Args:
-            var_name (str): The name of the variable to 'modify'.
-
-        Returns:
-            str: A Python statement that performs a no-op modification.
-        """
-        if self._current_type == "str":
-            return self.rng.choice(self.IDENTITY_OPS_STR).format(var=var_name)
-
-        return self.rng.choice(self.IDENTITY_OPS_NUMERIC).format(var=var_name)
-
-    def _get_fake_use(self, var_name: str) -> str:
-        """
-        Generates a statement that references the variable to prevent 'unused' warnings.
-
-        Args:
-            var_name (str): The variable name to reference.
-
-        Returns:
-            str: A Python statement consuming the variable.
-        """
-        return self.rng.choice(self.FAKE_USE_PATTERNS).format(var=var_name)
-
     def format_block(self, header: str, body: str, prefix: str, is_if: bool) -> str:
         """
         Wraps code in a Python block (if or loop) with correct colon syntax.
@@ -161,21 +130,3 @@ class PythonLexicon(DeadCodeLexicon):
             stmt_header = header
 
         return f"{prefix}{stmt_header}:\n{body}"
-
-    def _get_opaque_predicates(self) -> List[str]:
-        """
-        Provides Python-specific boolean expressions that are always False.
-
-        Returns:
-            List[str]: Impossible conditions for if-blocks.
-        """
-        return self.OPAQUE_PREDICATES
-
-    def _get_unreachable_loop_headers(self) -> List[str]:
-        """
-        Provides Python loop headers that will never execute their body.
-
-        Returns:
-            List[str]: Unreachable loop statements.
-        """
-        return self.UNREACHABLE_LOOP_HEADERS

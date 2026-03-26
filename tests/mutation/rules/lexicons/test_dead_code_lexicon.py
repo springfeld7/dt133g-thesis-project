@@ -33,7 +33,7 @@ class MinimalLexicon(DeadCodeLexicon):
 
     # --- Populate required class-level lists ---
     OPAQUE_PREDICATES = ["NEVER"]
-    UNREACHABLE_LOOP_HEADERS = ["LOOP(_)ZERO"]
+    UNREACHABLE_LOOP_HEADERS = ["LOOP({var})ZERO"]
     FAKE_USE_PATTERNS = ["use({var})"]
     IDENTITY_OPS_STR = ["{var} = {var} + ''"]
     IDENTITY_OPS_NUMERIC = ["{var} += 0"]
@@ -170,13 +170,10 @@ def test_get_random_dead_code_loop_wrap(lexicon, monkeypatch):
 
 
 def test_loop_var_is_applied_to_header(lexicon, monkeypatch):
-    """Ensure that the loop_var correctly replaces '_' in unreachable loop headers."""
+    """Ensure that the loop_var correctly replaces '{var}' in unreachable loop headers."""
 
     # Force loop_wrap strategy
     monkeypatch.setattr(lexicon._rng, "choice", lambda x: "loop_wrap" if "loop_wrap" in x else x[0])
-
-    # Use a header with a placeholder
-    lexicon.__class__.UNREACHABLE_LOOP_HEADERS = ["LOOP(_)ZERO"]
 
     loop_var = "i"
     output = lexicon.get_random_dead_code("v", loop_var, "")
@@ -186,7 +183,7 @@ def test_loop_var_is_applied_to_header(lexicon, monkeypatch):
 
     # The placeholder should be replaced
     assert loop_var in header_line
-    assert "_" not in header_line  # no placeholder remaining
+    assert "{var}" not in header_line  # no placeholder remaining
     assert "LOOP(i)ZERO" in header_line
 
 

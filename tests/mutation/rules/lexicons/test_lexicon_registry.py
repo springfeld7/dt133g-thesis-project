@@ -43,8 +43,8 @@ def test_get_lexicon_whitespace_handling():
 
 def test_get_lexicon_unsupported_raises_error():
     """Should raise a KeyError with a helpful message for unknown languages."""
-    with pytest.raises(KeyError, match="No DeadCodeLexicon registered for language: cobol"):
-        get_lexicon("cobol")
+    with pytest.raises(KeyError, match="No DeadCodeLexicon registered for language: nolanguage"):
+        get_lexicon("nolanguage")
 
 
 def test_registry_map_contains_expected_keys():

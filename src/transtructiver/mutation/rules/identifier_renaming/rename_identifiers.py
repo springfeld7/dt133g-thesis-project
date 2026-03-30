@@ -9,7 +9,7 @@ MutationRecord entries for each rename action.
 
 from ....node import Node
 from ..mutation_rule import MutationRecord, MutationRule
-from ._scope_manager import ScopeManager
+from ..utils.scope_manager import ScopeManager
 from ._name_generator import NameGenerator
 
 

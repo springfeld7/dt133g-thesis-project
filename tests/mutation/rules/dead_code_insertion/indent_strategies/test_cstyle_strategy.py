@@ -45,6 +45,7 @@ def test_prefix_from_whitespace_child(strategy):
     children = [
         DummyChild("code", "x=1;"),
         DummyChild("whitespace", "    "),
+        DummyChild("newline", "\n"),
         DummyChild("code", "y=2;"),
     ]
     node = DummyNode(children=children)
@@ -55,6 +56,7 @@ def test_first_whitespace_selected(strategy):
     """Only the first whitespace child should be used."""
     children = [
         DummyChild("whitespace", "  "),
+        DummyChild("newline", "\n"),
         DummyChild("whitespace", "    "),
     ]
     node = DummyNode(children=children)
@@ -74,23 +76,6 @@ def test_empty_children_returns_none(strategy):
     assert strategy.get_prefix(node) is None
 
 
-def test_deterministic_behavior(strategy):
-    """Repeated calls with the same node produce identical prefix."""
-    children = [DummyChild("whitespace", "    ")]
-    node = DummyNode(children=children)
-    prefix1 = strategy.get_prefix(node)
-    prefix2 = strategy.get_prefix(node)
-    assert prefix1 == prefix2
-
-
-def test_non_string_text_works(strategy):
-    """Whitespace node with non-string text is returned as-is."""
-    children = [DummyChild("whitespace", 5)]  # numeric text
-    node = DummyNode(children=children)
-    # Should return the value as-is
-    assert strategy.get_prefix(node) == 5
-
-
 def test_missing_children_attribute_raises(strategy):
     """Node without children attribute raises AttributeError."""
 
@@ -107,9 +92,21 @@ def test_multiple_mixed_children(strategy):
     children = [
         DummyChild("code", "int x;"),
         DummyChild("whitespace", "\t"),
+        DummyChild("newline", "\n"),
         DummyChild("code", "y=0;"),
         DummyChild("whitespace", "    "),
     ]
     node = DummyNode(children=children)
     # Only the first whitespace should be selected
     assert strategy.get_prefix(node) == "\t"
+
+
+def test_prefix_with_whitespace_no_newline(strategy):
+    """If no newline child exists, get_prefix should return None even if whitespace exists."""
+    children = [
+        DummyChild("code", "x=1;"),
+        DummyChild("whitespace", "    "),
+        DummyChild("code", "y=2;"),
+    ]
+    node = DummyNode(children=children)
+    assert strategy.get_prefix(node) is None

@@ -63,6 +63,7 @@ class TestIndentStrategyRegistry:
         children = [
             DummyChild("code", "int x;"),
             DummyChild("whitespace", "  "),
+            DummyChild("newline", "\n"),
             DummyChild("code", "y=0;"),
         ]
         node = DummyCNode(children)
@@ -72,6 +73,7 @@ class TestIndentStrategyRegistry:
         """CStyleIndent returns first whitespace child for C++ nodes."""
         children = [
             DummyChild("whitespace", "    "),
+            DummyChild("newline", "\n"),
             DummyChild("code", "int y;"),
         ]
         node = DummyCNode(children)

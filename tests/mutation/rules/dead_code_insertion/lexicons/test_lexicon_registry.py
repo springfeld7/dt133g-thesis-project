@@ -14,6 +14,7 @@ from src.transtructiver.mutation.rules.dead_code_insertion.lexicons.python_lexic
 )
 from src.transtructiver.mutation.rules.dead_code_insertion.lexicons.java_lexicon import JavaLexicon
 from src.transtructiver.mutation.rules.dead_code_insertion.lexicons.cpp_lexicon import CppLexicon
+from src.transtructiver.exceptions import UnsupportedLanguageError
 
 
 # ===== Positive Cases =====
@@ -41,21 +42,28 @@ def test_get_lexicon_whitespace_handling():
 # ===== Negative Cases & Edge Cases =====
 
 
-def test_get_lexicon_unsupported_raises_error():
-    """Should raise a KeyError with a helpful message for unknown languages."""
-    with pytest.raises(KeyError, match="No DeadCodeLexicon registered for language: nolanguage"):
-        get_lexicon("nolanguage")
-
-
 def test_registry_map_contains_expected_keys():
     """Ensure the underlying map hasn't been accidentally cleared or corrupted."""
     expected_keys = {"python", "java", "cpp"}
     assert expected_keys.issubset(set(LEXICON_MAP.keys()))
 
 
-def test_get_lexicon_empty_string():
-    """Should raise KeyError for empty or whitespace-only strings."""
-    with pytest.raises(KeyError):
-        get_lexicon("")
-    with pytest.raises(KeyError):
-        get_lexicon("   ")
+@pytest.mark.parametrize("unsupported", ["nolanguage", " ", ""])
+def test_get_lexicon_raises_unsupported_language_error(unsupported: str):
+    """
+    Test that unsupported, whitespace, or empty strings raise UnsupportedLanguageError.
+
+    Args:
+        unsupported (str): The invalid language identifier to test.
+
+    Returns:
+        None
+    """
+    with pytest.raises(UnsupportedLanguageError) as exc_info:
+        get_lexicon(unsupported)
+
+    # Verify the error message contains the exact input provided
+    assert str(exc_info.value) == f"Unsupported language: {unsupported}"
+
+    # Verify the custom 'language' attribute matches the input
+    assert exc_info.value.language == unsupported

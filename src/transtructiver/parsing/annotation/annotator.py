@@ -52,14 +52,16 @@ UNIFIED_TYPE_LABELS = {
         ],
         "class_scope",
     ),
-    **dict.fromkeys(["block", "compound_statement", "class_body"], "block_scope"),
+    **dict.fromkeys(
+        ["block", "compound_statement", "class_body", "constructor_body"], "block_scope"
+    ),
     **dict.fromkeys(["for_statement", "while_statement", "for_range_loop"], "loop_scope"),
 }
 
 
 # Language-specific semantic labels for declaration ancestors.
 # Maps (language, ancestor_node_type) pairs to semantic labels that classify
-# the identifiers within those contexts. For example, an identifier within a
+
 # 'formal_parameter' context in Java gets labeled 'parameter_name'.
 #
 # Used to annotate identifiers based on their declaration context, enabling
@@ -101,7 +103,7 @@ NAMING_ANCESTOR_LABELS = {
     "cpp": {
         **dict.fromkeys(["function_declarator", "function_definition"], "function_name"),
         **dict.fromkeys(["class_specifier", "struct_specifier", "enum_specifier"], "class_name"),
-        **dict.fromkeys(
+        **dict.fromkeys(  # the identifiers within those contexts. For example, an identifier within a
             ["init_declarator", "field_declaration", "enumerator", "preproc_def"], "variable_name"
         ),
         "parameter_declaration": "parameter_name",

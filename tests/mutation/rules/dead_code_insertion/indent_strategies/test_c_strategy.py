@@ -8,7 +8,7 @@ Verifies:
 """
 
 import pytest
-from src.transtructiver.mutation.rules.dead_code_insertion.indent_strategies.c_strategy import (
+from src.transtructiver.mutation.rules.dead_code_insertion.indent_strategies.cstyle_strategy import (
     CStyleIndent,
 )
 

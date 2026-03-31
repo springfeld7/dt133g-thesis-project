@@ -12,7 +12,7 @@ class PythonIndent(IndentStrategy):
     to determine the required indentation level.
     """
 
-    def get_prefix(self, node) -> str:
+    def get_prefix(self, node) -> str | None:
         """
         In Python, the block node's start_point[1] (column) matches
         the indentation of its first logical statement.
@@ -21,6 +21,10 @@ class PythonIndent(IndentStrategy):
             node (Node): The 'block_scope' node being analyzed.
 
         Returns:
-            str: The whitespace string to be used as a prefix for inserted code.
+            str | None: The whitespace string to be used as a prefix for inserted code,
+                        or None if the column information is unavailable.
         """
+        if node.start_point[1] is None:
+            return None
+
         return " " * node.start_point[1]

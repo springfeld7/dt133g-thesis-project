@@ -13,7 +13,7 @@ class CStyleIndent(IndentStrategy):
     by looking for a whitespace child node following the opening brace.
     """
 
-    def get_prefix(self, node) -> str:
+    def get_prefix(self, node) -> str | None:
         """
         Iterates through children to find a 'whitespace' node.
         If none exists (e.g., minified code), falls back to parent + 4.
@@ -22,8 +22,8 @@ class CStyleIndent(IndentStrategy):
             node (Node): The 'block_scope' node being analyzed.
 
         Returns:
-            str: The whitespace string to be used as a prefix for inserted code,
-                 or None if no suitable prefix can be determined.
+            str | None: The whitespace string to be used as a prefix for inserted code,
+                        or None if no suitable prefix can be determined.
         """
         for child in node.children:
             if child.type == "whitespace":

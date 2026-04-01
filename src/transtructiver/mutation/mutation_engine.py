@@ -52,6 +52,10 @@ class MutationEngine:
         manifest = MutationManifest()
         context = MutationContext()
 
+        # Ensure that WhitespaceNormalizationRule runs first
+        # to ensure DeadCodeInsertionRule relies upon consistent indentation
+        self.rules.sort(key=lambda r: 0 if r.rule_name == "whitespace-normalization" else 1)
+
         for rule in self.rules:
             local_changes = rule.apply(cst, context)
             self._merge_to_manifest(manifest, local_changes, rule.name)

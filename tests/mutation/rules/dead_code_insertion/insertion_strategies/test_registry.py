@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.transtructiver.exceptions import UnsupportedLanguageError
+from transtructiver.exceptions import UnsupportedLanguageError
 from transtructiver.mutation.rules.dead_code_insertion.insertion_strategies.registry import (
     get_strategy,
     _STRATEGY_MAP,

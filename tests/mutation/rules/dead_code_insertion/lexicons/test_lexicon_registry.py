@@ -14,7 +14,7 @@ from src.transtructiver.mutation.rules.dead_code_insertion.lexicons.python_lexic
 )
 from src.transtructiver.mutation.rules.dead_code_insertion.lexicons.java_lexicon import JavaLexicon
 from src.transtructiver.mutation.rules.dead_code_insertion.lexicons.cpp_lexicon import CppLexicon
-from src.transtructiver.exceptions import UnsupportedLanguageError
+from transtructiver.exceptions import UnsupportedLanguageError
 
 
 # ===== Positive Cases =====

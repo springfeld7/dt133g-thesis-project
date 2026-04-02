@@ -10,7 +10,7 @@ from .dead_code_lexicon import DeadCodeLexicon
 from .python_lexicon import PythonLexicon
 from .java_lexicon import JavaLexicon
 from .cpp_lexicon import CppLexicon
-from src.transtructiver.exceptions import UnsupportedLanguageError
+from transtructiver.exceptions import UnsupportedLanguageError
 
 # Mapping normalized language strings to their respective Class types
 LEXICON_MAP: Dict[str, Type[DeadCodeLexicon]] = {

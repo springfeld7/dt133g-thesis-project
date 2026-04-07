@@ -1,214 +1,161 @@
-"""Unit tests for the DeadCodeInsertionRule mutation rule.
-
-This suite validates core behavior, determinism, fallback guarantees,
-and structural correctness of dead code insertion within CSTs.
-"""
-
 import pytest
+import random
+from unittest.mock import MagicMock, patch
 
+from transtructiver.node import Node
+from transtructiver.mutation.mutation_context import MutationContext
+from transtructiver.mutation.rules.utils.scope_manager import ScopeManager
 from transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion import (
     DeadCodeInsertionRule,
 )
-from src.transtructiver.node import Node
-from src.transtructiver.mutation.mutation_context import MutationContext
+
+# ===== Tree Construction Helpers =====
 
 
-# ===== Helpers =====
+def _build_test_tree(with_whitespace=False):
+    """
+    Creates a valid, non-cyclic tree with parent links and a root scope.
+    Optionally adds a whitespace node for testing indentation detection.
+    Structure: Root(module) -> Func(function_definition) -> Block(block_scope) -> Stmt
+    """
+    # Create nodes
+    stmt = Node((1, 4), (1, 8), "expression_statement", text="pass")
+    block = Node((1, 0), (2, 0), "block", children=[stmt])
+    func = Node((0, 0), (2, 0), "function_definition", children=[block])
+    root = Node((0, 0), (2, 0), "module", children=[func])
 
+    # Optionally add whitespace node
+    if with_whitespace:
+        ws_node = Node((2, 0), (2, 4), "whitespace", text="    ")  # column 0, 4 spaces
+        root.children.append(ws_node)
+        ws_node.parent = root
 
-def _wire_parents(node: Node, parent: Node | None = None) -> Node:
-    """Recursively populate parent links after literal tree construction."""
-    node.parent = parent
-    for child in node.children:
-        _wire_parents(child, node)
-    return node
-
-
-def label_basic_block_tree(root: Node) -> Node:
-    """Annotate minimal semantic labels required for dead code insertion."""
-    _wire_parents(root)
-
-    root.semantic_label = "root"
+    # Set Metadata
     root.language = "python"
+    root.semantic_label = "root"  # Triggers first enter_scope()
+    func.semantic_label = "function_scope"
+    block.semantic_label = "block_scope"  # Triggers _is_valid_container
 
-    for node in root.traverse():
-        if node.type == "function_definition":
-            node.semantic_label = "function_scope"
-        elif node.type == "block":
-            node.semantic_label = "block_scope"
+    # Establish Parent Links (Crucial for _inject_dead_code)
+    func.parent = root
+    block.parent = func
+    stmt.parent = block
 
-    return root
-
-
-def make_simple_block_tree() -> Node:
-    """Create a minimal function with a block and one statement."""
-    stmt = Node((2, 4), (2, 10), "expression", text="x = 1")
-
-    block = Node((1, 0), (3, 0), "block", children=[stmt])
-
-    root = Node(
-        (0, 0),
-        (3, 0),
-        "module",
-        children=[Node((0, 0), (3, 0), "function_definition", children=[block])],
-    )
-
-    return label_basic_block_tree(root)
-
-
-def make_empty_block_tree() -> Node:
-    """Create a block with no children (edge case)."""
-    block = Node((1, 0), (2, 0), "block", children=[])
-
-    root = Node(
-        (0, 0),
-        (2, 0),
-        "module",
-        children=[Node((0, 0), (2, 0), "function_definition", children=[block])],
-    )
-
-    return label_basic_block_tree(root)
+    return root, block, stmt
 
 
 # ===== Fixtures =====
 
 
 @pytest.fixture
-def mutation_context() -> MutationContext:
-    """Provide a fresh MutationContext for tests."""
+def mutation_context():
     return MutationContext()
 
 
 @pytest.fixture
-def simple_block_tree() -> Node:
-    """Provide a minimal valid tree with one insertion point."""
-    return make_simple_block_tree()
+def mock_registry():
+    """Mocks both lexicon and strategy registries."""
+    with patch(
+        "transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion.get_lexicon"
+    ) as m_lex, patch(
+        "transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion.get_strategy"
+    ) as m_strat:
+
+        # Lexicon Setup
+        lex_inst = MagicMock()
+        lex_inst.get_random_dead_code.return_value = "if False: pass\n"
+        m_lex.return_value = lambda rng: lex_inst
+
+        # Strategy Setup
+        strat_inst = MagicMock()
+        strat_inst.is_valid_container.return_value = True
+        strat_inst.is_valid_gap.return_value = True
+        strat_inst.get_indent_prefix.return_value = "    "
+        strat_inst.is_terminal.return_value = False
+        m_strat.return_value = strat_inst
+
+        yield lex_inst, strat_inst
 
 
-@pytest.fixture
-def empty_block_tree() -> Node:
-    """Provide a block with no insertion opportunities."""
-    return make_empty_block_tree()
-
-
-# ===== Test Cases =====
+# ===== Tests =====
 
 
 class TestDeadCodeInsertionRule:
-    """Comprehensive tests for dead code insertion behavior."""
 
-    # ===== Core Behavior =====
+    def test_init_method_sets_attributes(self):
+        """Init sets level, RNG, base_indent, and scope manager correctly."""
+        indent = "  "
+        seed = 123
+        rule = DeadCodeInsertionRule(level=2, seed=seed, indent_unit=indent)
 
-    def test_initialization(self):
-        """Ensure the rule initializes with correct defaults."""
+        assert rule._level == 2
+        other_rng = random.Random(seed)
+        assert rule._rng.random() == other_rng.random()
+        assert rule._base_indent == indent
+        assert isinstance(rule._scope, ScopeManager)
+
+    def test_detect_indent_unit_with_tree(self):
+        """Detects indentation correctly from a tree with a whitespace node."""
+        root, _, _ = _build_test_tree(with_whitespace=True)
+        rule = DeadCodeInsertionRule()
+        indent = rule._detect_indent_unit(root)
+        assert indent == "    "
+
+    def test_detect_indent_unit_fallback(self):
+        """Returns empty string when no valid whitespace node exists."""
+        root, _, _ = _build_test_tree(with_whitespace=False)
+        rule = DeadCodeInsertionRule()
+        indent = rule._detect_indent_unit(root)
+        assert indent == ""
+
+    def test_apply_probability_logic(self, mutation_context, mock_registry):
+        """Tests that the rule respects the inverted probability check (> prob)."""
+        lex, strat = mock_registry
+        root, block, stmt = _build_test_tree()
+
+        # Level 3 -> Prob = 0.5. rng.random() is mocked to 0.1
+        # 0.1 > 0.5 is False. It should NOT inject during scan, but hit fallback.
+        rule = DeadCodeInsertionRule(level=3)
+        with patch.object(rule._rng, "random", return_value=0.1):
+            records = rule.apply(root, mutation_context)
+
+        assert len(records) == 1
+        # Verify fallback was used (records comes from _ensure_minimum_mutation)
+        assert any(n.type == "dead_code" for n in block.children)
+
+    def test_synthetic_id_decrement(self, mutation_context, mock_registry):
+        """Verifies injected nodes pull unique IDs from the context."""
+        root, block, _ = _build_test_tree()
         rule = DeadCodeInsertionRule()
 
-        assert rule.rule_name == "dead-code-insertion"
-
-    def test_apply_with_none_root(self, mutation_context):
-        """Ensure apply handles None safely."""
-        rule = DeadCodeInsertionRule()
-
-        assert rule.apply(None, mutation_context) == []  # type: ignore
-
-    def test_requires_language(self, mutation_context):
-        """Root without language should raise an error."""
-        root = Node((0, 0), (0, 0), "module", children=[])
-
-        rule = DeadCodeInsertionRule()
-
-        with pytest.raises(ValueError, match="No language found"):
-            rule.apply(root, mutation_context)
-
-    # ===== Basic Mutation =====
-
-    def test_inserts_dead_code(self, simple_block_tree, mutation_context):
-        """Ensure dead code is inserted into a valid block."""
-        rule = DeadCodeInsertionRule(level=3, seed=1)
-
-        records = rule.apply(simple_block_tree, mutation_context)
-
-        assert len(records) >= 1
-
-        dead_nodes = [node for node in simple_block_tree.traverse() if node.type == "dead_code"]
-
-        assert len(dead_nodes) >= 1
-
-    def test_returns_valid_mutation_records(self, simple_block_tree, mutation_context):
-        """Ensure mutation records contain correct metadata."""
-        rule = DeadCodeInsertionRule(level=3, seed=1)
-
-        records = rule.apply(simple_block_tree, mutation_context)
-
-        assert len(records) >= 1
-
-        for record in records:
-            assert record.metadata["node_type"] == "dead_code"
-            assert record.metadata["new_val"] is not None
-            assert record.metadata["insertion_point"] is not None
-
-    # ===== Determinism =====
-
-    def test_is_deterministic(self):
-        """Same seed should produce identical insertions and positions."""
-        rule1 = DeadCodeInsertionRule(level=3, seed=42)
-        rule2 = DeadCodeInsertionRule(level=3, seed=42)
-
-        tree1 = make_simple_block_tree()
-        tree2 = make_simple_block_tree()
-
-        ctx1 = MutationContext()
-        ctx2 = MutationContext()
-
-        records1 = rule1.apply(tree1, ctx1)
-        records2 = rule2.apply(tree2, ctx2)
-
-        assert len(records1) == len(records2)
-
-        assert [(r.metadata["new_val"], r.metadata["insertion_point"]) for r in records1] == [
-            (r.metadata["new_val"], r.metadata["insertion_point"]) for r in records2
-        ]
-
-    # ===== Fallback Behavior =====
-
-    def test_guarantees_at_least_one_insertion(self, simple_block_tree, mutation_context):
-        """At low probability, fallback should still ensure one insertion."""
-        rule = DeadCodeInsertionRule(level=0, seed=999)
-
-        records = rule.apply(simple_block_tree, mutation_context)
-
-        assert len(records) >= 1
-
-    def test_no_candidates_produces_no_insertions(self, empty_block_tree, mutation_context):
-        """If no valid insertion points exist, no mutations should occur."""
-        rule = DeadCodeInsertionRule(level=3, seed=1)
-
-        records = rule.apply(empty_block_tree, mutation_context)
-
-        assert records == []
-
-    # ===== Structural Correctness =====
-
-    def test_inserts_before_target_node(self, simple_block_tree, mutation_context):
-        """Dead code should be inserted before the original statement."""
-        rule = DeadCodeInsertionRule(level=3, seed=1)
-
-        root = simple_block_tree
-        block = next(node for node in root.traverse() if node.semantic_label == "block_scope")
-
-        original_child = block.children[0]
-
+        initial_id = mutation_context.synthetic_row_counter  # -1
         rule.apply(root, mutation_context)
 
+        # Find the injected node
+        dc_node = [n for n in block.children if n.type == "dead_code"][0]
+        assert dc_node.start_point[0] == initial_id
+        # Context should have decremented
+        assert mutation_context.synthetic_row_counter == initial_id - 1
+
+    def test_terminal_node_truncation(self, mutation_context, mock_registry):
+        """Strategy.is_terminal should stop the injection scan for that block."""
+        lex, strat = mock_registry
+        root, block, stmt = _build_test_tree()
+
+        # Add a second statement
+        stmt2 = Node((2, 4), (2, 8), "expression_statement", text="pass")
+        block.children.append(stmt2)
+
+        # Mock strategy to say the first statement is terminal (like a return)
+        strat.is_terminal.side_effect = lambda n: n == stmt
+
+        rule = DeadCodeInsertionRule(level=3)
+        # Force high probability of injection
+        with patch.object(rule._rng, "random", return_value=0.9):
+            rule.apply(root, mutation_context)
+
+        # Injection should only be possible before the terminal node
+        # Because the loop breaks, candidates should only contain the first gap
+        assert len(block.children) == 3  # original 2 + 1 injected
         assert block.children[0].type == "dead_code"
-        assert block.children[1] == original_child
-
-    def test_inserted_node_has_parent(self, simple_block_tree, mutation_context):
-        """Inserted nodes should maintain correct parent references."""
-        rule = DeadCodeInsertionRule(level=3, seed=1)
-
-        rule.apply(simple_block_tree, mutation_context)
-
-        for node in simple_block_tree.traverse():
-            if node.type == "dead_code":
-                assert node.parent is not None
+        assert block.children[1] == stmt

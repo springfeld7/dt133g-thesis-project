@@ -13,6 +13,8 @@ This strategy:
 
 from typing import Optional
 
+from transtructiver.prototype import node
+
 from .insertion_strategy import InsertionStrategy
 from .....node import Node
 
@@ -29,8 +31,7 @@ class PythonInsertionStrategy(InsertionStrategy):
 
     def get_indent_prefix(self, node: Node) -> str | None:
         """
-        In Python, the block node's start_point[1] (column) matches
-        the indentation of its first logical statement.
+        Calculates the indentation prefix.
 
         Args:
             node (Node): The 'block_scope' node being analyzed.
@@ -39,17 +40,59 @@ class PythonInsertionStrategy(InsertionStrategy):
             str | None: The whitespace string to be used as a prefix for inserted code,
                         or None if the column information is unavailable.
         """
-        if node.start_point[1] is None:
-            return None
+        # print(f"Calculating indent prefix for node at column {node.start_point[1]}")  # Debug statement
+        # print(f"tYPE OF NODE: {node.type}")  # Debug statement
+        siblings = node.parent.children
+        idx = siblings.index(node)
+        if idx == 0:
+            return None  # no preceding sibling
 
-        return " " * node.start_point[1]
+        preceding = siblings[idx - 1]
+        if preceding.type == "whitespace":
+            print(
+                f"Preceding type: {preceding.type}, text: '{preceding.start_point}' endpos: {preceding.end_point}"
+            )  # Debug statement
+            print(
+                f"Returning whitespace as indent prefix: '{repr(preceding.text)}'"
+            )  # Debug statement
+            return preceding.text
+
+        # print(f"Preceding sibling: {siblings[idx - 1].start_point}, type: {siblings[idx - 1].type}")  # Debug statement
+        # print(f"Preceding sibling text: '{siblings[idx - 1].text}', and representation: {repr(siblings[idx - 1].text)}")
+        # print(f"Length of preceding sibling text: {len(siblings[idx - 1].text)}")  # Debug statement
+        print(
+            f"Calculated indent prefix: '{' ' * node.start_point[1]}' for node at column {node.start_point[1]}"
+        )  # Debug statement
+        return ""  # No whitespace used
+
+    def is_valid_container(self, node: Node) -> bool:
+        """
+        Validates that the node is a block scope suitable for insertion.
+
+        Checks if the node does not contain a 'pass' statement, which indicates an abstract or placeholder block.
+        Also ensures that the block is not a single-line block by verifying that its starting column is different
+        from its parent's starting column.
+
+        Args:
+            node (Node): The node to validate.
+
+        Returns:
+            bool: True if the node is a valid block scope, False otherwise.
+        """
+        if any(child.type == "pass_statement" for child in node.children):
+            return False
+
+        if node.parent.start_point[0] == node.start_point[0]:
+            return False
+
+        return True
 
     def is_valid_gap(self, current: Node, preceding: Optional[Node]) -> bool:
         """
         Determines if the gap before the current node is a valid Python insertion point.
 
         In Python, a gap is valid if it is at the very beginning of a block
-        (preceding is None) or if it follows a newline character.
+        (preceding is None) or if it follows a whitespace node  .
 
         Args:
             current (Node): The node immediately following the potential insertion.
@@ -62,8 +105,8 @@ class PythonInsertionStrategy(InsertionStrategy):
         if preceding is None:
             return True
 
-        # After any newline node, ensuring the new code starts on its own line
-        return preceding.type == "newline"
+        # After any whitespace node, ensuring the new code starts on its own line
+        return preceding.type == "whitespace"
 
     def is_terminal(self, node: Node) -> bool:
         """

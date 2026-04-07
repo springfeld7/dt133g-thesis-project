@@ -1,13 +1,13 @@
 """C-Style Insertion Strategy
 
-Handles code insertion for brace-delimited languages (C, C++, Java, etc.). 
+Handles code insertion for brace-delimited languages (C, C++, Java, etc.).
 
 This strategy:
-* **Calculates Indentation**: Determines the required leading whitespace by 
+* **Calculates Indentation**: Determines the required leading whitespace by
     analyzing the block's vertical structure.
-* **Validates Insertion Points**: Checks gaps between nodes to ensure 
+* **Validates Insertion Points**: Checks gaps between nodes to ensure
     insertions only occur at valid logical breaks (e.g., after newlines).
-* **Defines Terminal Conditions**: Identifies statements that end execution 
+* **Defines Terminal Conditions**: Identifies statements that end execution
     within a block (like returns or breaks) to manage insertion flow.
 """
 
@@ -38,19 +38,29 @@ class CStyleInsertionStrategy(InsertionStrategy):
             str | None: The whitespace string to be used as a prefix for inserted code,
                         or None if no suitable prefix can be determined.
         """
-
-        # Check if any of the children is a newline, which indicates that the block isn't a single-line block.
-        # This might mean there is an empty block like { },
-        # in which case it's safer to return None to avoid incorrect insertion.
-        has_newline = any(child.type == "newline" for child in node.children)
-        if not has_newline:
-            return None
-
         for child in node.children:
             if child.type == "whitespace":
                 return child.text
 
         return None
+
+    def is_valid_container(self, node: Node) -> bool:
+        """
+        Validates that the node is a block scope suitable for insertion.
+
+        Checks that the block scope is not a single-line block.
+
+        Args:
+            node (Node): The node to validate.
+
+        Returns:
+            bool: True if the node is a valid container for insertion.
+        """
+        has_newline = any(child.type == "newline" for child in node.children)
+        if not has_newline:
+            return False
+
+        return True
 
     def is_valid_gap(self, current: Node, preceding: Optional[Node]) -> bool:
         """
@@ -63,12 +73,12 @@ class CStyleInsertionStrategy(InsertionStrategy):
         Returns:
             bool: True if following a newline and not before a closing brace.
         """
-        # Never insert before the opening brace
-        if current.type == "{":
+        # Never insert before the opening or closing brace of a block
+        if current.type == "{" or current.type == "}":
             return False
 
         # Must follow a newline, but don't jam code right before the '}'
-        if preceding.type == "newline":
+        if preceding.type == "whitespace":
             return True
 
         return False

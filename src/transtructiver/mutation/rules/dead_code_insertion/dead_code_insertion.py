@@ -1,8 +1,8 @@
 """Rule for injecting language-specific dead code into a CST.
 
 This module defines the InsertDeadCodeRule, which traverses a CST and identifies
-safe containers (blocks, functions, etc.) for injecting unreachable code. It 
-leverages language-specific lexicons to ensure the injected code is syntactically 
+safe containers (blocks, functions, etc.) for injecting unreachable code. It
+leverages language-specific lexicons to ensure the injected code is syntactically
 valid and uses a ScopeManager to prevent identifier collisions.
 """
 
@@ -153,9 +153,9 @@ class DeadCodeInsertionRule(MutationRule):
         # Traverse to find the first 'indentation' whitespace with a length > 0
         for node in root.traverse():
             if node.type == "whitespace" and node.start_point[1] == 0:
-                if node.text:
+                if node.text and all(c in (" ", "\t") for c in node.text):
                     return node.text
-        return "    "  # Fallback to 4 spaces if no indentation pattern is detected
+        return ""  # Fallback to empty string if no indentation pattern is found, which will be treated as no indentation.
 
     def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
@@ -237,7 +237,7 @@ class DeadCodeInsertionRule(MutationRule):
             if "identifier" in node.type and node.text:
                 self._scope.declare(node.text, "exists")
 
-            if self._is_valid_container(node):
+            if self._is_valid_container(node, strategy):
                 self._scan_and_inject(
                     node, strategy, lexicon, context, insertion_probability, candidates, records
                 )
@@ -283,7 +283,7 @@ class DeadCodeInsertionRule(MutationRule):
         for child in list(node.children):
             if strategy.is_valid_gap(child, preceding):
                 candidates.append((child, prefix))
-                if self._rng.random() < prob:
+                if self._rng.random() > prob:
                     records.append(self._inject_dead_code(child, prefix, lexicon, context))
 
             if strategy.is_terminal(child):
@@ -307,7 +307,7 @@ class DeadCodeInsertionRule(MutationRule):
         """
         var_name = self._get_var_name("d")
         loop_var = self._get_loop_var()
-        dead_code = lexicon.get_random_dead_code(prefix, var_name, loop_var)
+        dead_code = lexicon.get_random_dead_code(var_name, loop_var, prefix)
 
         # Create an adopt dead code node
         dc_node = Node(
@@ -329,17 +329,21 @@ class DeadCodeInsertionRule(MutationRule):
             new_type="dead_code",
         )
 
-    def _is_valid_container(self, node: Node) -> bool:
+    def _is_valid_container(self, node: Node, strategy: InsertionStrategy) -> bool:
         """
         Checks if the node is a block that lives inside a function, loop, or conditional.
 
         Args:
             node (Node): The node to check for eligibility as a container for dead code insertion.
+            strategy (InsertionStrategy): The language-specific insertion strategy.
 
         Returns:
             bool: True if the node is a valid container for insertion, False otherwise.
         """
         if node.semantic_label != "block_scope":
+            return False
+
+        if not strategy.is_valid_container(node):
             return False
 
         parent = node.parent

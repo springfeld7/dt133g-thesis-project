@@ -186,8 +186,8 @@ class Parser:
         """
         try:
             ts_language = get_language(cast(SupportedLanguage, language.lower()))
-        except LookupError:
-            raise ValueError(f"Unsupported language: {language}")
+        except Exception as e:
+            raise ValueError(f"Unsupported language: {language}") from e
 
         try:
             code.encode("utf-8")

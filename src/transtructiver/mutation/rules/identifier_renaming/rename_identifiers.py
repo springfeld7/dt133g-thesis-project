@@ -103,6 +103,7 @@ class RenameIdentifiersRule(MutationRule):
         """Return whether the identifier is eligible for renaming."""
         return (
             "identifier" in node.type
+            and not bool(node.builtin)
             and bool(node.text)
             and node.semantic_label in self.allowed_labels
         )

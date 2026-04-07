@@ -46,6 +46,7 @@ class Node:
         self.semantic_label: Optional[str] = None
         self.field: Optional[str] = None
         self.language: Optional[str] = None
+        self.builtin: bool = False
 
     def add_child(self, child: Node) -> None:
         """

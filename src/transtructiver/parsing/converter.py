@@ -213,7 +213,7 @@ def convert_node(
     line_starts = _line_start_bytes(source_bytes)
     code_len = len(source_bytes)
 
-    if ts_node.child_count == 0:
+    if ts_node.child_count == 0 or ts_node.is_error:
         text = source_bytes[ts_node.start_byte : ts_node.end_byte].decode("utf8")
         children = []
     else:

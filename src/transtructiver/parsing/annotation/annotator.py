@@ -53,7 +53,31 @@ UNIFIED_TYPE_LABELS = {
         "class_scope",
     ),
     **dict.fromkeys(["block", "compound_statement", "class_body"], "block_scope"),
-    **dict.fromkeys(["for_statement", "while_statement", "for_range_loop"], "loop_scope"),
+    **dict.fromkeys(
+        ["for_statement", "while_statement", "for_range_loop", "enhanced_for_statement"],
+        "loop_scope",
+    ),
+    **dict.fromkeys(
+        [
+            "assignment",
+            "assignment_expression",
+            "declaration",
+            "field_declaration",
+            "local_variable_declaration",
+        ],
+        "assignment_scope",
+    ),
+    **dict.fromkeys(
+        [
+            "if_statement",
+            "compound_literal_expression",
+            "elif_clause",
+        ],
+        "condition_scope",
+    ),
+    **dict.fromkeys(["method_invocation", "call_expression", "call"], "call"),
+    **dict.fromkeys(["binary_operator", "binary_expression"], "operation_scope"),
+    "return_statement": "return_scope",
 }
 
 
@@ -66,9 +90,7 @@ UNIFIED_TYPE_LABELS = {
 # mutation rules to selectively target specific identifier categories.
 NAMING_ANCESTOR_LABELS = {
     "python": {
-        **dict.fromkeys(
-            ["global_statement", "nonlocal_statement", "argument_list"], "variable_name"
-        ),
+        **dict.fromkeys(["global_statement", "nonlocal_statement"], "variable_name"),
         **dict.fromkeys(
             ["parameters", "typed_parameter", "default_parameter", "typed_default_parameter"],
             "parameter_name",
@@ -77,13 +99,12 @@ NAMING_ANCESTOR_LABELS = {
         "class_definition": "class_name",
         "type": "type_name",
         "raise_statement": "exception_name",
+        "argument_list": "argument_name",
     },
     "java": {
         **dict.fromkeys(
             ["method_declaration", "annotation_type_element_declaration"], "function_name"
         ),
-        **dict.fromkeys(["formal_parameters"], "parameter_name"),
-        **dict.fromkeys(["variable_declarator", "argument_list"], "variable_name"),
         **dict.fromkeys(
             [
                 "class_declaration",
@@ -96,7 +117,10 @@ NAMING_ANCESTOR_LABELS = {
             ],
             "class_name",
         ),
+        "formal_parameters": "parameter_name",
+        "variable_declarator": "variable_name",
         "throw_statement": "exception_name",
+        "argument_list": "argument_name",
     },
     "cpp": {
         **dict.fromkeys(["function_declarator", "function_definition"], "function_name"),
@@ -108,6 +132,7 @@ NAMING_ANCESTOR_LABELS = {
         "namespace_definition": "namespace_name",
         "type_alias_declaration": "type_name",
         "throw_statement": "exception_name",
+        "argument_list": "argument_name",
     },
 }
 

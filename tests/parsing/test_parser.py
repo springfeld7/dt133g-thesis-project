@@ -262,11 +262,9 @@ class TestParserDiscardCriteria:
     def test_discard_no_meaningful_structure(self, parser):
         """Test that code without meaningful structure is marked for discard."""
         # Create a node that appears valid but has no meaningful structure
-        child = make_node("function_definition", is_error=False)
+        func_child = make_node("block", is_error=False)
+        child = make_node("function_definition", children=[func_child], is_error=False)
         root = make_node("module", children=[child])
-
-        # Override has_meaningful_structure to return False for all children
-        parser.has_meaningful_structure = lambda _node: False
 
         reason = parser.should_discard(root, "return")
         assert reason == "no_meaningful_structure"

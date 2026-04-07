@@ -37,7 +37,7 @@ def _annotate_node(node: Node, profile: dict[str, str]) -> None:
 
         if node.text.startswith("//"):
             node.semantic_label = "line_comment"
-        elif node.text.startswith("//*") or node.text.endswith("*/"):
+        elif node.text.startswith("/*"):
             node.semantic_label = "block_comment"
         return
 
@@ -52,10 +52,9 @@ def _annotate_node(node: Node, profile: dict[str, str]) -> None:
 
     _annotate_scope_types(node)
 
-    # Edit annotation of node from standard library
+    # Mark node from standard library
     if node.text and is_builtin(node.text, profile):
-        if node.semantic_label != "type_name":
-            node.semantic_label = "builtin_name"
+        node.builtin = True
 
 
 def _annotate_scope_types(node: Node) -> None:

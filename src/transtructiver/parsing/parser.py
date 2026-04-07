@@ -6,7 +6,7 @@ and converts the resulting syntax tree into the project's Node structure.
 
 from tree_sitter import Node as TSNode
 from tree_sitter import Parser as TSParser
-from tree_sitter_language_pack import get_language, SupportedLanguage
+from tree_sitter_language_pack import get_language, SupportedLanguage, LanguageNotFoundError
 from typing import cast
 from .adapter import adapt
 from ..node import Node
@@ -153,8 +153,9 @@ class Parser:
 
         if any(self.has_meaningful_structure(child) for child in root.children):
             return None
-        else:
-            return "no_meaningful_structure"
+        elif self.has_meaningful_structure(root) and root.child_count > 2:
+            return None
+        return "no_meaningful_structure"
 
     # ------------------------------------------------------------
     # Parse
@@ -186,7 +187,7 @@ class Parser:
         """
         try:
             ts_language = get_language(cast(SupportedLanguage, language.lower()))
-        except LookupError:
+        except LanguageNotFoundError:
             raise ValueError(f"Unsupported language: {language}")
 
         try:

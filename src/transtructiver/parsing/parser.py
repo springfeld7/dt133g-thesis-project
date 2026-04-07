@@ -6,7 +6,7 @@ and converts the resulting syntax tree into the project's Node structure.
 
 from tree_sitter import Node as TSNode
 from tree_sitter import Parser as TSParser
-from tree_sitter_language_pack import get_language, SupportedLanguage
+from tree_sitter_language_pack import LanguageNotFoundError, get_language, SupportedLanguage
 from typing import cast
 from .adapter import adapt
 from ..node import Node
@@ -186,8 +186,8 @@ class Parser:
         """
         try:
             ts_language = get_language(cast(SupportedLanguage, language.lower()))
-        except Exception as e:
-            raise ValueError(f"Unsupported language: {language}") from e
+        except LanguageNotFoundError:
+            raise ValueError(f"Unsupported language: {language}")
 
         try:
             code.encode("utf-8")

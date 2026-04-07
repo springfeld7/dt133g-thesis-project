@@ -12,7 +12,8 @@ and content of the comment for downstream verification and manifest generation.
 
 from typing import List
 
-from ..identifier_renaming._scope_manager import ScopeManager
+from ..utils.scope_manager import ScopeManager
+from transtructiver.mutation.mutation_context import MutationContext
 from ..mutation_rule import MutationRule, MutationRecord
 from ....node import Node
 from ._replacement_generator import ReplacementGenerator
@@ -97,7 +98,7 @@ class CommentNormalizationRule(MutationRule):
 
         return self._replacer.get_replacement(node, ancestor)
 
-    def apply(self, root: Node) -> List[MutationRecord]:
+    def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """Apply the CommentNormalization mutation rule to the CST.
 
         This method recursively traverses the tree rooted at `root`,
@@ -109,6 +110,8 @@ class CommentNormalizationRule(MutationRule):
 
         Args:
             root (Node): The root node of the CST to mutate.
+            context (MutationContext): The context object for tracking mutation state,
+                                       not used in this rule but included for interface consistency.
 
         Returns:
             List[MutationRecord]: A list of all modifications performed,

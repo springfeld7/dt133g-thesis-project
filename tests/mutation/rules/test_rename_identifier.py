@@ -4,6 +4,7 @@ import pytest
 from transtructiver.mutation.rules.identifier_renaming.rename_identifiers import (
     RenameIdentifiersRule,
 )
+from transtructiver.mutation.rules.identifier_renaming import _rename_appendage as appendage_mod
 from transtructiver.node import Node
 from transtructiver.mutation.rules.mutation_rule import MutationRecord
 from transtructiver.mutation.mutation_types import MutationAction
@@ -492,7 +493,9 @@ class TestRenameIdentifierTargeting:
         assert records == []
         assert ident.text == "x"
 
-    def test_rename_identifier_rule_skips_non_variable_annotations(self, module_function_tree):
+    def test_rename_identifier_rule_skips_non_variable_annotations(
+        self, module_function_tree, mutation_context
+    ):
         """Only variable-like semantic labels should be renamed by default."""
         root, function_name = module_function_tree
 
@@ -512,7 +515,7 @@ class TestRenameIdentifierTargeting:
         records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
-        assert function_name.text == "foo_fn"
+        assert function_name.text == "foo_func"
 
     def test_rename_identifier_rule_can_target_only_parameter_names(
         self, variable_parameter_tree, mutation_context
@@ -525,7 +528,7 @@ class TestRenameIdentifierTargeting:
 
         assert len(records) == 1
         assert variable_id.text == "x"
-        assert parameter_id.text == "pp"
+        assert parameter_id.text == "p_param"
 
     def test_rename_identifier_rule_rejects_unknown_target_keyword(self):
         """Unknown keyword should raise a clear configuration error."""
@@ -572,8 +575,8 @@ class TestRenameIdentifierSuffixInference:
         records = rule.apply(root, mutation_context)
 
         assert len(records) == 2
-        assert values_id.text == "valuess"
-        assert message_id.text == "messagee"
+        assert values_id.text == "values_list"
+        assert message_id.text == "message_str"
 
 
 class TestRenameIdentifierFormatting:
@@ -589,7 +592,7 @@ class TestRenameIdentifierFormatting:
         records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
-        assert function_name.text == "fooFn"
+        assert function_name.text == "fooFunc"
 
     def test_rename_identifier_rule_formats_python_and_java_differently(self, mutation_context):
         """Suffix formatting should differ between module and program roots."""
@@ -601,8 +604,8 @@ class TestRenameIdentifierFormatting:
         python_rule.apply(python_root, mutation_context)
         java_rule.apply(java_root, mutation_context)
 
-        assert python_function.text == "foo_fn"
-        assert java_function.text == "fooFn"
+        assert python_function.text == "foo_func"
+        assert java_function.text == "fooFunc"
 
     def test_rename_identifier_rule_empty_suffix_fallback_is_stable(
         self, variable_only_tree, mutation_context
@@ -614,7 +617,23 @@ class TestRenameIdentifierFormatting:
         records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
-        assert variable_id.text == "dataa"
+        assert variable_id.text == "data_var"
+
+    def test_rename_identifier_rule_uses_tmp_when_label_has_no_suffix_mapping(
+        self, variable_only_tree, mutation_context, monkeypatch
+    ):
+        """Labeled identifiers with no inferred suffix should use the ``_tmp`` fallback."""
+        root, variable_id = variable_only_tree
+
+        fallback = dict(appendage_mod._SEMANTIC_FALLBACK_SUFFIXES)
+        fallback.pop("variable_name", None)
+        monkeypatch.setattr(appendage_mod, "_SEMANTIC_FALLBACK_SUFFIXES", fallback)
+
+        rule = RenameIdentifiersRule(targets=["variable"])
+        records = rule.apply(root, mutation_context)
+
+        assert len(records) == 1
+        assert variable_id.text == "data_tmp"
 
     def test_rename_identifier_rule_overwrites_language_each_apply_run(
         self, program_bar_function_tree, mutation_context
@@ -627,5 +646,5 @@ class TestRenameIdentifierFormatting:
         rule.apply(python_root, mutation_context)
         rule.apply(java_root, mutation_context)
 
-        assert python_function.text == "foo_fn"
-        assert java_function.text == "barFn"
+        assert python_function.text == "foo_func"
+        assert java_function.text == "barFunc"

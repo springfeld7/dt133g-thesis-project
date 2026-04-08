@@ -1,5 +1,7 @@
 """Scope stack manager for rules that require tracking of variable bindings across nested scopes."""
 
+from typing import Any
+
 
 class ScopeManager:
     """Track identifier bindings across nested scopes.
@@ -25,15 +27,15 @@ class ScopeManager:
             self._scopes.pop()
 
     def declare(self, name: str, value: str) -> None:
-        """Bind a name in the current (innermost) scope."""
+        """Bind a value in the current (innermost) scope."""
         if self._scopes:
             self._scopes[-1][name] = value
 
-    def resolve(self, name: str) -> str | None:
-        """Look up a name from inner to outer scope, returning None if absent."""
+    def resolve(self, key: str) -> Any:
+        """Look up a value from inner to outer scope, returning None if absent."""
         for scope in reversed(self._scopes):
-            if name in scope:
-                return scope[name]
+            if key in scope:
+                return scope[key]
         return None
 
     def depth(self) -> int:

@@ -45,15 +45,16 @@ def _annotate_node(node: Node, profile: dict[str, str]) -> None:
         return
 
     # Annotate identifier that is not in import statement
-    if node.type in ("identifier", "type_identifier") and not parent.type == "scoped_identifier":
+    if (
+        node.type in ("identifier", "type_identifier") and not parent.type == "scoped_identifier"
+    ) or "_type" in node.type:
         _annotate_identifier(node)
 
     _annotate_scope_types(node)
 
-    # Edit annotation of node from standard library
+    # Mark node from standard library
     if node.text and is_builtin(node.text, profile):
-        if node.semantic_label != "type_name":
-            node.semantic_label = "builtin_name"
+        node.builtin = True
 
 
 def _annotate_scope_types(node: Node) -> None:
@@ -90,7 +91,7 @@ def _annotate_identifier(node: Node) -> None:
     if parent is None:
         return
 
-    if node.type == "type_identifier":
+    if node.field == "type":
         if parent.parent and parent.parent.type == "throw_statement":
             node.semantic_label = "exception_name"
             return

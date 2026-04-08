@@ -5,9 +5,7 @@ universal raw data into syntactically valid C++ code, including
 assignment statements, identity modifications, opaque predicates, and unreachable loop headers.
 """
 
-from email import header
 import random
-from sys import prefix
 from typing import Any
 from .dead_code_lexicon import DeadCodeLexicon
 

@@ -52,10 +52,9 @@ def _annotate_node(node: Node, profile: dict[str, str]) -> None:
 
     _annotate_scope_types(node)
 
-    # Edit annotation of node from standard library
+    # Mark node from standard library
     if node.text and is_builtin(node.text, profile):
-        if node.semantic_label != "type_name":
-            node.semantic_label = "builtin_name"
+        node.builtin = True
 
 
 def _annotate_scope_types(node: Node) -> None:
@@ -74,7 +73,6 @@ def _annotate_scope_types(node: Node) -> None:
     unified_label = get_unified_type_label(node.type)
     if unified_label is not None:
         node.semantic_label = unified_label
-    return
 
 
 def _annotate_identifier(node: Node) -> None:
@@ -206,9 +204,16 @@ def _label_for_naming_ancestor(node: Node, naming_ancestor: Node) -> str | None:
             is not recognized.
     """
     if naming_ancestor.type == "argument_list":
-        return (
-            "class_name" if node.parent and node.parent.field == "superclasses" else "variable_name"
-        )
+        if node.parent:
+            if node.parent.type == "keyword_argument":
+                if node.field == "value":
+                    return "variable_name"
+                elif node.field == "name":
+                    return "parameter_name"
+            elif node.parent.field == "superclasses":
+                return "class_name"
+            else:
+                return "variable_name"
     return NAMING_ANCESTOR_LABELS["python"].get(naming_ancestor.type)
 
 

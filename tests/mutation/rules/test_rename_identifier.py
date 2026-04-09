@@ -6,7 +6,6 @@ from transtructiver.mutation.rules.identifier_renaming.rename_identifiers import
 )
 from transtructiver.mutation.rules.identifier_renaming import _rename_appendage as appendage_mod
 from transtructiver.node import Node
-from transtructiver.mutation.rules.mutation_rule import MutationRecord
 from transtructiver.mutation.mutation_types import MutationAction
 from transtructiver.mutation.mutation_context import MutationContext
 
@@ -188,46 +187,109 @@ def make_program_bar_function_tree() -> tuple[Node, Node]:
     return label_nodes(root), function_name
 
 
-def make_scoped_tree_with_shadowing() -> Node:
-    """Create a scope tree where inner and outer declarations share a name."""
+def make_control_scope_assignment_tree(
+    control_node_type: str,
+    control_scope_label: str,
+) -> tuple[Node, Node, Node, Node, Node]:
+    """Create a function tree with assignments nested inside a control scope.
+
+    The inner assignments should resolve to the outer function-scope bindings,
+    not introduce a separate control-flow scope binding stack.
+    """
+    outer_x = Node((1, 0), (1, 1), "identifier", text="x")
+    outer_y = Node((2, 0), (2, 1), "identifier", text="y")
+    inner_x = Node((4, 4), (4, 5), "identifier", text="x")
+    inner_y = Node((5, 4), (5, 5), "identifier", text="y")
+
     root = Node(
         (0, 0),
-        (0, 0),
+        (6, 0),
         "module",
         children=[
             Node(
                 (1, 0),
-                (1, 5),
-                "assignment",
-                children=[Node((1, 0), (1, 1), "identifier", text="x")],
-            ),
-            Node(
-                (2, 0),
-                (5, 0),
+                (5, 10),
                 "function_definition",
                 children=[
-                    Node((2, 4), (2, 7), "identifier", text="foo"),
+                    Node(
+                        (1, 0),
+                        (1, 10),
+                        "assignment",
+                        children=[
+                            outer_x,
+                            Node((1, 2), (1, 3), "operator", text="="),
+                            Node((1, 4), (1, 5), "number", text="1"),
+                        ],
+                    ),
+                    Node(
+                        (2, 0),
+                        (2, 10),
+                        "assignment",
+                        children=[
+                            outer_y,
+                            Node((2, 2), (2, 3), "operator", text="="),
+                            Node((2, 4), (2, 5), "number", text="2"),
+                        ],
+                    ),
                     Node(
                         (3, 0),
-                        (5, 0),
-                        "block",
+                        (6, 0),
+                        control_node_type,
                         children=[
                             Node(
                                 (3, 4),
-                                (3, 9),
-                                "assignment",
+                                (3, 10),
+                                "condition",
                                 children=[Node((3, 4), (3, 5), "identifier", text="x")],
                             ),
-                            Node((4, 4), (4, 5), "identifier", text="x"),
+                            Node(
+                                (4, 2),
+                                (6, 0),
+                                "block",
+                                children=[
+                                    Node(
+                                        (4, 4),
+                                        (4, 10),
+                                        "assignment",
+                                        children=[
+                                            inner_x,
+                                            Node((4, 6), (4, 7), "operator", text="="),
+                                            Node((4, 8), (4, 9), "number", text="3"),
+                                        ],
+                                    ),
+                                    Node(
+                                        (5, 4),
+                                        (5, 10),
+                                        "assignment",
+                                        children=[
+                                            inner_y,
+                                            Node((5, 6), (5, 7), "operator", text="="),
+                                            Node((5, 8), (5, 9), "number", text="4"),
+                                        ],
+                                    ),
+                                ],
+                            ),
                         ],
                     ),
                 ],
-            ),
-            Node((6, 0), (6, 1), "identifier", text="x"),
+            )
         ],
     )
 
-    return label_nodes(root)
+    labeled_root = label_nodes(root)
+    control_scope_node = labeled_root.children[0].children[2]
+    control_scope_node.semantic_label = control_scope_label
+    return labeled_root, outer_x, outer_y, inner_x, inner_y
+
+
+def make_condition_scope_assignment_tree() -> tuple[Node, Node, Node, Node, Node]:
+    """Create a function tree with assignments nested inside an if-statement."""
+    return make_control_scope_assignment_tree("if_statement", "condition_scope")
+
+
+def make_loop_scope_assignment_tree() -> tuple[Node, Node, Node, Node, Node]:
+    """Create a function tree with assignments nested inside a for-statement."""
+    return make_control_scope_assignment_tree("for_statement", "loop_scope")
 
 
 def make_typed_parameter_tree() -> tuple[Node, Node]:
@@ -312,6 +374,58 @@ def make_assignment_type_tree() -> tuple[Node, Node, Node]:
     return label_nodes(root), values_id, message_id
 
 
+def make_class_field_and_parameter_shadow_tree() -> tuple[Node, Node, Node, Node]:
+    """Create a class where a method parameter shadows a field name."""
+    field_id = Node((1, 4), (1, 5), "identifier", text="x")
+    parameter_id = Node((2, 12), (2, 13), "identifier", text="x")
+    parameter_use = Node((3, 8), (3, 9), "identifier", text="x")
+
+    root = Node(
+        (0, 0),
+        (4, 0),
+        "module",
+        children=[
+            Node(
+                (0, 0),
+                (4, 0),
+                "class_definition",
+                children=[
+                    field_id,
+                    Node(
+                        (2, 4),
+                        (4, 0),
+                        "function_definition",
+                        children=[
+                            Node(
+                                (2, 11),
+                                (2, 14),
+                                "typed_parameter",
+                                children=[parameter_id],
+                            ),
+                            Node((3, 8), (3, 9), "block", children=[parameter_use]),
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+
+    _wire_parents(root)
+    root.language = "python"
+    root.semantic_label = "root"
+    class_node = root.children[0]
+    class_node.semantic_label = "class_scope"
+    function_node = class_node.children[1]
+    function_node.semantic_label = "function_scope"
+    field_id.semantic_label = "property_name"
+    field_id.field = "name"
+    parameter_id.semantic_label = "parameter_name"
+    parameter_id.field = "name"
+    parameter_use.semantic_label = "variable_name"
+
+    return root, field_id, parameter_id, parameter_use
+
+
 # ===== Fixtures =====
 
 
@@ -362,12 +476,6 @@ def variable_only_tree() -> tuple[Node, Node]:
 def program_bar_function_tree() -> tuple[Node, Node]:
     """Program root with a function identifier named bar."""
     return make_program_bar_function_tree()
-
-
-@pytest.fixture
-def scoped_tree_with_shadowing() -> Node:
-    """Create tree where inner scope declares the same identifier as outer scope."""
-    return make_scoped_tree_with_shadowing()
 
 
 @pytest.fixture
@@ -442,31 +550,7 @@ class TestRenameIdentifierCoreBehavior:
 
 
 class TestRenameIdentifierScopeBehavior:
-    """Scope handling and shadowing behavior."""
-
-    def test_rename_identifier_rule_uses_scope_stack_for_shadowing(
-        self, scoped_tree_with_shadowing: Node, mutation_context
-    ):
-        """Inner declaration of same name should not reuse outer scope rename."""
-        rule = RenameIdentifiersRule()
-        records: list[MutationRecord] = rule.apply(scoped_tree_with_shadowing, mutation_context)
-
-        renamed_x_nodes: list[Node] = [
-            node
-            for node in scoped_tree_with_shadowing.traverse()
-            if node.type == "identifier" and node.start_point in {(1, 0), (3, 4), (4, 4), (6, 0)}
-        ]
-        renamed_values: dict[tuple[int, int], str | None] = {
-            node.start_point: node.text for node in renamed_x_nodes
-        }
-
-        assert len(records) == 4
-        # Outer x and outer use should be equal
-        assert renamed_values[(1, 0)] == renamed_values[(6, 0)]
-        # Inner x and inner use should be equal
-        assert renamed_values[(3, 4)] == renamed_values[(4, 4)]
-        # Outer x and inner x should not be equal
-        assert renamed_values[(1, 0)] != renamed_values[(3, 4)]
+    """Scope handling behavior."""
 
     def test_rename_identifier_rule_clears_scope_state_between_runs(
         self, sample_tree, mutation_context
@@ -476,6 +560,40 @@ class TestRenameIdentifierScopeBehavior:
         rule.apply(sample_tree, mutation_context)
 
         assert rule.scope == []
+
+    @pytest.mark.parametrize(
+        ("tree_factory", "scope_name"),
+        [
+            (make_condition_scope_assignment_tree, "condition_scope"),
+            (make_loop_scope_assignment_tree, "loop_scope"),
+        ],
+    )
+    def test_rename_identifier_rule_keeps_control_flow_assignments_in_function_scope(
+        self, tree_factory, scope_name, mutation_context
+    ):
+        """Control-flow scopes should not split function-scope variable bindings."""
+        root, outer_x, outer_y, inner_x, inner_y = tree_factory()
+
+        # Ensure the fixture path matches the intended scope type for this regression.
+        assert root.children[0].children[2].semantic_label == scope_name
+
+        rule = RenameIdentifiersRule()
+        rule.apply(root, mutation_context)
+
+        assert outer_x.text == inner_x.text
+        assert outer_y.text == inner_y.text
+
+    def test_rename_identifier_rule_disambiguates_parameter_from_class_field(
+        self, mutation_context
+    ):
+        """A method parameter shadowing a field should receive a distinct rename."""
+        root, field_id, parameter_id, parameter_use = make_class_field_and_parameter_shadow_tree()
+
+        rule = RenameIdentifiersRule(targets=["property", "parameter", "variable"])
+        rule.apply(root, mutation_context)
+
+        assert field_id.text != parameter_id.text
+        assert parameter_use.text == parameter_id.text
 
 
 class TestRenameIdentifierTargeting:

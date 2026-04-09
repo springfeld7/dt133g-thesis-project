@@ -117,7 +117,6 @@ def _infer_from_tree_context(node: Node) -> str | None:
                     return result
             # Also check node types that might contain type information.
             else:
-                print(f"type: {candidate.type}, field: {candidate.field}")
                 result = _match_type_suffix(candidate.type, "")
                 if result is not None:
                     return result

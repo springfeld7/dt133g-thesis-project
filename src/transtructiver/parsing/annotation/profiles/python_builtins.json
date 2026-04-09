@@ -49,6 +49,7 @@
       "repr",
       "reversed",
       "round",
+      "self",
       "set",
       "setattr",
       "slice",

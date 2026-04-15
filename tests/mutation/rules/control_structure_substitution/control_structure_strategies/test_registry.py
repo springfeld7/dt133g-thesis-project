@@ -2,14 +2,17 @@
 
 import pytest
 
-from transtructiver.mutation.rules.control_structure_substitution.for_loop_strategies.registry import (
+from transtructiver.mutation.rules.control_structure_substitution.control_structure_strategies.for_loop_strategies.registry import (
     get_for_loop_strategy,
     _STRATEGY_REGISTRY,
 )
-from transtructiver.mutation.rules.control_structure_substitution.for_loop_strategies.cstyle_strategy import (
-    CStyleForLoopStrategy,
+from transtructiver.mutation.rules.control_structure_substitution.control_structure_strategies.for_loop_strategies.cpp_strategy import (
+    CppForLoopStrategy,
 )
-from transtructiver.mutation.rules.control_structure_substitution.for_loop_strategies.python_strategy import (
+from transtructiver.mutation.rules.control_structure_substitution.control_structure_strategies.for_loop_strategies.java_strategy import (
+    JavaForLoopStrategy,
+)
+from transtructiver.mutation.rules.control_structure_substitution.control_structure_strategies.for_loop_strategies.python_strategy import (
     PythonForLoopStrategy,
 )
 
@@ -20,17 +23,18 @@ class TestForLoopStrategyRegistry:
     def test_get_for_loop_strategy_returns_correct_types(self):
         """Verify the registry returns the expected strategy instances."""
         assert isinstance(get_for_loop_strategy("python"), PythonForLoopStrategy)
-        assert isinstance(get_for_loop_strategy("java"), CStyleForLoopStrategy)
-        assert isinstance(get_for_loop_strategy("cpp"), CStyleForLoopStrategy)
+        assert isinstance(get_for_loop_strategy("java"), JavaForLoopStrategy)
+        assert isinstance(get_for_loop_strategy("cpp"), CppForLoopStrategy)
 
     def test_get_for_loop_strategy_is_case_insensitive(self):
         """Verify lookup handles mixed and upper casing correctly."""
         assert isinstance(get_for_loop_strategy("pYtHoN"), PythonForLoopStrategy)
-        assert isinstance(get_for_loop_strategy("JAVA"), CStyleForLoopStrategy)
+        assert isinstance(get_for_loop_strategy("JAVA"), JavaForLoopStrategy)
+        assert isinstance(get_for_loop_strategy("CPP"), CppForLoopStrategy)
 
     def test_get_for_loop_strategy_strips_whitespace(self):
         """Verify lookup strips surrounding whitespace before resolving."""
-        assert isinstance(get_for_loop_strategy("  cpp  "), CStyleForLoopStrategy)
+        assert isinstance(get_for_loop_strategy("  cpp  "), CppForLoopStrategy)
 
     def test_registry_contains_all_mapped_languages(self):
         """Ensure all registered languages can be resolved without failure."""

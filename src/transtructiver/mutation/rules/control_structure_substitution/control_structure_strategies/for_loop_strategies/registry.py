@@ -9,14 +9,15 @@ Each supported language must have a corresponding strategy registered here.
 from typing import Dict, Type
 
 from .base_for_loop_strategy import BaseForLoopStrategy
-from .cstyle_strategy import CStyleForLoopStrategy
+from .cpp_strategy import CppForLoopStrategy
+from .java_strategy import JavaForLoopStrategy
 from .python_strategy import PythonForLoopStrategy
 
 
 # Mapping of language identifiers to their corresponding strategy classes
 _STRATEGY_REGISTRY: Dict[str, Type[BaseForLoopStrategy]] = {
-    "java": CStyleForLoopStrategy,
-    "cpp": CStyleForLoopStrategy,
+    "java": JavaForLoopStrategy,
+    "cpp": CppForLoopStrategy,
     "python": PythonForLoopStrategy,
 }
 

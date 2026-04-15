@@ -12,6 +12,7 @@ from typing import List
 from ....node import Node
 from ..mutation_rule import MutationRule, MutationRecord
 from ...mutation_context import MutationContext
+from ..utils.indentation_util import IndentationUtils
 from .lexicons.dead_code_lexicon import DeadCodeLexicon
 from .lexicons.registry import get_lexicon
 from .insertion_strategies.registry import get_strategy
@@ -137,26 +138,6 @@ class DeadCodeInsertionRule(MutationRule):
         self._base_indent = indent_unit
         self._scope = ScopeManager()
 
-    def _detect_indent_unit(self, root: Node) -> str:
-        """
-        Scans the tree for the first whitespace node that starts at column 0
-        and has a length greater than 0.
-
-        This method is used to auto-detect the indentation unit, fallbacks to 4 spaces if none is found.
-
-        Args:
-            root (Node): The root of the CST to scan for indentation patterns.
-
-        Returns:
-            str: The detected indentation unit (e.g. "    " for 4 spaces) or a default if none found.
-        """
-        # Traverse to find the first 'indentation' whitespace with a length > 0
-        for node in root.traverse():
-            if node.type == "whitespace" and node.start_point[1] == 0:
-                if node.text and all(c in (" ", "\t") for c in node.text):
-                    return node.text
-        return ""  # Fallback to empty string if no indentation pattern is found, which will be treated as no indentation.
-
     def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
         Entry point for the mutation. Validates language and initializes
@@ -187,7 +168,7 @@ class DeadCodeInsertionRule(MutationRule):
         insertion_strategy = get_strategy(language)
 
         # Determine indentation
-        indent = self._base_indent or self._detect_indent_unit(root)
+        indent = self._base_indent or IndentationUtils.detect_indent_unit(root)
         lexicon.set_indent_unit(indent)
 
         return self._apply_traversal(root, context, insertion_strategy, lexicon)

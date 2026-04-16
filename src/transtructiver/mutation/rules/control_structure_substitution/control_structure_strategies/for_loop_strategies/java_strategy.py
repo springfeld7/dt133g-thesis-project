@@ -4,14 +4,24 @@ Handles both Java for loop forms:
 
 - Traditional for-loops:
 
-    for (init; condition; increment) { body }
+    for (init; condition; update) { body }
 
 Converted into:
 
     init;
     while (condition) {
         body
-        increment
+        update
+    }
+
+If init contains variable declarations, extra braces are added around the body to preserve variable scoping:
+
+    {
+        init;
+        while (condition) {
+            body
+            update
+        }
     }
 
 - Enhanced for-loops (for-each):
@@ -34,6 +44,7 @@ from typing import List, Optional
 from ......node import Node
 from .....mutation_context import MutationContext
 from ....mutation_rule import MutationRule, MutationRecord
+from ....identifier_renaming._name_generator import NameGenerator
 from .base_for_loop_strategy import BaseForLoopStrategy
 
 
@@ -62,7 +73,12 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
         }
 
     def apply(
-        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str
+        self,
+        node: Node,
+        rule: MutationRule,
+        context: MutationContext,
+        indent_unit: str,
+        language: str,
     ) -> List[MutationRecord]:
         """
         Transforms a Java for-loop into a while-loop equivalent.
@@ -74,6 +90,7 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             rule (MutationRule): Rule instance used for recording mutations.
             context (MutationContext): Shared mutation context.
             indent_unit (str): The indentation unit for the language.
+            language (str): The programming language of the source code.
 
         Returns:
             List[MutationRecord]: Replace operation transforming the loop.
@@ -82,7 +99,7 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             return self._transform_traditional(node, rule, context, indent_unit)
 
         if node.type == "enhanced_for_statement":
-            return self._transform_enhanced(node, rule, context, indent_unit)
+            return self._transform_enhanced(node, rule, context, indent_unit, language)
 
         return []
 
@@ -106,9 +123,15 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             self._extract_for_loop_components(node)
         )
 
-        # If body contains no statements, skip transformation
-        if not self._has_effective_body(body):
+        # If body is not block or contains no statements, skip transformation
+        if body is None or not self._has_effective_body(body):
             return []
+
+        opening_brace, closing_brace = self._get_block_braces(body)
+        if opening_brace is None or closing_brace is None:
+            return (
+                []
+            )  # If we can't find braces, we can't reliably insert updates, so skip transformation
 
         # Build source code strings for init and update sections
         init_sources = self._normalize_init_nodes(init_nodes)
@@ -119,8 +142,6 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
         records.extend(self._delete_nodes(update_nodes, rule))
         records.extend(self._clean_for_loop_header(node, rule))
 
-        # Substitute the targeted nodes
-        records.append(self._substitute(node, "while_statement", node.text, rule))
         records.append(self._substitute(for_node, "while", "while", rule))
 
         # Insert a default "true" condition if the condition section is empty, to maintain loop semantics
@@ -153,8 +174,7 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
         last_statement = self._find_last_statement(body)
         body_insert_idx = body.children.index(last_statement) + 1
         node_at_idx = body.children[body_insert_idx]
-        body_indent = self._get_indent(last_statement)
-        body_indent = body_indent + indent_unit if needs_scope_block else body_indent
+        body_indent = init_indent + indent_unit
 
         # Insert updates at the end of the loop body
         for src in reversed(update_sources):
@@ -202,10 +222,28 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             # Add extra indentation to the body to account for the new block
             records.extend(self._apply_indent_reformat(node, indent_unit, rule))
 
+        if opening_brace.start_point[0] == closing_brace.start_point[0]:
+
+            # Handle opening brace: target is the node immediately after '{'
+            opening_idx = body.children.index(opening_brace)
+            self._ensure_newline_and_indent(
+                context, body, opening_brace, opening_idx + 1, body_indent, rule, records
+            )
+            # Handle closing brace: target is the position immediately before '}'
+            closing_idx = body.children.index(closing_brace)
+            self._ensure_newline_and_indent(
+                context, body, closing_brace, closing_idx, init_indent, rule, records
+            )
+
         return records
 
     def _transform_enhanced(
-        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str
+        self,
+        node: Node,
+        rule: MutationRule,
+        context: MutationContext,
+        indent_unit: str,
+        language: str,
     ) -> List[MutationRecord]:
         """
         Transforms an enhanced Java for-loop (for-each) into an iterator-based while-loop equivalent.
@@ -215,6 +253,7 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             rule (MutationRule): Rule instance used for recording mutations.
             context (MutationContext): Shared mutation context.
             indent_unit (str): The indentation unit for the language.
+            language (str): The programming language of the source code.
 
         Returns:
             List[MutationRecord]: A list of the performed mutations.
@@ -235,7 +274,7 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
                 print("   CChildren:")
                 for cc in child_child.children:
                     print(f"     - {cc.type}: {cc.text}")
-        new_code = "fsd"
+
         return []
 
     def _extract_for_loop_components(
@@ -391,6 +430,25 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
         node.text = new_text
         return rule.record_substitute(node, old_type)
 
+    def _get_block_braces(self, body):
+        """
+        Retrieves the opening and closing brace nodes from a block body.
+
+        This method scans the children of the given body node and returns the
+        first encountered opening brace ("{") and closing brace ("}") nodes.
+
+        Args:
+            body: The AST node representing a block body whose children may include
+                brace tokens.
+
+        Returns:
+            tuple: A tuple (opening_brace, closing_brace) where each element is either
+                the corresponding brace node or None if not found.
+        """
+        opening = next((c for c in body.children if c.type == "{"), None)
+        closing = next((c for c in body.children if c.type == "}"), None)
+        return opening, closing
+
     def is_effective_node(self, node: Node) -> bool:
         """
         Determines if a node is an effective statement, ignoring formatting and structural tokens.
@@ -465,6 +523,55 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
 
         return records
 
+    def _force_block_break(self, context, body, anchor_node, indent, rule, after=True):
+        """
+        Adjusts the block structure to ensure a newline and proper indentation
+        exist around a brace.
+
+        This method checks for existing whitespace adjacent to an anchor node
+        (typically a brace) and reformats it to match the desired indentation.
+        It then inserts a newline to force the block onto a new line, effectively
+        expanding one-liner blocks into a standard multi-line format.
+
+        Args:
+            context (MutationContext):
+                The shared execution context used for unique ID generation.
+            body (Node):
+                The 'block' node representing the loop body being modified.
+            anchor_node (Node):
+                The specific child node (e.g., '{' or '}') to use as a
+                positional anchor.
+            indent (str):
+                The whitespace string to be used for reformatting (e.g., the
+                calculated indentation for the body or the loop header).
+            rule (MutationRule):
+                The rule instance used to record the reformat and insert operations.
+            after (bool):
+                If True, the newline is ensured after the anchor node (for '{').
+                If False, it is ensured before the anchor node (for '}').
+                Defaults to True.
+
+        Returns:
+            List[MutationRecord]:
+                A list of records for the whitespace reformatting and the
+                newline insertion.
+        """
+        idx = body.children.index(anchor_node)
+        target_idx = idx + 1 if after else idx
+
+        # Look for existing whitespace to reformat
+        adj_idx = idx + 1 if after else idx - 1
+        adj_node = body.children[adj_idx] if 0 <= adj_idx < len(body.children) else None
+
+        records = []
+        if adj_node and adj_node.type == "whitespace":
+            records.append(rule.record_reformat(adj_node, indent))
+
+        # Insert the newline node
+        point = anchor_node.end_point if after else anchor_node.start_point
+        records.append(self._insert_node(context, body, point, "newline", "\n", target_idx, rule))
+        return records
+
     def _insert_node(self, context, parent, point, type, text, index, rule):
         """
         Creates and inserts a Node, then returns the generated insertion record.
@@ -522,6 +629,49 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             )
 
         return records
+
+    def _ensure_newline_and_indent(
+        self, context, body, anchor_node, target_idx, indent_value, rule, records
+    ):
+        """
+        Ensures that a specific index in the body contains a newline and the correct indentation.
+        If whitespace already exists at the target location, it reformats it; otherwise,
+        it inserts new whitespace and newline nodes.
+
+        Args:
+            context (Context): The current transformation context.
+            body (Node): The parent node containing the children to modify.
+            anchor_node (Node): The node used as a positional reference for start_point.
+            target_idx (int): The index in body.children where the nodes should be checked/inserted.
+            indent_value (str): The string value of the indentation to apply.
+            rule (Rule): The rule object responsible for recording changes.
+            records (list): The list of transformation records to append to.
+
+        Returns:
+            None: Appends records in-place.
+        """
+        # Check if we are within bounds and if the node at target_idx is already whitespace
+        if 0 <= target_idx < len(body.children) and body.children[target_idx].type == "whitespace":
+            records.append(rule.record_reformat(body.children[target_idx], indent_value))
+        else:
+            records.append(
+                self._insert_node(
+                    context,
+                    body,
+                    anchor_node.start_point,
+                    "whitespace",
+                    indent_value,
+                    target_idx,
+                    rule,
+                )
+            )
+
+        # Always insert the newline
+        records.append(
+            self._insert_node(
+                context, body, anchor_node.start_point, "newline", "\n", target_idx, rule
+            )
+        )
 
     def _delete_nodes(self, nodes: list[Node], rule) -> list[MutationRecord]:
         """
@@ -593,3 +743,24 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             new_text=true_node.text,
             new_type=true_node.type,
         )
+
+    def _generate_iterator_name(self, context: MutationContext) -> str:
+        """
+        Generates a unique name for a new iterator identifier.
+
+        Args:
+            context (MutationContext): Shared context containing forbidden_names.
+
+        Returns:
+            str: A unique, claimed identifier string.
+        """
+        base = "iter"
+        candidate = base
+        counter = 0
+
+        while candidate in context.forbidden_names:
+            candidate = f"{base}_{counter}"
+            counter += 1
+
+        context.forbidden_names.add(candidate)
+        return candidate

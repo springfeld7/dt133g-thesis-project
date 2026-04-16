@@ -57,15 +57,19 @@ class ControlStructureSubstitutionRule(MutationRule):
         targets: List[tuple[BaseControlStructureStrategy, Node]] = []
 
         indent_unit = IndentationUtils.detect_indent_unit(root)
+        context.forbidden_names = set()
 
-        # Collect valid targets for transformation
         for node in root.traverse():
+            # Collect used identifiers to prevent naming collisions in generated code
+            if node.type == "identifier":
+                context.forbidden_names.add(node.text)
+            # Collect valid targets for transformation
             for strategy in strategies:
                 if strategy.is_valid(node):
                     targets.append((strategy, node))
 
         # Apply transformations
         for strategy, node in targets:
-            records.extend(strategy.apply(node, self, context, indent_unit))
+            records.extend(strategy.apply(node, self, context, indent_unit, language))
 
         return records

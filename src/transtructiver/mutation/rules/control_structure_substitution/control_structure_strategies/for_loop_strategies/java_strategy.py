@@ -1,17 +1,15 @@
 """Java loop substitution strategy.
 
-Handles both Java for loop forms:
+Handles traditional Java for loops:
 
-- Traditional for-loops:
-
-    for (init; condition; update) { body }
+    for (init; condition; update) { body; }
 
 Converted into:
 
     init;
     while (condition) {
-        body
-        update
+        body;
+        update;
     }
 
 If init contains variable declarations, extra braces are added around the body to preserve variable scoping:
@@ -19,23 +17,9 @@ If init contains variable declarations, extra braces are added around the body t
     {
         init;
         while (condition) {
-            body
-            update
+            body;
+            update;
         }
-    }
-
-- Enhanced for-loops (for-each):
-
-    for (Type x : iterable) { body }
-
-Converted into:
-
-    Iterator-based while-loop equivalent:
-
-    Iterator<Type> it = iterable.iterator();
-    while (it.hasNext()) {
-        Type x = it.next();
-        body
     }
 """
 
@@ -44,7 +28,6 @@ from typing import List, Optional
 from ......node import Node
 from .....mutation_context import MutationContext
 from ....mutation_rule import MutationRule, MutationRecord
-from ....identifier_renaming._name_generator import NameGenerator
 from .base_for_loop_strategy import BaseForLoopStrategy
 
 
@@ -69,41 +52,9 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
         """
         return node.type in {
             "for_statement",
-            "enhanced_for_statement",
         }
 
     def apply(
-        self,
-        node: Node,
-        rule: MutationRule,
-        context: MutationContext,
-        indent_unit: str,
-        language: str,
-    ) -> List[MutationRecord]:
-        """
-        Transforms a Java for-loop into a while-loop equivalent.
-
-        Dispatches transformation based on loop type.
-
-        Args:
-            node (Node): The for-loop node.
-            rule (MutationRule): Rule instance used for recording mutations.
-            context (MutationContext): Shared mutation context.
-            indent_unit (str): The indentation unit for the language.
-            language (str): The programming language of the source code.
-
-        Returns:
-            List[MutationRecord]: Replace operation transforming the loop.
-        """
-        if node.type == "for_statement":
-            return self._transform_traditional(node, rule, context, indent_unit)
-
-        if node.type == "enhanced_for_statement":
-            return self._transform_enhanced(node, rule, context, indent_unit, language)
-
-        return []
-
-    def _transform_traditional(
         self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str
     ) -> List[MutationRecord]:
         """
@@ -119,6 +70,22 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             List[MutationRecord]: A list of the performed mutations.
         """
         records = []
+        print(f"Start:\n{node.to_code()}")
+        print(f"Found valid node: {node.type}")
+        print(f"Node text: {node.text}")
+        print("Printing children for debugging:")
+        for child in node.children:
+            print(f" - {child.type}")
+            print(f"   Text: {child.text}")
+            if child.semantic_label:
+                print(f"   Semantic label: {child.semantic_label}")
+            for child_child in child.children:
+                print(f"   - {child_child.type}: {child_child.text}")
+                if child_child.semantic_label:
+                    print(f"     Semantic label: {child_child.semantic_label}")
+                print("   CChildren:")
+                for cc in child_child.children:
+                    print(f"     - {cc.type}: {cc.text}")
         for_node, init_nodes, condition_nodes, update_nodes, body = (
             self._extract_for_loop_components(node)
         )
@@ -237,55 +204,11 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
 
         return records
 
-    def _transform_enhanced(
-        self,
-        node: Node,
-        rule: MutationRule,
-        context: MutationContext,
-        indent_unit: str,
-        language: str,
-    ) -> List[MutationRecord]:
-        """
-        Transforms an enhanced Java for-loop (for-each) into an iterator-based while-loop equivalent.
-
-        Args:
-            node (Node): The enhanced for-loop node.
-            rule (MutationRule): Rule instance used for recording mutations.
-            context (MutationContext): Shared mutation context.
-            indent_unit (str): The indentation unit for the language.
-            language (str): The programming language of the source code.
-
-        Returns:
-            List[MutationRecord]: A list of the performed mutations.
-        """
-        print(f"Start:\n{node.to_code()}")
-        print(f"Found valid node: {node.type}")
-        print(f"Node text: {node.text}")
-        print("Printing children for debugging:")
-        for child in node.children:
-            print(f" - {child.type}")
-            print(f"   Text: {child.text}")
-            if child.semantic_label:
-                print(f"   Semantic label: {child.semantic_label}")
-            for child_child in child.children:
-                print(f"   - {child_child.type}: {child_child.text}")
-                if child_child.semantic_label:
-                    print(f"     Semantic label: {child_child.semantic_label}")
-                print("   CChildren:")
-                for cc in child_child.children:
-                    print(f"     - {cc.type}: {cc.text}")
-
-        return []
-
     def _extract_for_loop_components(
         self, node: Node
     ) -> tuple[Optional[Node], list[Node], list[Node], list[Node], Optional[Node]]:
         """
         Extracts the structural components of a for-loop node from a CST.
-
-        This method traverses the direct children of the provided node and identifies
-        the key components of a for-loop structure, separating them into initialization
-        expressions, update expressions, and the loop body.
 
         Args:
             node (Node): The CST node expected to represent or contain a for-loop structure.
@@ -293,59 +216,43 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
         Returns:
             tuple:
                 - for_node (Node | None): The identified 'for' node if present.
-                - init_nodes (list[Node]): A list of initialization-related nodes extracted
-                from variable declarations and assignment expressions.
-                - condition_nodes (list[Node]): A list of condition-expression nodes found in the loop.
-                - update_nodes (list[Node]): A list of update-expression nodes found in the loop.
-                - body (Node | None): The block node representing the loop body, if present.
+                - init_nodes (list[Node]): A list of initialization-related nodes.
+                - condition_nodes (list[Node]): A list of condition-expression nodes.
+                - update_nodes (list[Node]): A list of update-expression nodes.
+                - body (Node | None): The block node representing the loop body.
         """
-        init_nodes = []
-        condition_nodes = []
-        update_nodes = []
-        body = None
-        for_node = None
-
+        init_nodes, condition_nodes, update_nodes = [], [], []
+        for_node, body = None, None
         section = 0  # 0 = init, 1 = condition, 2 = update
+
+        # Map sections to their respective storage lists
+        sections = {0: init_nodes, 1: condition_nodes, 2: update_nodes}
 
         for child in node.children:
             match child.type:
-
                 case ";":
                     section += 1
-
                 case "for":
                     for_node = child
-
-                case "local_variable_declaration":
-                    init_nodes.append(child)
-                    section += 1  # In local_variable_declaration, the ; is included as a child
-
-                case "assignment_expression":
-                    if section == 0:
-                        init_nodes.append(child)
-                    elif section == 2:
-                        update_nodes.append(child)
-
-                case "binary_expression":
-                    if section == 1:
-                        condition_nodes.append(child)
-
-                case "update_expression":
-                    update_nodes.append(child)
-
-                case "method_invocation":
-                    if section == 0:
-                        init_nodes.append(child)
-                    elif section == 1:
-                        condition_nodes.append(child)
-                    elif section == 2:
-                        update_nodes.append(child)
-
                 case "block":
                     body = child
-
-                case _:
-                    continue
+                case "local_variable_declaration":
+                    init_nodes.append(child)
+                    section += 1  # Semicolon is internal to this node type
+                case "update_expression":
+                    update_nodes.append(child)
+                case (
+                    "assignment_expression"
+                    | "method_invocation"
+                    | "binary_expression"
+                    | "identifier"
+                    | "parenthesized_expression"
+                    | "true"
+                    | "false"
+                ):
+                    # Only append if the current section is valid for this node type
+                    if section in sections:
+                        sections[section].append(child)
 
         return for_node, init_nodes, condition_nodes, update_nodes, body
 
@@ -360,8 +267,13 @@ class JavaForLoopStrategy(BaseForLoopStrategy):
             text (str): The raw statement text without termination.
 
         Returns:
-            str: A fully formatted statement ending with ';'.
+            str: A fully formatted statement ending with ';' (if not already present).
         """
+        text = text.rstrip()
+
+        if text.endswith(";"):
+            return text
+
         return f"{text};"
 
     def _normalize_init_nodes(self, init_nodes: list[Node]) -> list[str]:

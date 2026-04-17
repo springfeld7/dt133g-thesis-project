@@ -6,6 +6,7 @@ but is designed to support additional control structures (e.g., ternary)
 in the future.
 """
 
+from multiprocessing import context
 from typing import List
 
 from ....node import Node
@@ -45,6 +46,7 @@ class ControlStructureSubstitutionRule(MutationRule):
             return []
 
         records: List[MutationRecord] = []
+        taken_names = set()
 
         language = root.language.lower().strip() if root.language else None
         if not language:
@@ -59,10 +61,17 @@ class ControlStructureSubstitutionRule(MutationRule):
         indent_unit = IndentationUtils.detect_indent_unit(root)
 
         for node in root.traverse():
+
+            # Collect variable names to avoid naming collisions in transformations
+            if node.type == "identifier":
+                taken_names.add(node.text)
+
             # Collect valid targets for transformation
             for strategy in strategies:
                 if strategy.is_valid(node):
                     targets.append((strategy, node))
+
+        context.taken_names = taken_names
 
         # Apply transformations
         for strategy, node in targets:

@@ -95,5 +95,6 @@ class SubstituteVerificationStrategy(VerificationStrategy):
             ("for_statement", "while_statement"),
             ("for", "while"),
             ("enhanced_for_statement", "while_statement"),
+            ("in", "true"),
         }
         return (old_type, new_type) in valid_pairs

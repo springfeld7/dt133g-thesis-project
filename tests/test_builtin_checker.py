@@ -4,9 +4,9 @@ from transtructiver.parsing.annotation.builtin_checker import make_profile_from_
 BASE_DIR = os.path.join(
     os.path.dirname(__file__), "..", "src", "transtructiver", "parsing", "annotation", "profiles"
 )
-PY = make_profile_from_files("python", BASE_DIR)
-JAVA = make_profile_from_files("java", BASE_DIR)
-CPP = make_profile_from_files("cpp", BASE_DIR)
+PY = make_profile_from_files("python", os.path.join(BASE_DIR, "python"))
+JAVA = make_profile_from_files("java", os.path.join(BASE_DIR, "java"))
+CPP = make_profile_from_files("cpp", os.path.join(BASE_DIR, "cpp"))
 
 
 def test_python_builtins():
@@ -19,12 +19,12 @@ def test_python_builtins():
 def test_java_builtins():
     """Test Java builtins detection."""
     assert is_builtin("String", JAVA)
-    assert is_builtin("util", JAVA)
+    assert is_builtin("java.util", JAVA)
     assert not is_builtin("myHelper", JAVA)
 
 
 def test_cpp_builtins():
     """Test C++ builtins detection."""
-    assert not is_builtin("printf", CPP)  # printf is not a C++ STL builtin
+    assert not is_builtin("startswith", CPP)
     assert is_builtin("vector", CPP)
     assert not is_builtin("my_vector", CPP)

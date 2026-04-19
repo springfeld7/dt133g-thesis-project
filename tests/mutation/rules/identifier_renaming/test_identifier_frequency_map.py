@@ -129,9 +129,9 @@ def test_build_identifier_frequency_map_integration(monkeypatch, tmp_path):
 
 
 def test_parse_args_loads_all_values_from_config(tmp_path):
-        config_path = tmp_path / "identifier-map.json"
-        config_path.write_text(
-                """
+    config_path = tmp_path / "identifier-map.json"
+    config_path.write_text(
+        """
 {
     "identifier_frequency_map": {
         "parquet_path": "dataset.parquet",
@@ -142,22 +142,22 @@ def test_parse_args_loads_all_values_from_config(tmp_path):
     }
 }
 """.strip(),
-                encoding="utf-8",
-        )
+        encoding="utf-8",
+    )
 
-        args = _parse_args(["--config", str(config_path)])
+    args = _parse_args(["--config", str(config_path)])
 
-        assert args.parquet_path == "dataset.parquet"
-        assert args.output_json_path == "out/map.json"
-        assert args.batch_size == 250
-        assert args.top_n == 12
-        assert args.min_coverage == 0.87
+    assert args.parquet_path == "dataset.parquet"
+    assert args.output_json_path == "out/map.json"
+    assert args.batch_size == 250
+    assert args.top_n == 12
+    assert args.min_coverage == 0.87
 
 
 def test_parse_args_cli_overrides_config_values(tmp_path):
-        config_path = tmp_path / "identifier-map.json"
-        config_path.write_text(
-                """
+    config_path = tmp_path / "identifier-map.json"
+    config_path.write_text(
+        """
 {
     "identifier_frequency_map": {
         "parquet_path": "dataset.parquet",
@@ -168,26 +168,26 @@ def test_parse_args_cli_overrides_config_values(tmp_path):
     }
 }
 """.strip(),
-                encoding="utf-8",
-        )
+        encoding="utf-8",
+    )
 
-        args = _parse_args(
-                [
-                        "--config",
-                        str(config_path),
-                        "override.parquet",
-                        "override.json",
-                        "--batch-size",
-                        "500",
-                        "--top-n",
-                        "5",
-                        "--min-coverage",
-                        "0.9",
-                ]
-        )
+    args = _parse_args(
+        [
+            "--config",
+            str(config_path),
+            "override.parquet",
+            "override.json",
+            "--batch-size",
+            "500",
+            "--top-n",
+            "5",
+            "--min-coverage",
+            "0.9",
+        ]
+    )
 
-        assert args.parquet_path == "override.parquet"
-        assert args.output_json_path == "override.json"
-        assert args.batch_size == 500
-        assert args.top_n == 5
-        assert args.min_coverage == 0.9
+    assert args.parquet_path == "override.parquet"
+    assert args.output_json_path == "override.json"
+    assert args.batch_size == 500
+    assert args.top_n == 5
+    assert args.min_coverage == 0.9

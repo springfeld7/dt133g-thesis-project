@@ -48,13 +48,11 @@ def test_substitute_valid_metadata():
     Test that SUBSTITUTE accepts properly structured parts_map.
     """
     metadata = {
-        "node_type": "For",
-        "parts_map": {
-            "target": valid_coord(),
-            "iterable": valid_coord(),
-            "body": valid_coord(),
-        },
+        "old_type": "for_statement",
+        "new_type": "while_statement",
+        "new_val": "while (condition) { body }",
     }
+
     assert validate_action_metadata(MutationAction.SUBSTITUTE, metadata)
 
 
@@ -95,19 +93,6 @@ def test_missing_required_keys(action, metadata):
 # ==== Invalid Map Type =====
 
 
-def test_substitute_parts_map_not_dict():
-    """
-    Test that SUBSTITUTE fails if parts_map is not a dictionary.
-    """
-    metadata = {
-        "node_type": "For",
-        "parts_map": "invalid",
-    }
-
-    with pytest.raises(TypeError):
-        validate_action_metadata(MutationAction.SUBSTITUTE, metadata)
-
-
 def test_flatten_ref_map_not_dict():
     """
     Test that FLATTEN fails if ref_map is not a dictionary.
@@ -119,73 +104,6 @@ def test_flatten_ref_map_not_dict():
 
     with pytest.raises(TypeError):
         validate_action_metadata(MutationAction.FLATTEN, metadata)
-
-
-# ==== Invalid Coordinate Structure ====
-
-
-@pytest.mark.parametrize(
-    "invalid_coord",
-    [
-        (1,),  # wrong length
-        (1, 2, 3),  # too long
-        ("a", "b"),  # wrong types
-        (1, "x"),  # mixed types
-        None,  # not iterable
-    ],
-)
-def test_invalid_coordinate_shapes(invalid_coord):
-    """
-    Test that invalid coordinate shapes raise TypeError.
-    """
-    metadata = {
-        "node_type": "For",
-        "parts_map": {
-            "target": invalid_coord,
-            "iterable": (1, 2),
-            "body": (3, 4),
-        },
-    }
-
-    with pytest.raises(TypeError):
-        validate_action_metadata(MutationAction.SUBSTITUTE, metadata)
-
-
-# ==== SUBSTITUTE Strict Key Matching ====
-
-
-def test_substitute_extra_key_in_parts_map():
-    """
-    Test that SUBSTITUTE fails if parts_map contains unexpected keys.
-    """
-    metadata = {
-        "node_type": "For",
-        "parts_map": {
-            "target": (1, 1),
-            "iterable": (2, 2),
-            "body": (3, 3),
-            "extra": (4, 4),
-        },
-    }
-
-    with pytest.raises(ValueError):
-        validate_action_metadata(MutationAction.SUBSTITUTE, metadata)
-
-
-def test_substitute_missing_key_in_parts_map():
-    """
-    Test that SUBSTITUTE fails if parts_map is missing required keys.
-    """
-    metadata = {
-        "node_type": "For",
-        "parts_map": {
-            "target": (1, 1),
-            "body": (3, 3),
-        },
-    }
-
-    with pytest.raises(ValueError):
-        validate_action_metadata(MutationAction.SUBSTITUTE, metadata)
 
 
 # ==== Extra Metadata Keys (Allowed Behavior) ====

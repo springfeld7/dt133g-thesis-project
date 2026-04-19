@@ -94,20 +94,6 @@ class TestDeadCodeInsertionRule:
         assert rule._base_indent == indent
         assert isinstance(rule._scope, ScopeManager)
 
-    def test_detect_indent_unit_with_tree(self):
-        """Detects indentation correctly from a tree with a whitespace node."""
-        root, _, _ = _build_test_tree(with_whitespace=True)
-        rule = DeadCodeInsertionRule()
-        indent = rule._detect_indent_unit(root)
-        assert indent == "    "
-
-    def test_detect_indent_unit_fallback(self):
-        """Returns empty string when no valid whitespace node exists."""
-        root, _, _ = _build_test_tree(with_whitespace=False)
-        rule = DeadCodeInsertionRule()
-        indent = rule._detect_indent_unit(root)
-        assert indent == ""
-
     def test_apply_probability_logic(self, mutation_context, mock_registry):
         """Tests that the rule respects the inverted probability check (> prob)."""
         lex, strat = mock_registry

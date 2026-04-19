@@ -5,22 +5,19 @@ It derives type-aware suffix tokens from declaration context and formats
 renamed identifier text according to language-specific naming conventions.
 """
 
-from typing import Callable
-
 from ....node import Node
-from ....parsing.annotation.annotator import NAMING_ANCESTOR_LABELS
-from ....parsing.annotation.annotation_utils import meaningful_children
+from ..utils.formatter import format_identifier
 
 
 # Canonical suffix map that collapses equivalent type names to shared tokens.
 _TYPE_SUFFIXES = {
-    **dict.fromkeys(["list", "array"], "list"),
-    **dict.fromkeys(["tuple"], "tuple"),
-    **dict.fromkeys(["dict", "dictionary"], "dict"),
-    **dict.fromkeys(["set"], "set"),
-    **dict.fromkeys(["str", "string"], "str"),
-    **dict.fromkeys(["int", "integer", "float", "double", "number"], "num"),
-    **dict.fromkeys(["bool", "boolean"], "flag"),
+    "list": "list",
+    "tuple": "tuple",
+    "map": "map",
+    "set": "set",
+    "string": "str",
+    **dict.fromkeys(["integer", "float", "double", "number"], "num"),
+    "boolean": "flag",
 }
 
 # Semantic-only fallback when no concrete type hint can be inferred.
@@ -32,23 +29,6 @@ _SEMANTIC_FALLBACK_SUFFIXES = {
     "parameter_name": "param",
     "argument_name": "arg",
 }
-
-
-def _ancestor_types_for_label(label: str) -> set[str]:
-    """Return ancestor node types that map to a semantic naming label.
-
-    Args:
-        label: Semantic label to reverse-map (for example ``variable_name``).
-
-    Returns:
-        A set of ancestor node types associated with the given label.
-    """
-    return {
-        node_type
-        for language_map in NAMING_ANCESTOR_LABELS.values()
-        for node_type, semantic_label in language_map.items()
-        if semantic_label == label
-    }
 
 
 def _build_appendage_name(node: Node, language: str) -> str:
@@ -64,78 +44,12 @@ def _build_appendage_name(node: Node, language: str) -> str:
     if not node.text:
         return ""
 
+    old_text = node.text
     suffix = _infer_suffix(node)
-    if node.text.endswith(f"_{suffix}"):
-        return node.text
+    if old_text.endswith(f"_{suffix}"):
+        return old_text
 
-    return _format_new_name(node.text, suffix, language)
-
-
-def _infer_from_tree_context(node: Node) -> str | None:
-    """Infer a type suffix by searching the tree for type nodes.
-
-    Attempts to find type annotations by checking the parent and expanded
-    ancestor contexts. First tries restricted declaration-context matching;
-    if that fails, broadens the search to siblings, children of siblings,
-    and grandparent contexts.
-
-    Args:
-        node: Identifier node with populated ``semantic_label`` and ``parent``.
-
-    Returns:
-        Canonical suffix token if a type annotation is found, otherwise None.
-    """
-    parent = node.parent
-    if parent is None or not node.semantic_label:
-        return None
-
-    # First try restricted declaration-context matching.
-    ancestor_types = _ancestor_types_for_label(node.semantic_label)
-    if parent.type in ancestor_types:
-        # Restricted search: inline type child on the declaration itself.
-        for child in meaningful_children(parent):
-            if child is not node and child.field == "type":
-                result = _suffix_from_type_node(child)
-                if result is not None:
-                    return result
-
-        # Then try sibling type nodes from the declaration's parent context.
-        if parent.parent is not None:
-            for sibling in parent.parent.children:
-                if sibling is not parent and sibling.field == "type":
-                    result = _suffix_from_type_node(sibling)
-                    if result is not None:
-                        return result
-
-    # If restricted search found nothing, broaden to nearby tree context.
-    # Check parent's children and siblings, and grandparent's children.
-    for candidate in parent.traverse():
-        if candidate is not node:
-            if candidate.field == "type":
-                result = _suffix_from_type_node(candidate)
-                if result is not None:
-                    return result
-            # Also check node types that might contain type information.
-            else:
-                result = _match_type_suffix(candidate.type, "")
-                if result is not None:
-                    return result
-
-    return None
-
-
-def _infer_from_semantic_label(node: Node) -> str:
-    """Return a suffix based solely on the node's semantic label.
-
-    Args:
-        node: Identifier node with a populated ``semantic_label``.
-
-    Returns:
-        Canonical suffix token if the label maps to one, otherwise None.
-    """
-    if node.semantic_label and node.semantic_label in _SEMANTIC_FALLBACK_SUFFIXES:
-        return _SEMANTIC_FALLBACK_SUFFIXES[node.semantic_label]
-    return ""
+    return format_identifier(node, f"{old_text}_{suffix}", language)
 
 
 def _infer_suffix(node: Node) -> str:
@@ -148,138 +62,101 @@ def _infer_suffix(node: Node) -> str:
         node: Identifier node context used for inference.
 
     Returns:
-        Canonical suffix token (for example ``list`` or ``fn``), or an empty
-        string when no suffix can be inferred.
+        Canonical suffix token (for example ``list`` or ``func``).
     """
-    return _infer_from_tree_context(node) or _infer_from_semantic_label(node)
+    return (
+        _infer_from_context_type(node)
+        or _infer_from_local_declaration_type(node)
+        or _infer_from_semantic_label(node)
+        or "tmp"
+    )
 
 
-def _resolve_type_text(type_node: Node) -> str | None:
-    """Return the best available text for a type annotation node.
-
-    Tries the node's own text first, then the first child with text.
+def _infer_from_context_type(node: Node) -> str | None:
+    """Return a suffix based solely on the node's context type.
 
     Args:
-        type_node: Node representing a type annotation.
+        node: Identifier node with a populated ``context_type``.
 
     Returns:
-        Non-empty text string, or None if nothing is available.
+        Canonical suffix token if the type maps to one, otherwise None.
     """
-    if type_node.text:
-        return type_node.text
-    for nested in type_node.children:
-        if nested.text:
-            return nested.text
+    if node.context_type:
+        for key in _TYPE_SUFFIXES:
+            if key in node.context_type:
+                return _TYPE_SUFFIXES[key]
     return None
 
 
-def _extract_terminal_type(text: str, parent_type: str | None) -> str:
-    """Return the most specific type name from a qualified type string.
-
-    Strips namespace qualifiers, generic parameters, and package prefixes
-    according to how the type appears in its parent context.
+def _infer_from_semantic_label(node: Node) -> str | None:
+    """Return a suffix based solely on the node's semantic label.
 
     Args:
-        text: Lowercased type text.
-        parent_type: The parent node type, used to choose a parsing strategy.
+        node: Identifier node with a populated ``semantic_label``.
 
     Returns:
-        The terminal (rightmost, most specific) type name.
+        Canonical suffix token if the label maps to one, otherwise None.
     """
-    normalized = text.strip()
-    if not normalized:
-        return ""
-
-    # method_reference may include constructor/method tails (e.g., List::new).
-    if parent_type == "method_reference":
-        normalized = normalized.split("::", 1)[0]
-
-    # Drop generic type arguments so List<String> resolves to List.
-    if "<" in normalized:
-        normalized = normalized.split("<", 1)[0]
-
-    # Keep only the terminal type for qualified names like java.util.List.
-    normalized = normalized.rsplit("::", 1)[-1].split(".")[-1]
-    return normalized.strip()
-
-
-def _match_type_suffix(lowered: str, terminal: str) -> str | None:
-    """Map a terminal type name to a canonical suffix token.
-
-    First tries an exact lookup, then falls back to substring scanning
-    over all known type keys (longest key first to prefer more specific matches).
-
-    Args:
-        lowered: Full lowercased type text used for substring fallback.
-        terminal: Most specific type name from the type string.
-
-    Returns:
-        Canonical suffix token if a match is found, otherwise None.
-    """
-    # Fast path: exact terminal type match.
-    exact = _TYPE_SUFFIXES.get(terminal)
-    if exact is not None:
-        return exact
-
-    # Fallback: substring scan for composite types (e.g., Optional[List[int]]).
-    for key in sorted(_TYPE_SUFFIXES.keys(), key=len, reverse=True):
-        if key in lowered:
-            return _TYPE_SUFFIXES[key]
+    if node.semantic_label and node.semantic_label in _SEMANTIC_FALLBACK_SUFFIXES:
+        return _SEMANTIC_FALLBACK_SUFFIXES[node.semantic_label]
     return None
 
 
-def _suffix_from_type_node(type_node: Node) -> str | None:
-    """Derive a canonical suffix token from a type annotation node.
+def _infer_from_local_declaration_type(node: Node) -> str | None:
+    """Infer a type token from nearby declaration structure when context_type is missing."""
+    parent = node.parent
+    if not parent:
+        return None
 
-    Delegates text extraction to :func:`_resolve_type_text`, terminal
-    parsing to :func:`_extract_terminal_type`, and lookup to
-    :func:`_match_type_suffix`.
+    # typed_parameter(identifier, type(...))
+    if parent.type == "typed_parameter" and parent.children and parent.children[0] is node:
+        for sibling in parent.children[1:]:
+            inferred = _extract_type_from_node(sibling)
+            if inferred:
+                return _TYPE_SUFFIXES.get(inferred, inferred)
 
-    Args:
-        type_node: Node representing a type annotation or type-like context.
+    # assignment(left, '=', right)
+    if parent.type == "assignment" and parent.children and parent.children[0] is node:
+        for sibling in parent.children[1:]:
+            if sibling.type == "operator" and sibling.text == "=":
+                continue
+            inferred = _extract_type_from_node(sibling)
+            if inferred:
+                return _TYPE_SUFFIXES.get(inferred, inferred)
 
-    Returns:
-        Canonical suffix token if resolvable, otherwise None.
-    """
-    type_text = _resolve_type_text(type_node)
-    if not type_text:
-        type_text = type_node.type
-    parent_type = type_node.parent.type if type_node.parent else None
-    terminal = _extract_terminal_type(type_text.lower(), parent_type)
-    return _match_type_suffix(type_text.lower(), terminal)
-
-
-# Explicit per-language name formatters.
-# New languages can be added here without modifying _format_new_name.
-_LANGUAGE_FORMATTERS: dict[str, Callable[[str, str], str]] = {
-    "python": lambda text, suffix: f"{text}_{suffix}",
-}
+    return None
 
 
-def _format_generic(text: str, suffix: str) -> str:
-    """Format an identifier using generic (non-Python) camelCase-suffix style."""
-    return text + suffix.capitalize()
+def _extract_type_from_node(node: Node) -> str | None:
+    """Extract canonical type token from a node or its subtree."""
+    for child in node.traverse():
+        inferred = _to_canonical_type(child.type) or _to_canonical_type(child.text)
+        if inferred:
+            return inferred
+
+    return None
 
 
-def _format_new_name(text: str, suffix: str, language: str) -> str:
-    """Format a new identifier from base ``text``, ``suffix``, and ``language``.
+def _to_canonical_type(raw: str | None) -> str | None:
+    """Map raw type/literal text to canonical type keys used in _TYPE_SUFFIXES."""
+    if not raw:
+        return None
 
-    Args:
-        text: Original identifier text.
-        suffix: Canonical suffix token.
-        language: Language key resolved from root.
+    token = raw.strip().lower().strip("\"'")
+    if not token:
+        return None
 
-    Returns:
-        Formatted identifier text according to current language rules.
+    aliases = {
+        "str": "string",
+        "int": "integer",
+        "bool": "boolean",
+        "dict": "map",
+        "array": "list",
+    }
 
-    Notes:
-        Python formatting uses snake_case suffixes, while non-Python
-        languages use camelCase-suffix via :func:`_format_generic`.
-        Both are registered in :data:`_LANGUAGE_FORMATTERS`.
-    """
-    # Fallback for empty/unknown inputs.
-    if not suffix:
-        suffix = "tmp"
+    token = aliases.get(token, token)
 
-    # Dispatch via registry for explicit, extensible language formatting.
-    return _LANGUAGE_FORMATTERS.get(language, _format_generic)(text, suffix)
+    if token in _TYPE_SUFFIXES:
+        return token
+
+    return None

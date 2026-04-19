@@ -4,12 +4,14 @@ from typing import Callable
 
 from ....node import Node
 from ._rename_appendage import _build_appendage_name
+from ._rename_substitution import _build_substitute_name
 
 _NamingStrategy = Callable[["Node", str], str]
 
 # Strategy table keyed by rename "level"; level 0 is the current default heuristic.
 _LEVEL_STRATEGIES: dict[int, _NamingStrategy] = {
     0: _build_appendage_name,
+    1: _build_substitute_name,
 }
 
 

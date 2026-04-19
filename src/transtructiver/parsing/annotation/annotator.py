@@ -15,154 +15,12 @@ Key concepts:
 - Lazy-loaded annotators prevent circular imports
 """
 
+import os
+
 from collections.abc import Callable
 
 from ...node import Node
-
-
-# Cross-language semantic labels for scope-defining node types.
-# Maps language-specific node type names to unified semantic labels that represent
-# similar constructs across Python, Java, and C++. This enables the mutation engine
-# and other tools to treat equivalent structures uniformly regardless of language.
-#
-# Examples:
-#   - Python's and C++'s 'function_definition' and Java's 'method_declaration' all map to 'function_scope'
-#   - Blocks/compounds map to 'block_scope' for scope tracking
-UNIFIED_TYPE_LABELS = {
-    **dict.fromkeys(
-        [
-            "function_definition",
-            "method_declaration",
-            "constructor_declaration",
-            "compact_constructor_declaration",
-            "lambda",
-        ],
-        "function_scope",
-    ),
-    **dict.fromkeys(
-        [
-            "class_definition",
-            "class_declaration",
-            "class_specifier",
-            "struct_specifier",
-            "interface_declaration",
-            "record_declaration",
-            "enum_declaration",
-            "annotation_type_declaration",
-        ],
-        "class_scope",
-    ),
-    **dict.fromkeys(
-        ["block", "compound_statement", "class_body", "constructor_body"], "block_scope"
-    ),
-    **dict.fromkeys(
-        ["for_statement", "while_statement", "for_range_loop", "enhanced_for_statement"],
-        "loop_scope",
-    ),
-    **dict.fromkeys(
-        [
-            "assignment",
-            "assignment_expression",
-            "declaration",
-            "field_declaration",
-            "local_variable_declaration",
-        ],
-        "assignment_scope",
-    ),
-    **dict.fromkeys(
-        [
-            "if_statement",
-            "compound_literal_expression",
-            "elif_clause",
-        ],
-        "condition_scope",
-    ),
-    **dict.fromkeys(["method_invocation", "call_expression", "call"], "call"),
-    **dict.fromkeys(["binary_operator", "binary_expression"], "operation_scope"),
-    "return_statement": "return_scope",
-}
-
-
-# Language-specific semantic labels for declaration ancestors.
-# Maps (language, ancestor_node_type) pairs to semantic labels that classify
-# the identifiers within those contexts. For example, an identifier within a
-# 'formal_parameter' context in Java gets labeled 'parameter_name'.
-#
-# Used to annotate identifiers based on their declaration context, enabling
-# mutation rules to selectively target specific identifier categories.
-NAMING_ANCESTOR_LABELS = {
-    "python": {
-        **dict.fromkeys(["global_statement", "nonlocal_statement"], "variable_name"),
-        **dict.fromkeys(
-            ["parameters", "typed_parameter", "default_parameter", "typed_default_parameter"],
-            "parameter_name",
-        ),
-        "function_definition": "function_name",
-        "class_definition": "class_name",
-        "type": "type_name",
-        "raise_statement": "exception_name",
-        "argument_list": "argument_name",
-    },
-    "java": {
-        **dict.fromkeys(
-            ["method_declaration", "annotation_type_element_declaration"], "function_name"
-        ),
-        **dict.fromkeys(
-            [
-                "class_declaration",
-                "constructor_declaration",
-                "compact_constructor_declaration",
-                "record_declaration",
-                "interface_declaration",
-                "annotation_type_declaration",
-                "enum_declaration",
-            ],
-            "class_name",
-        ),
-        "formal_parameters": "parameter_name",
-        "variable_declarator": "variable_name",
-        "throw_statement": "exception_name",
-        "argument_list": "argument_name",
-    },
-    "cpp": {
-        **dict.fromkeys(["function_declarator", "function_definition"], "function_name"),
-        **dict.fromkeys(["class_specifier", "struct_specifier", "enum_specifier"], "class_name"),
-        **dict.fromkeys(
-            ["init_declarator", "field_declaration", "enumerator", "preproc_def"], "variable_name"
-        ),
-        "parameter_declaration": "parameter_name",
-        "namespace_definition": "namespace_name",
-        "type_alias_declaration": "type_name",
-        "throw_statement": "exception_name",
-        "argument_list": "argument_name",
-    },
-}
-
-
-def get_unified_type_label(node_type: str) -> str | None:
-    """Return the cross-language semantic label for a structural node type.
-
-    Maps language-specific node types (like 'method_declaration') to unified
-    semantic labels (like 'function_scope') that represent the same concept
-    across Python, Java, and C++.
-
-    Args:
-        node_type (str): The language-specific node type to look up.
-
-    Returns:
-        str | None: The unified semantic label ('function_scope', 'class_scope',
-            'block_scope', 'loop_scope'), or None if the node type is not a
-            recognized scope-defining construct.
-
-    Example:
-        >>> get_unified_type_label('method_declaration')
-        'function_scope'
-        >>> get_unified_type_label('class_definition')
-        'class_scope'
-        >>> get_unified_type_label('identifier')
-        None
-    """
-    return UNIFIED_TYPE_LABELS.get(node_type)
+from .annotators import BaseAnnotator
 
 
 # Registry mapping language keys to their annotate functions.
@@ -200,25 +58,20 @@ def annotate(root: Node) -> Node:
     Raises:
         ValueError: If ``root.language`` is not present or unsupported.
     """
+
     explicit_language = getattr(root, "language", None)
     if not explicit_language:
         raise ValueError(
             "No language found on root node. Set root.language before calling annotate()."
         )
 
-    language = explicit_language.lower()
-
-    if language not in _ANNOTATOR_REGISTRY:
-        known = sorted(_ANNOTATOR_REGISTRY.keys())
-        raise ValueError(
-            f"No annotator registered for language '{language}'. Available annotators: {known}"
-        )
+    language = BaseAnnotator.normalize_language_key(explicit_language)
 
     # Load the correct LanguageProfile for the language
     from .builtin_checker import make_profile_from_files
-    import os
 
-    base_dir = os.path.join(os.path.dirname(__file__), "profiles")
+    base_dir = os.path.join(os.path.dirname(__file__), f"profiles/{language}")
     profile = make_profile_from_files(language, base_dir)
 
-    return _ANNOTATOR_REGISTRY[language](root, profile)
+    annotator = BaseAnnotator.for_language(language)
+    return annotator.annotate(root, profile)

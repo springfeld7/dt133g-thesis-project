@@ -229,38 +229,38 @@ def load_builtins_from_json(path: str) -> dict:
 
 class ProfileDict(dict):
     """Profile dict with precomputed builtin indices for fast lookups.
-    
+
     Builds two indices during initialization:
     - exact_names: set of all flat strings from the builtins dict (O(1) lookups)
     - token_index: mapping from single tokens to names containing them (fast token search)
     - _cache: LRU-style cache for is_builtin checks
     """
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._cache: dict[str, bool] = {}
         self._build_indices()
-    
+
     def _build_indices(self) -> None:
         """Build exact_names set and token_index for fast lookups."""
         self.exact_names: set[str] = set()
         self.token_index: dict[str, set[str]] = {}
-        
+
         # Collect all builtin strings from keys and values
         all_strings: list[str] = []
-        
+
         # Add keys
         for key in self.keys():
             if isinstance(key, str):
                 all_strings.append(key)
-        
+
         # Add strings from values
         for value in self.values():
             all_strings.extend(_iter_builtin_strings(value))
-        
+
         # Build exact_names set
         self.exact_names = set(all_strings)
-        
+
         # Build token_index: token -> set of names containing that token
         for name in all_strings:
             tokens = _builtin_tokens(name)
@@ -268,16 +268,16 @@ class ProfileDict(dict):
                 if token not in self.token_index:
                     self.token_index[token] = set()
                 self.token_index[token].add(name)
-    
+
     def is_builtin_cached(self, raw_name: str) -> bool:
         """Check if name is builtin, with caching."""
         if raw_name in self._cache:
             return self._cache[raw_name]
-        
+
         result = self._is_builtin_impl(raw_name)
         self._cache[raw_name] = result
         return result
-    
+
     def _is_builtin_impl(self, raw_name: str) -> bool:
         """Fast builtin check using precomputed indices."""
         name = raw_name.strip()
@@ -297,7 +297,7 @@ class ProfileDict(dict):
                 for indexed_name in self.token_index[token]:
                     if name in _builtin_tokens(indexed_name):
                         return True
-        
+
         # For multi-token qualified names, require exact match (already checked above)
         return False
 
@@ -316,7 +316,7 @@ def make_profile_from_files(name: str, base_dir: str) -> ProfileDict:
     path = os.path.join(base_dir, f"{name}{_LANG_VERSIONS[name]}_builtin_profile.json")
     builtins_dict = load_builtins_from_json(path)
     builtins_dict[f"{name}_keywords"] = _LANGUAGE_KEYWORDS[name]
-    
+
     # Convert to optimized ProfileDict with precomputed indices
     profile = ProfileDict(builtins_dict)
     return profile
@@ -324,8 +324,8 @@ def make_profile_from_files(name: str, base_dir: str) -> ProfileDict:
 
 def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
     """
-    Check if a name is a builtin. 
-    
+    Check if a name is a builtin.
+
     For ProfileDict, uses fast precomputed indices and caching.
     For plain dicts, falls back to slower exhaustive search.
 
@@ -339,7 +339,7 @@ def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
     # Use optimized path if ProfileDict is available
     if isinstance(builtins_dict, ProfileDict):
         return builtins_dict.is_builtin_cached(raw_name)
-    
+
     # Fallback for plain dicts (backward compatibility)
     name = raw_name.strip()
     if not name:

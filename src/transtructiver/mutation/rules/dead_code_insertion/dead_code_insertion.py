@@ -16,7 +16,7 @@ from .lexicons.dead_code_lexicon import DeadCodeLexicon
 from .lexicons.registry import get_lexicon
 from .insertion_strategies.registry import get_strategy
 from .insertion_strategies.insertion_strategy import InsertionStrategy
-from ..utils.scope_manager import ScopeManager
+from ....utils.scope_manager import ScopeManager
 
 
 class DeadCodeInsertionRule(MutationRule):

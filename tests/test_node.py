@@ -111,7 +111,7 @@ def test_clone_deep_copy():
     """Verify that cloning creates a deep copy, not a shallow reference."""
     point = (0, 0)
     root = Node(point, point, "root")
-    child = Node(point, point, "child", "original")
+    child = Node(point, point, "child", text="original")
     root.add_child(child)
 
     cloned_root = root.clone()
@@ -164,7 +164,10 @@ def test_clone_preserves_parent_relationships():
 def test_node_with_multiple_children_init():
     """Verify initializing a node with a pre-defined list of children."""
     point = (0, 0)
-    children = [Node(point, point, "int", "1"), Node(point, point, "int", "2")]
+    children = [
+        Node(point, point, "int", text="1"),
+        Node(point, point, "int", text="2"),
+    ]
 
     root = Node(point, point, "list", children=children)
 

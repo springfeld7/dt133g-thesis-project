@@ -7,11 +7,10 @@ deterministic identifier renaming over annotated CST nodes and emits
 MutationRecord entries for each rename action.
 """
 
-
 from ....node import Node
 from ...mutation_context import MutationContext
 from ..mutation_rule import MutationRecord, MutationRule
-from ..utils.scope_manager import ScopeManager
+from ....utils.scope_manager import ScopeManager
 from ._name_generator import NameGenerator
 
 

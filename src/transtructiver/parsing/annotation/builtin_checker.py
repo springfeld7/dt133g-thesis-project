@@ -344,6 +344,9 @@ def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
     name = raw_name.strip()
     if not name:
         return False
+    
+    if re.search(r"(^(_[A-Z]+)|^(__)", name):
+        return True
 
     name_tokens = _builtin_tokens(name)
 

@@ -21,6 +21,7 @@ def _wire(node: Node, parent: Node | None = None) -> Node:
 
 
 def test_build_frequency_payload_with_fixed_top_n():
+    """Build payload using a fixed top-N selection per type."""
     type_map = {
         "number": Counter({"idx": 10, "count": 7, "tmp": 3}),
         "string": Counter({"arg": 4, "value": 2}),
@@ -42,6 +43,7 @@ def test_build_frequency_payload_with_fixed_top_n():
 
 
 def test_build_frequency_payload_with_auto_coverage():
+    """Build payload selecting identifiers to reach minimum coverage."""
     type_map: IdentifierCounterMap = {
         "number": Counter({"one": 6, "two": 2, "three": 1, "four": 1}),
     }
@@ -63,6 +65,7 @@ def test_build_frequency_payload_with_auto_coverage():
 
 
 def test_build_identifier_frequency_map_integration(monkeypatch, tmp_path):
+    """Integration: generate frequency map JSON from loader+parser stubs."""
     class DummyLoader:
         def iter_snippets(self, batch_size, start_index):
             assert batch_size == 100
@@ -129,6 +132,7 @@ def test_build_identifier_frequency_map_integration(monkeypatch, tmp_path):
 
 
 def test_parse_args_loads_all_values_from_config(tmp_path):
+    """Parse CLI args and load defaults from a configuration file."""
     config_path = tmp_path / "identifier-map.json"
     config_path.write_text(
         """
@@ -155,6 +159,7 @@ def test_parse_args_loads_all_values_from_config(tmp_path):
 
 
 def test_parse_args_cli_overrides_config_values(tmp_path):
+    """Ensure CLI arguments override values from configuration file."""
     config_path = tmp_path / "identifier-map.json"
     config_path.write_text(
         """

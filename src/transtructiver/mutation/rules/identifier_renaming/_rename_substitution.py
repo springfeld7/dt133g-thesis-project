@@ -1,3 +1,13 @@
+"""Substitution helpers for identifier renaming.
+
+This module chooses replacement identifier texts using a precomputed
+frequency map keyed by semantic label and optional context type. The
+selection logic prefers context-aware candidates but falls back to the
+generic ("none") bucket when needed. The resulting candidate is then
+formatted according to language naming conventions using
+``format_identifier``.
+"""
+
 import random
 
 from ....node import Node
@@ -6,15 +16,29 @@ from ..utils.identifier_frequency_map import load_identifier_frequency_map
 
 
 def _build_substitute_name(node: Node, language: str) -> str:
-    """Generate substitution text for a node.
+    """Generate a substitution text for an identifier node.
+
+    Selection strategy:
+      1. If a precompiled frequency map exists for the node's semantic
+         label and language, attempt to pick a candidate from the map.
+      2. Prefer candidates that match the identifier's ``context_type``
+         (for example, the declared type of a variable). If too few
+         context-specific candidates are available, augment the pool with
+         generic candidates from the ``"none"`` bucket.
+      3. Pick a candidate deterministically using a fixed PRNG seed so
+         unit tests and builds are reproducible.
 
     Args:
-        node: Identifier node being renamed.
-        language: Language key resolved from CST root.
+        node: The identifier node being renamed. Useful fields are
+            ``semantic_label`` (e.g. "variable_name") and ``context_type``
+            (inferred type like "list").
+        language: Language key (e.g. "python", "java", "cpp").
 
     Returns:
-        The formatted identifier text after substitution.
+        The new identifier string formatted to match language conventions.
+        If no frequency map is available, the original text is returned.
     """
+    # Deterministic RNG for reproducible name selection in tests.
     _rng = random.Random(42)
 
     if not node.text:
@@ -24,14 +48,18 @@ def _build_substitute_name(node: Node, language: str) -> str:
     label = node.semantic_label
     frequency_map: dict[str, dict[str, int]] = {}
 
+    # Load a small role-keyed frequency map produced by the offline build
+    # step. The map structure is: { context_type -> { identifier -> count } }
     if label and language in ["python", "java", "cpp"]:
         frequency_map = load_identifier_frequency_map(
             "output/test-identifier-frequency-map.json", language, label
         )
 
+    # No external map available -> keep original name.
     if not frequency_map:
         return old_text
 
+    # Build candidate pool: prefer context-specific identifiers first.
     identifiers: list[str] = []
 
     if node.context_type:
@@ -39,23 +67,16 @@ def _build_substitute_name(node: Node, language: str) -> str:
         for i in identifier_map.keys():
             identifiers.append(i)
 
+    # If context-specific pool is small, augment with generic identifiers.
     if node.context_type != "none" and len(identifiers) < 20:
         for i in frequency_map.get("none", {}).keys():
             identifiers.append(i)
 
+    if not identifiers:
+        return old_text
+
+    # Pick deterministically from the pool.
     random_idx: int = _rng.randint(0, len(identifiers) - 1)
     new_text: str = identifiers[random_idx]
 
     return format_identifier(node, new_text, language)
-
-
-def main():
-    n = Node((0, 1), (0, 5), "identifier", "original_var", None)
-    n.semantic_label = "variable_name"
-    n.context_type = "number"
-
-    print(_build_substitute_name(n, "cpp"))
-
-
-if __name__ == "__main__":
-    main()

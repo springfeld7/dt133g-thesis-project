@@ -709,6 +709,7 @@ class TestContextTypeInference:
     """Context-type tests with explicit expected values across languages."""
 
     def test_python_parameter_type_resolves_in_return_expression(self):
+        """Test that annotated parameter types are available in return expressions."""
         code = """
 def add_one(a: int) -> int:
     return a + 1
@@ -720,6 +721,7 @@ def add_one(a: int) -> int:
         assert a_usage.context_type == "number"
 
     def test_python_assignment_left_gets_list_type_from_right(self):
+        """Test that assignment infers list type from right-hand list literals."""
         code = """
 values = [1, 2, 3]
 """
@@ -730,6 +732,7 @@ values = [1, 2, 3]
         assert left_values.context_type == "list"
 
     def test_python_assignment_propagates_to_later_usage_via_scopemanager(self):
+        """Test that inferred types propagate to later usages via ScopeManager."""
         code = """
 items = [1, 2, 3]
 result = len(items)
@@ -741,6 +744,7 @@ result = len(items)
         assert items_usage.context_type == "list"
 
     def test_java_local_int_declaration_resolves_in_return(self):
+        """Test that Java local int declarations resolve to number context type."""
         code = """
 class Demo {
     int f() {
@@ -756,6 +760,7 @@ class Demo {
         assert a_usage.context_type == "number"
 
     def test_java_multiple_declarators_keep_number_type(self):
+        """Test that multiple Java declarators keep numeric type for each variable."""
         code = """
 class Demo {
     int f() {
@@ -773,6 +778,7 @@ class Demo {
         assert b_usage.context_type == "number"
 
     def test_java_parameter_type_available_in_operation_scope(self):
+        """Test that Java parameter types are visible inside operation scopes."""
         code = """
 class Demo {
     int sum(int a, int b) {
@@ -793,6 +799,7 @@ class Demo {
             assert usage.context_type == "number"
 
     def test_cpp_local_int_declaration_resolves_in_return(self):
+        """Test that C++ local int declarations resolve to number context type."""
         code = """
 int f() {
     int value = 42;
@@ -806,6 +813,7 @@ int f() {
         assert value_usage.context_type == "number"
 
     def test_cpp_parameter_types_available_in_binary_expression(self):
+        """Test that C++ parameter types are available in binary expressions."""
         code = """
 int add(int a, int b) {
     return a + b;
@@ -824,6 +832,7 @@ int add(int a, int b) {
             assert usage.context_type == "number"
 
     def test_cpp_bool_declaration_resolves_to_boolean(self):
+        """Test that C++ bool declarations resolve to boolean context type."""
         code = """
 bool f() {
     bool ok = true;

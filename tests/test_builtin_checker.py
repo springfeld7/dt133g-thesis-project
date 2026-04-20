@@ -28,3 +28,10 @@ def test_cpp_builtins():
     assert not is_builtin("startswith", CPP)
     assert is_builtin("vector", CPP)
     assert not is_builtin("my_vector", CPP)
+
+
+def test_start_with_underscore():
+    """Test  builtins detection for name starting with underscore."""
+    assert not is_builtin("_singlelower", CPP)
+    assert is_builtin("__doublelower", JAVA)
+    assert is_builtin("_Singleupper", PY)

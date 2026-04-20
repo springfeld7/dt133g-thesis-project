@@ -322,7 +322,7 @@ def make_profile_from_files(name: str, base_dir: str) -> ProfileDict:
     return profile
 
 
-def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
+def is_builtin(name: str, builtins_dict: dict) -> bool:
     """
     Check if a name is a builtin.
 
@@ -336,27 +336,13 @@ def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
     Returns:
         bool: True if the name is found as a builtin, False otherwise.
     """
-    # Use optimized path if ProfileDict is available
-    if isinstance(builtins_dict, ProfileDict):
-        return builtins_dict.is_builtin_cached(raw_name)
-
-    # Fallback for plain dicts (backward compatibility)
-    name = raw_name.strip()
-    if not name:
-        return False
-    
-    if re.search(r"(^(_[A-Z]+)|^(__)", name):
+    if name.startswith("__"):
+        return True
+    if name.startswith("_") and len(name) > 1 and name[1].isupper():
         return True
 
-    name_tokens = _builtin_tokens(name)
-
-    for key, value in builtins_dict.items():
-        if _matches_builtin_name(name, name_tokens, key):
-            return True
-
-        for candidate in _iter_builtin_strings(value):
-            if _matches_builtin_name(name, name_tokens, candidate):
-                return True
+    if isinstance(builtins_dict, ProfileDict):
+        return builtins_dict.is_builtin_cached(name)
 
     return False
 
@@ -364,19 +350,6 @@ def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
 def _builtin_tokens(value: str) -> set[str]:
     """Split a qualified builtin name into comparable parts."""
     return {part for part in re.split(r"::|[._]+", value) if part}
-
-
-def _matches_builtin_name(name: str, name_tokens: set[str], candidate: str) -> bool:
-    """Match by exact qualified name or by stable token membership."""
-    if name == candidate:
-        return True
-
-    # For qualified names (e.g. java.util), require exact match to avoid
-    # over-matching user identifiers that merely contain builtin fragments.
-    if len(name_tokens) != 1:
-        return False
-
-    return name in _builtin_tokens(candidate)
 
 
 def _iter_builtin_strings(value: object) -> Iterable[str]:

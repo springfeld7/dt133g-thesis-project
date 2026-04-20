@@ -81,6 +81,11 @@ def format_identifier(node: Node, new_text: str, language: str) -> str:
     """
     words = new_text.split("_")
 
+    if words[0] == "destruct":
+        if _is_title(node, language):
+            return words[-1].upper()
+        return words[-1].lower()
+
     if _is_title(node, language):
         return _format_pascal_case(words)
 

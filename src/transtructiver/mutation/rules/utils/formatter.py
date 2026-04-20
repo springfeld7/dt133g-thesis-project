@@ -41,7 +41,7 @@ def _format_camel_case(words: list[str]) -> str:
     new_name = []
     for w in words:
         if indexOf(words, w) == 0:
-            new_name.append(w)
+            new_name.append(w.lower())
         else:
             new_name.append(w.capitalize())
     return "".join(new_name)

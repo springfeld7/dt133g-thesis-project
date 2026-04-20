@@ -5,6 +5,7 @@ from typing import Callable
 from ....node import Node
 from ._rename_appendage import _build_appendage_name
 from ._rename_substitution import _build_substitute_name
+from ._rename_abbreviation import _build_abbreviated_name
 from ._rename_destruction import _build_destructed_name
 
 _NamingStrategy = Callable[[Node, str], str]
@@ -13,6 +14,7 @@ _NamingStrategy = Callable[[Node, str], str]
 _LEVEL_STRATEGIES: dict[int, _NamingStrategy] = {
     0: _build_appendage_name,
     1: _build_substitute_name,
+    2: _build_abbreviated_name,
     3: _build_destructed_name,
 }
 

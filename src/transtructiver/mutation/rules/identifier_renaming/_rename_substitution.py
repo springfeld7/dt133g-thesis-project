@@ -9,6 +9,7 @@ formatted according to language naming conventions using
 """
 
 import random
+from difflib import SequenceMatcher
 
 from ....node import Node
 from ..utils.formatter import format_identifier
@@ -62,21 +63,43 @@ def _build_substitute_name(node: Node, language: str) -> str:
     # Build candidate pool: prefer context-specific identifiers first.
     identifiers: list[str] = []
 
+    # Similarity thresholds
+    MIN_SIMILARITY = 0.3
+    MAX_SIMILARITY = 0.9
+
+    def is_similar(a: str, b: str) -> bool:
+        ratio = SequenceMatcher(None, a, b).ratio()
+        print(f"Ratio {ratio}")
+        return MIN_SIMILARITY <= ratio <= MAX_SIMILARITY
+
+    length_in_range = lambda x: len(x) in range(len(old_text) - 2, len(old_text) + 2)
+
     if node.context_type:
         identifier_map = frequency_map.get(node.context_type, {})
         for i in identifier_map.keys():
-            identifiers.append(i)
+            if length_in_range(i):
+                identifiers.append(i)
 
     # If context-specific pool is small, augment with generic identifiers.
     if node.context_type != "none" and len(identifiers) < 20:
         for i in frequency_map.get("none", {}).keys():
-            identifiers.append(i)
+            if length_in_range(i) and len(identifiers) < 40:
+                identifiers.append(i)
 
     if not identifiers:
         return old_text
 
-    # Pick deterministically from the pool.
-    random_idx: int = _rng.randint(0, len(identifiers) - 1)
-    new_text: str = identifiers[random_idx]
+    similar_identifiers = []
+
+    for i in identifiers:
+        if is_similar(old_text, i):
+            similar_identifiers.append(i)
+
+    if similar_identifiers:
+        random_idx: int = _rng.randint(0, len(similar_identifiers) - 1)
+        new_text: str = similar_identifiers[random_idx]
+    else:
+        random_idx: int = _rng.randint(0, len(identifiers) - 1)
+        new_text: str = identifiers[random_idx]
 
     return format_identifier(node, new_text, language)

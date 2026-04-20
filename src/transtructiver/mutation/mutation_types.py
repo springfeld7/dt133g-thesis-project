@@ -51,12 +51,9 @@ _ACTION_REQUIRED_KEYS: Dict[MutationAction, List[str]] = {
     MutationAction.RENAME: ["new_val"],
     MutationAction.DELETE: ["node_type", "content"],
     MutationAction.INSERT: ["new_val", "node_type", "insertion_point"],
-    MutationAction.SUBSTITUTE: ["node_type", "parts_map"],
+    MutationAction.SUBSTITUTE: ["old_type", "new_type", "new_val"],
     MutationAction.FLATTEN: ["node_type", "ref_map"],
 }
-
-_SUBSTITUTE_REQUIRED_PARTS: Set[str] = {"target", "iterable", "body"}
-
 
 # ==== Validation Utilities ====
 
@@ -82,10 +79,6 @@ def validate_action_metadata(action: MutationAction, metadata: Dict[str, Any]) -
     for key in required:
         if key not in metadata:
             raise ValueError(f"Contract Violation: {action.name} missing required key '{key}'.")
-
-    # Structured validation
-    if action == MutationAction.SUBSTITUTE:
-        _validate_coord_map(metadata, key="parts_map", expected_keys=_SUBSTITUTE_REQUIRED_PARTS)
 
     if action == MutationAction.FLATTEN:
         _validate_coord_map(metadata, key="ref_map")

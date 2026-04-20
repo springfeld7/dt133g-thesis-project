@@ -81,7 +81,7 @@ class PythonLexicon(DeadCodeLexicon):
 
     def format_block(self, header: str, body: str, prefix: str, is_if: bool) -> str:
         """
-        Wraps code in a Python block (if or loop) with correct colon syntax.
+        Formats a Python code block with the given header and body.
 
         Args:
             header (str): The condition or loop expression.
@@ -92,10 +92,14 @@ class PythonLexicon(DeadCodeLexicon):
         Returns:
             str: The fully constructed Python code block.
         """
+        if not header:
+            # Assignment-only, just return body + trailing prefix/newline
+            return f"{body}\n{prefix}"
+
         if is_if:
             # Add 'if ' prefix if the opaque predicate doesn't include it
             stmt_header = f"if {header}" if not header.startswith("if ") else header
         else:
             stmt_header = header
 
-        return f"{prefix}{stmt_header}:\n{body}"
+        return f"{stmt_header}:\n{body}\n{prefix}"

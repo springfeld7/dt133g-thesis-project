@@ -1,8 +1,8 @@
 """Rule for injecting language-specific dead code into a CST.
 
 This module defines the InsertDeadCodeRule, which traverses a CST and identifies
-safe containers (blocks, functions, etc.) for injecting unreachable code. It 
-leverages language-specific lexicons to ensure the injected code is syntactically 
+safe containers (blocks, functions, etc.) for injecting unreachable code. It
+leverages language-specific lexicons to ensure the injected code is syntactically
 valid and uses a ScopeManager to prevent identifier collisions.
 """
 
@@ -12,6 +12,7 @@ from typing import List
 from ....node import Node
 from ..mutation_rule import MutationRule, MutationRecord
 from ...mutation_context import MutationContext
+from ..utils.indentation_util import IndentationUtils
 from .lexicons.dead_code_lexicon import DeadCodeLexicon
 from .lexicons.registry import get_lexicon
 from .insertion_strategies.registry import get_strategy
@@ -137,26 +138,6 @@ class DeadCodeInsertionRule(MutationRule):
         self._base_indent = indent_unit
         self._scope = ScopeManager()
 
-    def _detect_indent_unit(self, root: Node) -> str:
-        """
-        Scans the tree for the first whitespace node that starts at column 0
-        and has a length greater than 0.
-
-        This method is used to auto-detect the indentation unit, fallbacks to 4 spaces if none is found.
-
-        Args:
-            root (Node): The root of the CST to scan for indentation patterns.
-
-        Returns:
-            str: The detected indentation unit (e.g. "    " for 4 spaces) or a default if none found.
-        """
-        # Traverse to find the first 'indentation' whitespace with a length > 0
-        for node in root.traverse():
-            if node.type == "whitespace" and node.start_point[1] == 0:
-                if node.text:
-                    return node.text
-        return "    "  # Fallback to 4 spaces if no indentation pattern is detected
-
     def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
         Entry point for the mutation. Validates language and initializes
@@ -187,7 +168,7 @@ class DeadCodeInsertionRule(MutationRule):
         insertion_strategy = get_strategy(language)
 
         # Determine indentation
-        indent = self._base_indent or self._detect_indent_unit(root)
+        indent = self._base_indent or IndentationUtils.detect_indent_unit(root)
         lexicon.set_indent_unit(indent)
 
         return self._apply_traversal(root, context, insertion_strategy, lexicon)
@@ -237,7 +218,7 @@ class DeadCodeInsertionRule(MutationRule):
             if "identifier" in node.type and node.text:
                 self._scope.declare(node.text, "exists")
 
-            if self._is_valid_container(node):
+            if self._is_valid_container(node, strategy):
                 self._scan_and_inject(
                     node, strategy, lexicon, context, insertion_probability, candidates, records
                 )
@@ -283,7 +264,7 @@ class DeadCodeInsertionRule(MutationRule):
         for child in list(node.children):
             if strategy.is_valid_gap(child, preceding):
                 candidates.append((child, prefix))
-                if self._rng.random() < prob:
+                if self._rng.random() > prob:
                     records.append(self._inject_dead_code(child, prefix, lexicon, context))
 
             if strategy.is_terminal(child):
@@ -307,7 +288,7 @@ class DeadCodeInsertionRule(MutationRule):
         """
         var_name = self._get_var_name("d")
         loop_var = self._get_loop_var()
-        dead_code = lexicon.get_random_dead_code(prefix, var_name, loop_var)
+        dead_code = lexicon.get_random_dead_code(var_name, loop_var, prefix)
 
         # Create an adopt dead code node
         dc_node = Node(
@@ -329,17 +310,21 @@ class DeadCodeInsertionRule(MutationRule):
             new_type="dead_code",
         )
 
-    def _is_valid_container(self, node: Node) -> bool:
+    def _is_valid_container(self, node: Node, strategy: InsertionStrategy) -> bool:
         """
         Checks if the node is a block that lives inside a function, loop, or conditional.
 
         Args:
             node (Node): The node to check for eligibility as a container for dead code insertion.
+            strategy (InsertionStrategy): The language-specific insertion strategy.
 
         Returns:
             bool: True if the node is a valid container for insertion, False otherwise.
         """
         if node.semantic_label != "block_scope":
+            return False
+
+        if not strategy.is_valid_container(node):
             return False
 
         parent = node.parent

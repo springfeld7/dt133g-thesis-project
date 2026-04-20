@@ -29,6 +29,19 @@ class InsertionStrategy(ABC):
         pass
 
     @abstractmethod
+    def is_valid_container(self, node: Node) -> bool:
+        """
+            Determines if the given node is a valid container for dead code insertion in this language.
+
+        Args:
+            node (Node): The node to check.
+
+        Returns:
+            bool: True if the node is a valid container, False otherwise.
+        """
+        pass
+
+    @abstractmethod
     def is_valid_gap(self, current: Node, preceding: Optional[Node]) -> bool:
         """
         Determines if the space before 'current' is a safe insertion point.

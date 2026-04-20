@@ -94,3 +94,30 @@ def test_repr_output():
 
     rule = TestRule()
     assert repr(rule) == "<TestRule>"
+
+
+def test_record_substitute_creates_valid_record():
+    """Ensure SUBSTITUTE record is created with correct metadata."""
+
+    class DummyNode:
+        def __init__(self):
+            self.start_point = (3, 7)
+            self.type = "new_type"
+            self.text = "new_text"
+
+    class TestRule(MutationRule):
+        def apply(self, root):
+            return []
+
+    node = DummyNode()
+    rule = TestRule()
+
+    record = rule.record_substitute(node, old_type="old_type")
+
+    assert record.node_id == (3, 7)
+    assert record.action == MutationAction.SUBSTITUTE
+    assert record.metadata == {
+        "old_type": "old_type",
+        "new_type": "new_type",
+        "new_val": "new_text",
+    }

@@ -88,7 +88,15 @@ class CppLexicon(DeadCodeLexicon):
         Returns:
             str: The fully constructed C++ code block.
         """
-        block = f"{prefix}{'if ' + header if is_if else header} {{\n"
+        # Assignment-only: no header, just return body with trailing newline/prefix
+        if not header:
+            return f"{body}\n{prefix}"
+
+        # Ensure proper 'if' prefix for conditional blocks
+        stmt_header = f"if ({header})" if is_if and not header.startswith("if") else header
+
+        # Build the block
+        block = f"{stmt_header} {{\n"
         block += body
-        block += f"\n{prefix}}}"
+        block += f"\n{prefix}}}\n{prefix}"
         return block

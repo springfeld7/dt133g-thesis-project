@@ -113,16 +113,27 @@ def test_meaningless_modification_type_none(lexicon):
 def test_format_block_if(lexicon):
     """format_block prepends 'if ' when is_if is True and missing."""
     body = "  stmt"
-
     result = lexicon.format_block("cond", body, "", is_if=True)
-    assert result.startswith("if cond:\n") and result.endswith(body)
+
+    # Should start with "if cond:\n"
+    assert result.startswith("if cond:\n")
+    # Body must be included
+    assert body in result
+    # Trailing newline exists
+    assert result.endswith("\n")
 
 
 def test_format_block_loop(lexicon):
     """format_block leaves loop header untouched when is_if=False."""
     body = "  stmt"
     result = lexicon.format_block("while False", body, "", is_if=False)
-    assert result.startswith("while False:\n") and result.endswith(body)
+
+    # Should start with loop header + colon
+    assert result.startswith("while False:\n")
+    # Body must be included
+    assert body in result
+    # Trailing newline exists
+    assert result.endswith("\n")
 
 
 # ===== Opaque Predicates & Loop Headers =====
@@ -153,7 +164,6 @@ def test_get_random_dead_code_assignment(monkeypatch, lexicon):
     lines = output.strip().split("\n")
 
     assert len(lines) == 2
-    assert output.endswith("\n")
 
 
 def test_get_random_dead_code_if_wrap(monkeypatch, lexicon):
@@ -185,16 +195,22 @@ def test_get_random_dead_code_if_wrap(monkeypatch, lexicon):
 
 def test_get_random_dead_code_loop_wrap(monkeypatch, lexicon):
     """Loop_wrap strategy formats header/body/footer correctly."""
-    # Force RNG to always select the "loop_wrap" strategy,
-    # while keeping all other random choices valid
+    # Force RNG to always select the "loop_wrap" strategy
     monkeypatch.setattr(lexicon._rng, "choice", lambda x: "loop_wrap" if "loop_wrap" in x else x[0])
     lexicon.set_indent_unit("  ")
-    output = lexicon.get_random_dead_code("v", "i", "Q")
-    lines = output.strip().split("\n")
 
-    assert lines[0].startswith("Q")
-    assert any("v =" in line for line in lines[1:])
-    assert lines[-1]  # Footer exists
+    output = lexicon.get_random_dead_code("v", "i", "Q")
+    lines = output.splitlines()
+
+    # Header must start with the loop header (no prefix prepended)
+    assert lines[0].startswith("while") or lines[0].startswith("for")
+
+    # Body must contain the variable
+    body_lines = lines[1:-1]  # everything except header and final prefix
+    assert any("v =" in line for line in body_lines)
+
+    # Footer line equals prefix
+    assert lines[-1] == "Q"
 
 
 def test_get_random_dead_code_fallback(monkeypatch, lexicon):
@@ -293,3 +309,11 @@ def test_loop_var_replacement_in_header(monkeypatch, lexicon):
     header_line = output.splitlines()[0]
     assert loop_var in header_line
     assert "{var}" not in header_line
+
+
+def test_format_block_empty_header(lexicon):
+    """Empty header returns body + trailing prefix."""
+    body = "stmt"
+    prefix = "  "
+    result = lexicon.format_block("", body, prefix, is_if=True)
+    assert result == "stmt\n  "

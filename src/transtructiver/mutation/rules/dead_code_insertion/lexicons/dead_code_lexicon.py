@@ -145,35 +145,47 @@ class DeadCodeLexicon(ABC):
 
         match strategy:
             case "assignment":
-                content = self._build_transaction(var_name, value, prefix)
+                body = self._build_transaction(var_name, value, prefix, True)
+                content = self.format_block("", body, prefix, False)
 
             case "if_wrap":
-                body = self._build_transaction(var_name, value, prefix + self._indent_unit)
+                body = self._build_transaction(var_name, value, prefix + self._indent_unit, False)
                 header = self._rng.choice(self._get_opaque_predicates())
                 content = self.format_block(header, body, prefix, is_if=True)
 
             case "loop_wrap":
-                body = self._build_transaction(var_name, value, prefix + self._indent_unit)
+                body = self._build_transaction(var_name, value, prefix + self._indent_unit, False)
                 raw_header = self._rng.choice(self._get_unreachable_loop_headers())
                 header = raw_header.replace("{var}", loop_var)
                 content = self.format_block(header, body, prefix, is_if=False)
 
             case _:
                 # Fallback: treat unknown strategy as a simple assignment
-                content = self._build_transaction(var_name, value, prefix)
+                content = self._build_transaction(var_name, value, prefix, True)
 
         # Ensure a single trailing newline
-        return content if content.endswith("\n") else content + "\n"
+        print(
+            f"prepending prefix: '{prefix}' to content. Content ends with newline: {content.endswith('\n')}"
+        )  # Debug statement
+        print(f"Generated content before ensuring newline: '{content}'")  # Debug statement
+        print(f"representation of content: '{repr(content)}'")  # Debug statement
+        return content
 
-    def _build_transaction(self, var_name: str, value: Any, indent: str) -> str:
+    def _build_transaction(
+        self,
+        var_name: str,
+        value: Any,
+        indent: str,
+        skip_first_indent: bool = False,
+    ) -> str:
         """
-        Constructs a multi-line sequence consisting of an assignment,
-        an identity modification, and a reference use.
+        Constructs a multi-line sequence consisting of an assignment and an identity modification.
 
         Args:
-            var_name (str): The variable name to manipulate.
-            value (Any): The initial value to assign.
-            indent (str): The full indentation string to prepend to each line.
+        var_name (str): The variable name to manipulate.
+        value (Any): The initial value to assign.
+        indent (str): The indentation string for each line.
+        skip_first_indent (bool): If True, the first line is not prefixed.
 
         Returns:
             str: A formatted multi-line string of code statements.
@@ -183,7 +195,14 @@ class DeadCodeLexicon(ABC):
             self._get_meaningless_modification(var_name),
         ]
 
-        return "\n".join(f"{indent}{s}" for s in statements)
+        lines = []
+        for i, s in enumerate(statements):
+            if i == 0 and skip_first_indent:
+                lines.append(s)
+            else:
+                lines.append(f"{indent}{s}")
+
+        return "\n".join(lines)
 
     def _get_meaningless_modification(self, var_name: str) -> str:
         """

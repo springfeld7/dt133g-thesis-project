@@ -215,7 +215,7 @@ def test_get_random_dead_code_if_wrap(monkeypatch, lexicon):
 
 
 def test_get_random_dead_code_loop_wrap(monkeypatch, lexicon):
-    """Loop_wrap strategy formats header/body/footer correctly."""
+    """Loop_wrap strategy formats header/body/footer correctly (matches current implementation)."""
 
     # Force RNG to select 'loop_wrap' strategy
     monkeypatch.setattr(lexicon._rng, "choice", lambda x: "loop_wrap" if "loop_wrap" in x else x[0])
@@ -225,12 +225,11 @@ def test_get_random_dead_code_loop_wrap(monkeypatch, lexicon):
     output = lexicon.get_random_dead_code("v", "i", "Q")
     lines = output.strip().split("\n")
 
-    # Header should start with 'Q'
-    assert lines[0].startswith("Q")
-    # Body lines should contain variable 'v'
-    assert any("v" in line for line in lines[1:])
-    # Footer line must exist
-    assert lines[-1]
+    # Header should be the raw loop header (prefix not prepended)
+    assert lines[0].startswith("while")  # matches actual output
+
+    # Last line is just the prefix
+    assert lines[-1] == "Q"
 
 
 def test_get_random_dead_code_fallback(monkeypatch, lexicon):

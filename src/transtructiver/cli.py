@@ -193,8 +193,9 @@ def _build_engine(
         base_unit = ws_params.get("base_unit", DEFAULT_BASE_UNIT)
         indent_unit = " " * base_unit
 
-        rule_params.setdefault("dead-code-insertion", {})
-        rule_params["dead-code-insertion"].setdefault("indent_unit", indent_unit)
+        dci_params = rule_params.setdefault("dead-code-insertion", {})
+        if dci_params.get("indent_unit") is None:
+            dci_params["indent_unit"] = indent_unit
 
     for rule_name in rules:
         rule_cls = RULE_REGISTRY[rule_name]

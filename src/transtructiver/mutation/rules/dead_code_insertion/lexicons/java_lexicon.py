@@ -33,14 +33,14 @@ class JavaLexicon(DeadCodeLexicon):
     ]
 
     UNREACHABLE_LOOP_HEADERS = [
-        "while(false)",
-        "while(0 == 1)",
-        "while(1 > 2)",
-        "for(int {var} = 0; {var} < 0; {var}++)",
-        "for(int {var} = 0; {var} < 0; {var}+=1)",
-        "for(int {var} = 10; {var} < 0; {var}++)",
-        "for(Object {var} : new Object[0])",
-        "for(String {var} : new String[0])",
+        "while (false)",
+        "while (0 == 1)",
+        "while (1 > 2)",
+        "for (int {var} = 0; {var} < 0; {var}++)",
+        "for (int {var} = 0; {var} < 0; {var}+=1)",
+        "for (int {var} = 10; {var} < 0; {var}++)",
+        "for (Object {var} : new Object[0])",
+        "for (String {var} : new String[0])",
     ]
 
     IDENTITY_OPS_STR = [
@@ -93,7 +93,14 @@ class JavaLexicon(DeadCodeLexicon):
         Returns:
             str: The fully constructed Java code block.
         """
-        block = f"{prefix}{'if (' + header + ')' if is_if else header} {{\n"
+        # Assignment only, just return body + trailing prefix/newline
+        if not header:
+            return f"{body}\n{prefix}"
+
+        # Ensure proper 'if' prefix
+        stmt_header = f"if ({header})" if is_if and not header.startswith("if") else header
+
+        block = f"{stmt_header} {{\n"
         block += body
-        block += f"\n{prefix}}}"
+        block += f"\n{prefix}}}\n{prefix}"
         return block

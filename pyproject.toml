@@ -25,6 +25,7 @@ proto-verify = "transtructiver.prototype.verification.verify:main"
 proto-cli = "transtructiver.prototype.cli:main"
 cli = "transtructiver.cli:main"
 build-identifier-map = "transtructiver.mutation.rules.utils.identifier_frequency_map:main"
+parser = "transtructiver.parsing.parser:main"
 
 [tool.black]
 line-length = 100

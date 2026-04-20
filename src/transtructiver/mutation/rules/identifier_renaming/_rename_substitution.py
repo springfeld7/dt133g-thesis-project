@@ -52,7 +52,7 @@ def _build_substitute_name(node: Node, language: str) -> str:
     # step. The map structure is: { context_type -> { identifier -> count } }
     if label and language in ["python", "java", "cpp"]:
         frequency_map = load_identifier_frequency_map(
-            "output/test-identifier-frequency-map.json", language, label
+            "output/identifier-frequency-map.json", language, label
         )
 
     # No external map available -> keep original name.

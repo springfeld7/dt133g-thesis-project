@@ -12,7 +12,7 @@ and content of the comment for downstream verification and manifest generation.
 
 from typing import List
 
-from ..utils.scope_manager import ScopeManager
+from ....utils.scope_manager import ScopeManager
 from transtructiver.mutation.mutation_context import MutationContext
 from ..mutation_rule import MutationRule, MutationRecord
 from ....node import Node

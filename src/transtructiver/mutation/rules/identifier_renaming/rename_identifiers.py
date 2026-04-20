@@ -7,11 +7,10 @@ deterministic identifier renaming over annotated CST nodes and emits
 MutationRecord entries for each rename action.
 """
 
-from transtructiver.mutation.mutation_context import MutationContext
-
 from ....node import Node
+from ...mutation_context import MutationContext
 from ..mutation_rule import MutationRecord, MutationRule
-from ..utils.scope_manager import ScopeManager
+from ....utils.scope_manager import ScopeManager
 from ._name_generator import NameGenerator
 
 
@@ -48,7 +47,7 @@ class RenameIdentifiersRule(MutationRule):
         "root",
         "function_scope",
         "class_scope",
-        "block_scope",
+        "condition_scope",
         "loop_scope",
     }
 
@@ -59,6 +58,8 @@ class RenameIdentifiersRule(MutationRule):
         "parameter",
         "pattern",
         "function",
+        "left",
+        "attribute",
     }
 
     def __init__(self, level: int = 0, targets: list[str] | None = None) -> None:
@@ -96,9 +97,6 @@ class RenameIdentifiersRule(MutationRule):
 
     def _is_declaration_identifier(self, node: Node) -> bool:
         """Return whether the identifier creates or updates scope bindings."""
-        if node.parent and "assignment" in node.parent.type:
-            if node.field == "left":
-                return True
         return node.field in self._DECLARATION_FIELDS
 
     def _is_renamable_identifier(self, node: Node) -> bool:
@@ -152,35 +150,47 @@ class RenameIdentifiersRule(MutationRule):
     # Naming
     # ------------------------------------------------------------------
 
-    def _make_scoped_name(self, node: Node, original_name: str, language: str) -> str:
-        """Generate a deterministic rename, adding a depth suffix when shadowing."""
-        base_name = self._namer.make_name(node, language)
+    def _make_scoped_name(self, node: Node, _original_name: str, language: str) -> str:
+        """Generate a deterministic rename for the current identifier."""
+        return self._namer.make_name(node, language)
 
-        if not self._scope:
-            return base_name
+    def _name_exists_in_visible_scope(self, candidate: str) -> bool:
+        """Return whether a generated name already exists in any active scope."""
+        return any(candidate in scope.values() for scope in self._scope._scopes)
 
-        # Reuse the generated base name, but mark it when it shadows an outer binding.
-        outer = self._scope.resolve(original_name)
-        if outer is not None:
-            return f"{base_name}_s{self._scope.depth() - 1}"
-
-        return base_name
+    def _bump_name(self, base: str, index: int, language: str) -> str:
+        """Create a deterministic disambiguated variant of ``base``."""
+        if language == "python":
+            return f"{base}_{index}"
+        return f"{base}{index}"
 
     def _resolve_name(self, node: Node, original_name: str, language: str) -> str:
         """Return the new name for an identifier, registering it in scope as needed."""
         if self._is_declaration_identifier(node):
             current = self._scope.current()
-            if current is not None and original_name not in current:
-                # First declaration in this scope establishes the binding for later references.
-                self._scope.declare(
-                    original_name, self._make_scoped_name(node, original_name, language)
-                )
-            resolved = self._scope.resolve(original_name)
-            return (
-                resolved
-                if resolved is not None
-                else self._make_scoped_name(node, original_name, language)
-            )
+            if current is not None and original_name in current:
+                return current[original_name]
+
+            outer_existing = self._scope.resolve(original_name)
+
+            # Targeted shadow handling: when a parameter declaration shadows
+            # an outer binding (e.g., class field), keep a distinct local name.
+            if node.semantic_label == "parameter_name" and outer_existing is not None:
+                base_name = self._make_scoped_name(node, original_name, language)
+                new_name = base_name
+                bump_index = 1
+                while new_name == outer_existing or self._name_exists_in_visible_scope(new_name):
+                    new_name = self._bump_name(base_name, bump_index, language)
+                    bump_index += 1
+                self._scope.declare(original_name, new_name)
+                return new_name
+
+            if outer_existing is not None:
+                return outer_existing
+
+            new_name = self._make_scoped_name(node, original_name, language)
+            self._scope.declare(original_name, new_name)
+            return new_name
 
         existing = self._scope.resolve(original_name)
         if existing is not None:

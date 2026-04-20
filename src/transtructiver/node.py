@@ -44,9 +44,11 @@ class Node:
         # Links populated during adaptation and annotation for tree navigation.
         self.parent: Optional[Node] = None
         self.semantic_label: Optional[str] = None
+        self.context_type: Optional[str] = None
         self.field: Optional[str] = None
         self.language: Optional[str] = None
         self.builtin: bool = False
+        self.is_named: bool = True
 
     def add_child(self, child: Node) -> None:
         """
@@ -102,8 +104,11 @@ class Node:
         )
 
         new_node.semantic_label = self.semantic_label
+        new_node.context_type = self.context_type
         new_node.field = self.field
         new_node.language = self.language
+        new_node.builtin = self.builtin
+        new_node.is_named = self.is_named
         new_node.parent = parent
 
         new_node.children = [child.clone(new_node) for child in self.children]
@@ -158,6 +163,11 @@ class Node:
 
             if self.text:
                 line += f": {self.text}"
+
+            if self.semantic_label:
+                line += f"  [{self.semantic_label}]"
+            if self.context_type:
+                line += f"<{self.context_type}>"
 
             print(line)
 

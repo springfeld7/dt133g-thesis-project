@@ -9,7 +9,7 @@ from tree_sitter import Node as TSNode
 
 from ..node import Node
 from .converter import convert_node
-from .annotation import annotate
+from .annotation.annotator import annotate
 
 
 def adapt(ts_node: TSNode, source_bytes: bytes, language: str | None = None) -> Node:
@@ -36,7 +36,7 @@ def adapt(ts_node: TSNode, source_bytes: bytes, language: str | None = None) -> 
     if language:
         node.language = language.lower()
 
-    # Step 2: Apply semantic annotations based on language
+    # Step 2: Apply semantic + context annotations based on language.
     annotated_node = annotate(node)
 
     return annotated_node

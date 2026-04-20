@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from transtructiver.node import Node
 from transtructiver.mutation.mutation_context import MutationContext
-from transtructiver.mutation.rules.utils.scope_manager import ScopeManager
+from transtructiver.utils.scope_manager import ScopeManager
 from transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion import (
     DeadCodeInsertionRule,
 )

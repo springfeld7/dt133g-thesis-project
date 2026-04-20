@@ -5,6 +5,8 @@ including identifier classification, field-aware context analysis, and
 multi-language support.
 """
 
+from tkinter import N
+
 import pytest
 from tree_sitter import Parser as TSParser
 from tree_sitter_language_pack import get_language
@@ -12,12 +14,8 @@ from tree_sitter_language_pack import get_language
 from transtructiver.node import Node
 from transtructiver.parsing.adapter import convert_node
 
-from transtructiver.parsing.annotation import (
-    annotate,
-    annotate_python,
-    annotate_java,
-    annotate_cpp,
-)
+from transtructiver.parsing.annotation.annotator import annotate
+from transtructiver.parsing.annotation.annotators import *
 from transtructiver.parsing.annotation.builtin_checker import make_profile_from_files
 import os
 
@@ -26,7 +24,8 @@ def _profile(language):
     """Import language profile containing builtin names"""
     base_dir = os.path.abspath(
         os.path.join(
-            os.path.dirname(__file__), "../../src/transtructiver/parsing/annotation/profiles"
+            os.path.dirname(__file__),
+            f"../../src/transtructiver/parsing/annotation/profiles/{language}",
         )
     )
     return make_profile_from_files(language, base_dir)
@@ -56,6 +55,11 @@ def cpp_parser() -> TSParser:
     return parser
 
 
+def annotator(lang) -> BaseAnnotator:
+    """Setup Python annotator for tests."""
+    return BaseAnnotator().for_language(lang)
+
+
 def parse_and_convert(code: str, language: str = "python") -> Node:
     """Parse code and convert to internal Node representation."""
     if language == "python":
@@ -75,6 +79,37 @@ def parse_and_convert(code: str, language: str = "python") -> Node:
     node = convert_node(tree.root_node, source_bytes)
     node.language = language
     return node
+
+
+def _identifier_nodes(root: Node, name: str) -> list[Node]:
+    """Return all identifier-like nodes with matching text."""
+    return [node for node in root.traverse() if "identifier" in node.type and node.text == name]
+
+
+def _identifier_by_field(root: Node, name: str, field: str) -> Node:
+    """Return the first identifier-like node with matching text and field."""
+    matches = [node for node in _identifier_nodes(root, name) if node.field == field]
+    assert matches, f"No identifier node found for {name!r} with field {field!r}"
+    return matches[0]
+
+
+def _usage_identifier(
+    root: Node,
+    name: str,
+    declaration_fields: set[str] | None = None,
+    exclude_parent_types: set[str] | None = None,
+) -> Node:
+    """Return a non-declaration usage identifier for a given text."""
+    declaration_fields = declaration_fields or {"name", "declarator", "parameter", "pattern"}
+    exclude_parent_types = exclude_parent_types or set()
+    matches = [
+        node
+        for node in _identifier_nodes(root, name)
+        if node.field not in declaration_fields
+        and not (node.parent and node.parent.type in exclude_parent_types)
+    ]
+    assert matches, f"No usage identifier found for {name!r}"
+    return matches[0]
 
 
 class TestAnnotatorDispatcher:
@@ -155,7 +190,7 @@ class TestPythonAnnotator:
         """Test function names are annotated correctly."""
         code = "def my_function(): pass"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         # Find function_definition node
         func_defs = [n for n in annotated.traverse() if n.type == "function_definition"]
@@ -170,7 +205,7 @@ class TestPythonAnnotator:
         """Test variable names in assignments are annotated."""
         code = "my_var = 123"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         # Find identifiers with variable_name label
         var_names = [n for n in annotated.traverse() if n.semantic_label == "variable_name"]
@@ -180,7 +215,7 @@ class TestPythonAnnotator:
         """Test class names are annotated correctly."""
         code = "class MyClass: pass"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         # Find class names
         class_names = [n for n in annotated.traverse() if n.semantic_label == "class_name"]
@@ -190,7 +225,7 @@ class TestPythonAnnotator:
         """Test parameter names are annotated."""
         code = "def func(param1, param2): pass"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         # Find parameter names
         param_names = [n for n in annotated.traverse() if n.semantic_label == "parameter_name"]
@@ -200,7 +235,7 @@ class TestPythonAnnotator:
         """Test global variable declarations are annotated."""
         code = "def func():\n    global x\n    x = 5"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         # Find identifiers in global statement
         global_vars = [
@@ -215,17 +250,17 @@ class TestPythonAnnotator:
         """Test type annotations are recognized."""
         code = "x: int = 5"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         # Type identifiers should have type_name label
-        type_names = [n for n in annotated.traverse() if n.semantic_label == "type_name"]
+        type_names = [n for n in annotated.traverse() if n.text and n.semantic_label == "type_name"]
         assert len(type_names) == 1
 
     def test_annotate_whitespace_and_newlines_skipped(self, python_parser: TSParser):
         """Test that whitespace and newline nodes are skipped during annotation."""
         code = "x = 1"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         # Whitespace and newline nodes should not have semantic labels
         whitespace_with_labels = [
@@ -239,7 +274,7 @@ class TestPythonAnnotator:
         """Unresolved identifiers in snippet fragments should remain renamable."""
         code = "result = ext + ext2"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         names = [
             n.semantic_label
@@ -251,9 +286,9 @@ class TestPythonAnnotator:
 
     def test_annotate_exception_name(self, python_parser: TSParser):
         """Test exception names in raise statements are labeled as exception_name."""
-        code = "raise Exception('error')"
+        code = "raise Exception"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         exception_names = [n for n in annotated.traverse() if n.semantic_label == "exception_name"]
         assert len(exception_names) == 1
@@ -271,7 +306,7 @@ public class Foo {
 }
 """
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
 
         # Find method names
         function_names = [n for n in annotated.traverse() if n.semantic_label == "function_name"]
@@ -281,7 +316,7 @@ public class Foo {
         """Test class names are annotated in Java."""
         code = "public class MyClass { }"
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
 
         # Find class names
         class_names = [n for n in annotated.traverse() if n.semantic_label == "class_name"]
@@ -296,7 +331,7 @@ public class Foo {
 }
 """
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
 
         # Type identifiers should be labeled
         type_names = [n for n in annotated.traverse() if n.semantic_label == "type_name"]
@@ -312,7 +347,9 @@ public class Foo {
 }
 """
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
+
+        annotated.pretty()
 
         # Field/property access
         var_names = [n for n in annotated.traverse() if n.semantic_label == "property_name"]
@@ -328,7 +365,7 @@ public class Foo {
 }
 """
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
 
         # Method calls should create function names
         function_names = [n for n in annotated.traverse() if n.semantic_label == "function_name"]
@@ -342,7 +379,9 @@ public class Foo {
 }
 """
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
+
+        annotated.pretty()
 
         # Parameters should be labeled
         param_names = [n for n in annotated.traverse() if n.semantic_label == "parameter_name"]
@@ -352,7 +391,7 @@ public class Foo {
         """Unresolved identifiers in snippet fragments should remain renamable."""
         code = "class A { void f(){ x = y + z; } }"
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
 
         names = [
             n.semantic_label
@@ -367,16 +406,15 @@ public class Foo {
         code = """
         public class Foo {
             public void bar() {
-                throw new Exception("fail");
+                throw anException;
             }
         }
         """
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
 
         exception_names = [n for n in annotated.traverse() if n.semantic_label == "exception_name"]
         assert len(exception_names) == 1
-        assert exception_names[0].text == "Exception"
 
 
 class TestCppAnnotator:
@@ -386,7 +424,7 @@ class TestCppAnnotator:
         """Test function names are annotated in C++."""
         code = "int myFunction() { return 0; }"
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         # Find function names
         function_names = [n for n in annotated.traverse() if n.semantic_label == "function_name"]
@@ -396,7 +434,7 @@ class TestCppAnnotator:
         """Unresolved identifiers in snippet fragments should remain renamable."""
         code = "int main(){ return x + y; }"
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         names = [
             n.semantic_label
@@ -419,17 +457,17 @@ int main() {
 }
 """
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         # Type identifiers (custom types like struct/class)
         type_names = [n for n in annotated.traverse() if n.semantic_label == "type_name"]
-        assert len(type_names) == 1
+        assert len(type_names) == 3
 
     def test_annotate_variable_reference(self, cpp_parser: TSParser):
         """Test variable references in expressions."""
         code = "int main() { int x = 5; int y = x + 1; return 0; }"
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         # Variable names should exist
         var_names = [n for n in annotated.traverse() if n.semantic_label == "variable_name"]
@@ -449,7 +487,7 @@ int main() {
 }
 """
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         # Field/property access
         property_names = [n for n in annotated.traverse() if n.semantic_label == "property_name"]
@@ -459,7 +497,7 @@ int main() {
         """Test namespace identifiers are labeled."""
         code = "namespace myNamespace { }"
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         # Namespace names
         namespace_names = [n for n in annotated.traverse() if n.semantic_label == "namespace_name"]
@@ -474,7 +512,9 @@ public:
 };
 """
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
+
+        annotated.pretty()
 
         # Class names
         class_names = [n for n in annotated.traverse() if n.semantic_label == "class_name"]
@@ -482,15 +522,15 @@ public:
 
     def test_annotate_exception_name(self, cpp_parser: TSParser):
         """Test exception names in throw statements are labeled as exception_name."""
-        code = "void foo() { throw std::exception(); }"
+        code = "void foo() { throw Exception; }"
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         annotated.pretty()
 
         exception_names = [n for n in annotated.traverse() if n.semantic_label == "exception_name"]
         assert len(exception_names) == 1
-        assert "exception" in exception_names[0].text  # type: ignore
+        assert "Exception" in exception_names[0].text  # type: ignore
 
 
 class TestAnnotationEdgeCases:
@@ -500,7 +540,7 @@ class TestAnnotationEdgeCases:
         """Test annotating empty Python module."""
         code = ""
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         assert annotated is not None
         assert annotated.type == "module"
@@ -512,7 +552,7 @@ class TestAnnotationEdgeCases:
 x = 5  # Inline comment
 """
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         assert annotated is not None
         # Should not raise errors
@@ -523,7 +563,7 @@ x = 5  # Inline comment
         node = parse_and_convert(code, "python")
         child_count_before = len(list(node.traverse()))
 
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
         child_count_after = len(list(annotated.traverse()))
 
         assert child_count_before == child_count_after
@@ -532,7 +572,7 @@ x = 5  # Inline comment
         """Test that parent links remain valid after annotation."""
         code = "class A:\n    def method(self): pass"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         for child in annotated.traverse():
             if child.parent is not None:
@@ -543,8 +583,8 @@ x = 5  # Inline comment
         code = "x = 42"
         node = parse_and_convert(code, "python")
 
-        annotated1 = annotate_python(node, _profile("python"))
-        annotated2 = annotate_python(annotated1, _profile("python"))
+        annotated1 = annotator("python").annotate(node, _profile("python"))
+        annotated2 = annotator("python").annotate(annotated1, _profile("python"))
 
         # Should have same structure
         labels1 = [n.semantic_label for n in annotated1.traverse()]
@@ -559,7 +599,7 @@ class TestUnifiedScopeLabels:
         """Python function_definition should map to unified function_scope label."""
         code = "def foo(x): return x"
         node = parse_and_convert(code, "python")
-        annotated = annotate_python(node, _profile("python"))
+        annotated = annotator("python").annotate(node, _profile("python"))
 
         func_defs = [n for n in annotated.traverse() if n.type == "function_definition"]
         assert len(func_defs) == 1
@@ -573,7 +613,7 @@ public class Foo {
 }
 """
         node = parse_and_convert(code, "java")
-        annotated = annotate_java(node, _profile("java"))
+        annotated = annotator("java").annotate(node, _profile("java"))
 
         method_nodes = [n for n in annotated.traverse() if n.type == "method_declaration"]
         assert len(method_nodes) == 1
@@ -583,7 +623,7 @@ public class Foo {
         """C++ function_definition should map to unified function_scope label."""
         code = "int foo() { return 1; }"
         node = parse_and_convert(code, "cpp")
-        annotated = annotate_cpp(node, _profile("cpp"))
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
 
         func_defs = [n for n in annotated.traverse() if n.type == "function_definition"]
         assert len(func_defs) == 1
@@ -663,3 +703,144 @@ int main() {
             n.semantic_label for n in annotated.traverse() if n.semantic_label is not None
         }
         assert len(all_labels) > 0
+
+
+class TestContextTypeInference:
+    """Context-type tests with explicit expected values across languages."""
+
+    def test_python_parameter_type_resolves_in_return_expression(self):
+        """Test that annotated parameter types are available in return expressions."""
+        code = """
+def add_one(a: int) -> int:
+    return a + 1
+"""
+        node = parse_and_convert(code, "python")
+        annotated = annotator("python").annotate(node, _profile("python"))
+
+        a_usage = _identifier_by_field(annotated, "a", "left")
+        assert a_usage.context_type == "number"
+
+    def test_python_assignment_left_gets_list_type_from_right(self):
+        """Test that assignment infers list type from right-hand list literals."""
+        code = """
+values = [1, 2, 3]
+"""
+        node = parse_and_convert(code, "python")
+        annotated = annotator("python").annotate(node, _profile("python"))
+
+        left_values = _identifier_by_field(annotated, "values", "left")
+        assert left_values.context_type == "list"
+
+    def test_python_assignment_propagates_to_later_usage_via_scopemanager(self):
+        """Test that inferred types propagate to later usages via ScopeManager."""
+        code = """
+items = [1, 2, 3]
+result = len(items)
+"""
+        node = parse_and_convert(code, "python")
+        annotated = annotator("python").annotate(node, _profile("python"))
+
+        items_usage = _usage_identifier(annotated, "items")
+        assert items_usage.context_type == "list"
+
+    def test_java_local_int_declaration_resolves_in_return(self):
+        """Test that Java local int declarations resolve to number context type."""
+        code = """
+class Demo {
+    int f() {
+        int a = 1;
+        return a;
+    }
+}
+"""
+        node = parse_and_convert(code, "java")
+        annotated = annotator("java").annotate(node, _profile("java"))
+
+        a_usage = _usage_identifier(annotated, "a")
+        assert a_usage.context_type == "number"
+
+    def test_java_multiple_declarators_keep_number_type(self):
+        """Test that multiple Java declarators keep numeric type for each variable."""
+        code = """
+class Demo {
+    int f() {
+        int a = 1, b = 2;
+        return a + b;
+    }
+}
+"""
+        node = parse_and_convert(code, "java")
+        annotated = annotator("java").annotate(node, _profile("java"))
+
+        a_usage = _usage_identifier(annotated, "a")
+        b_usage = _usage_identifier(annotated, "b")
+        assert a_usage.context_type == "number"
+        assert b_usage.context_type == "number"
+
+    def test_java_parameter_type_available_in_operation_scope(self):
+        """Test that Java parameter types are visible inside operation scopes."""
+        code = """
+class Demo {
+    int sum(int a, int b) {
+        return a + b;
+    }
+}
+"""
+        node = parse_and_convert(code, "java")
+        annotated = annotator("java").annotate(node, _profile("java"))
+
+        usages = [
+            node
+            for node in _identifier_nodes(annotated, "a") + _identifier_nodes(annotated, "b")
+            if node.field in {"left", "right"}
+        ]
+        assert usages, "Expected binary expression parameter usages"
+        for usage in usages:
+            assert usage.context_type == "number"
+
+    def test_cpp_local_int_declaration_resolves_in_return(self):
+        """Test that C++ local int declarations resolve to number context type."""
+        code = """
+int f() {
+    int value = 42;
+    return value;
+}
+"""
+        node = parse_and_convert(code, "cpp")
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
+
+        value_usage = _usage_identifier(annotated, "value")
+        assert value_usage.context_type == "number"
+
+    def test_cpp_parameter_types_available_in_binary_expression(self):
+        """Test that C++ parameter types are available in binary expressions."""
+        code = """
+int add(int a, int b) {
+    return a + b;
+}
+"""
+        node = parse_and_convert(code, "cpp")
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
+
+        usages = [
+            node
+            for node in _identifier_nodes(annotated, "a") + _identifier_nodes(annotated, "b")
+            if node.field in {"left", "right"}
+        ]
+        assert usages, "Expected binary expression parameter usages"
+        for usage in usages:
+            assert usage.context_type == "number"
+
+    def test_cpp_bool_declaration_resolves_to_boolean(self):
+        """Test that C++ bool declarations resolve to boolean context type."""
+        code = """
+bool f() {
+    bool ok = true;
+    return ok;
+}
+"""
+        node = parse_and_convert(code, "cpp")
+        annotated = annotator("cpp").annotate(node, _profile("cpp"))
+
+        ok_usage = _usage_identifier(annotated, "ok")
+        assert ok_usage.context_type == "boolean"

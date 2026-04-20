@@ -18,16 +18,21 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from functools import lru_cache
 from typing import Any, Generator
 
 from ....config import _load_yaml, _load_toml
 from ....data_loading.data_loader import DataLoader
 from ....node import Node
+from ....parsing.annotation.builtin_checker import is_builtin, make_profile_from_files
 from ....parsing.parser import Parser
 
 
 IdentifierCounterMap = dict[str, Counter[str]]
 RoleTypeMap = dict[str, IdentifierCounterMap]
+
+
+_BUILTIN_PROFILES_DIR = Path(__file__).resolve().parents[3] / "parsing" / "annotation" / "profiles"
 
 
 @dataclass(slots=True)
@@ -52,6 +57,12 @@ def _iter_role_identifiers(root: Node) -> Generator[tuple[str, str, str | None],
         if not node.semantic_label or not node.semantic_label.endswith("_name"):
             continue
         yield node.semantic_label, node.text, node.context_type
+
+
+@lru_cache(maxsize=None)
+def _get_builtin_profile(language: str) -> Any:
+    """Return the cached builtin profile for a language."""
+    return make_profile_from_files(language, str(_BUILTIN_PROFILES_DIR / language))
 
 
 def collect_identifier_frequencies(
@@ -84,8 +95,12 @@ def collect_identifier_frequencies(
 
         stats.rows_parsed += 1
         role_type_map: RoleTypeMap = language_role_map.setdefault(language, {})
+        builtin_profile = _get_builtin_profile(language)
 
         for role, identifier, context_type in _iter_role_identifiers(root):
+            if is_builtin(identifier, builtin_profile):
+                continue
+
             ct = context_type if context_type else "none"
             type_counters = role_type_map.setdefault(role, {})
             type_counters.setdefault(ct, Counter())[identifier] += 1

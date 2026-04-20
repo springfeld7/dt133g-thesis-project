@@ -30,7 +30,10 @@ def _is_title(node: Node, language: str) -> bool:
 
 def _format_snake_case(words: list[str]) -> str:
     """Format an identifier using snake_case style."""
-    return "_".join(words)
+    print(words)
+    if all(len(w) == 1 for w in words):
+        return "".join(words).lower()
+    return "_".join(words).lower()
 
 
 def _format_camel_case(words: list[str]) -> str:
@@ -79,7 +82,7 @@ def format_identifier(node: Node, new_text: str, language: str) -> str:
         Formatted identifier string that follows the conventions for the
         selected language and semantic kind.
     """
-    words = new_text.split("_")
+    words = split_words(new_text)
 
     if words[0] == "destruct":
         if _is_title(node, language):
@@ -90,3 +93,35 @@ def format_identifier(node: Node, new_text: str, language: str) -> str:
         return _format_pascal_case(words)
 
     return _LANGUAGE_FORMATTERS.get(language, _format_camel_case)(words)
+
+
+def split_words(text: str) -> list[str]:
+    """Split identifier text into words based on camelCase and underscores.
+
+    Args:
+        text: The identifier text to split.
+        language: The programming language (used for language-specific splitting rules).
+
+    Returns:
+        List of extracted words.
+    """
+    words = []
+    current_word = ""
+
+    for i, char in enumerate(text):
+        if char == "_":
+            if current_word:
+                words.append(current_word)
+                current_word = ""
+        elif i > 0 and char.isupper() and text[i - 1].islower():
+            # CamelCase boundary: uppercase after lowercase
+            if current_word:
+                words.append(current_word)
+            current_word = char
+        else:
+            current_word += char
+
+    if current_word:
+        words.append(current_word)
+
+    return words

@@ -3,19 +3,19 @@
 from transtructiver.node import Node
 from transtructiver.mutation.rules.identifier_renaming._rename_abbreviation import (
     _build_abbreviated_name,
-    _get_words,
     _compress_words,
 )
+from transtructiver.mutation.rules.utils.formatter import split_words
 
 
-def test_get_words_splits_underscore_and_camelcase():
+def testsplit_words_splits_underscore_and_camelcase():
     """Test splitting identifier into words by underscore and camelCase."""
-    assert _get_words("foo_bar") == ["foo", "bar"]
-    assert _get_words("fooBar") == ["foo", "Bar"]
-    assert _get_words("fooBarBaz") == ["foo", "Bar", "Baz"]
-    assert _get_words("foo_barBaz") == ["foo", "bar", "Baz"]
-    assert _get_words("foo") == ["foo"]
-    assert _get_words("") == []
+    assert split_words("foo_bar") == ["foo", "bar"]
+    assert split_words("fooBar") == ["foo", "Bar"]
+    assert split_words("fooBarBaz") == ["foo", "Bar", "Baz"]
+    assert split_words("foo_barBaz") == ["foo", "bar", "Baz"]
+    assert split_words("foo") == ["foo"]
+    assert split_words("") == []
 
 
 def test_compress_words_single_word():
@@ -55,7 +55,7 @@ def test_build_abbreviated_name_long_camelcase():
     # Should split to ["long", "Variable", "Name"] and compress to "lvn" for python
     result = _build_abbreviated_name(node, "python")
     assert isinstance(result, str)
-    assert result == "lVN"
+    assert result == "lvn"
 
 
 def test_build_abbreviated_name_language():

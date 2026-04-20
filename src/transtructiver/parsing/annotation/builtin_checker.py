@@ -336,14 +336,33 @@ def is_builtin(name: str, builtins_dict: dict) -> bool:
     Returns:
         bool: True if the name is found as a builtin, False otherwise.
     """
-    if name.startswith("__"):
-        return True
-    if name.startswith("_") and len(name) > 1 and name[1].isupper():
+    if _has_reserved_identifier_fragment(name):
         return True
 
     if isinstance(builtins_dict, ProfileDict):
         return builtins_dict.is_builtin_cached(name)
 
+    return False
+
+
+def _has_reserved_identifier_fragment(name: str) -> bool:
+    """Return True if a qualified name contains a reserved-looking identifier part.
+
+    Examples that should match:
+    - "__dunder"
+    - "_PrivateLike"
+    - "obj.__dunder"
+    - "ns::Class::_PrivateLike"
+    """
+    # Split only on qualification separators; underscores are part of the identifier.
+    for fragment in re.split(r"::|\.", name):
+        part = fragment.strip()
+        if not part:
+            continue
+        if part.startswith("__"):
+            return True
+        if part.startswith("_") and len(part) > 1 and part[1].isupper():
+            return True
     return False
 
 

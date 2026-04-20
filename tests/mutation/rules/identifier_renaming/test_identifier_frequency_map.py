@@ -66,6 +66,7 @@ def test_build_frequency_payload_with_auto_coverage():
 
 def test_build_identifier_frequency_map_integration(monkeypatch, tmp_path):
     """Integration: generate frequency map JSON from loader+parser stubs."""
+
     class DummyLoader:
         def iter_snippets(self, batch_size, start_index):
             assert batch_size == 100

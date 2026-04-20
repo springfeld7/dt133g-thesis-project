@@ -6,7 +6,7 @@ and structural correctness of dead code insertion within CSTs.
 
 import pytest
 
-from transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion import (
+from src.transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion import (
     DeadCodeInsertionRule,
 )
 from src.transtructiver.node import Node

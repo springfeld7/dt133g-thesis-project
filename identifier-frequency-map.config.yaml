@@ -9,5 +9,5 @@ identifier_frequency_map:
   # Optional
   batch_size: 1000
   # Set to null to use min_coverage mode, or set an integer for fixed top-N mode
-  top_n: 200
+  top_n: null
   min_coverage: 0.95

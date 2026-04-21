@@ -28,3 +28,18 @@ def test_cpp_builtins():
     assert not is_builtin("startswith", CPP)
     assert is_builtin("vector", CPP)
     assert not is_builtin("my_vector", CPP)
+
+
+def test_start_with_underscore():
+    """Test  builtins detection for name starting with underscore."""
+    assert not is_builtin("_singlelower", CPP)
+    assert is_builtin("__doublelower", JAVA)
+    assert is_builtin("_Singleupper", PY)
+
+
+def test_qualified_names_with_reserved_fragment():
+    """Qualified names with reserved fragments should be treated as builtin."""
+    assert is_builtin("obj.__dunder", PY)
+    assert is_builtin("module._PrivateLike", PY)
+    assert is_builtin("ns::Type::__dunder", CPP)
+    assert is_builtin("pkg.Type._PrivateLike", JAVA)

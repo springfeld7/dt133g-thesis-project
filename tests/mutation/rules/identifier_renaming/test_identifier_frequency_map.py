@@ -83,7 +83,7 @@ def test_build_identifier_frequency_map_integration(monkeypatch, tmp_path):
                     (0, 0),
                     (0, 0),
                     "module",
-                    children=[Node((0, 0), (0, 1), "identifier", text="variable")],
+                    children=[Node((0, 0), (0, 1), "identifier", text="alpha_var")],
                 )
                 root.semantic_label = "root"
                 root.language = "python"
@@ -97,9 +97,9 @@ def test_build_identifier_frequency_map_integration(monkeypatch, tmp_path):
                 (0, 0),
                 "module",
                 children=[
-                    Node((0, 0), (0, 1), "identifier", text="function"),
-                    Node((0, 0), (0, 1), "identifier", text="parameter"),
-                    Node((0, 0), (0, 1), "identifier", text="parameter"),
+                    Node((0, 0), (0, 1), "identifier", text="myfunc"),
+                    Node((0, 0), (0, 1), "identifier", text="argname"),
+                    Node((0, 0), (0, 1), "identifier", text="argname"),
                 ],
             )
             root.semantic_label = "root"
@@ -127,9 +127,48 @@ def test_build_identifier_frequency_map_integration(monkeypatch, tmp_path):
     )
 
     assert out.exists()
-    assert payload["role_maps"]["python"]["variable_name"]["number"] == {"variable": 1}
-    assert payload["role_maps"]["python"]["parameter_name"]["none"] == {"parameter": 2}
-    assert payload["role_maps"]["python"]["function_name"]["none"] == {"function": 1}
+    assert payload["role_maps"]["python"]["variable_name"]["number"] == {"alpha_var": 1}
+    assert payload["role_maps"]["python"]["parameter_name"]["none"] == {"argname": 2}
+    assert payload["role_maps"]["python"]["function_name"]["none"] == {"myfunc": 1}
+
+
+def test_build_identifier_frequency_map_skips_builtin_like_identifiers(monkeypatch, tmp_path):
+    """Identifiers that look builtin-like should be filtered even if annotation missed them."""
+
+    class DummyLoader:
+        def iter_snippets(self, batch_size, start_index):
+            return [(0, "#include <x>", "cpp")]
+
+    class DummyParser:
+        def parse(self, code, _):
+            root = Node(
+                (0, 0),
+                (0, 0),
+                "module",
+                children=[Node((0, 0), (0, 1), "identifier", text="__COLL_INTERNAL_NODE_H__")],
+            )
+            root.semantic_label = "root"
+            root.language = "cpp"
+            _wire(root)
+            root.children[0].semantic_label = "import_name"
+            root.children[0].context_type = "none"
+            root.children[0].builtin = False
+            return root, None
+
+    import transtructiver.mutation.rules.utils.identifier_frequency_map as module
+
+    monkeypatch.setattr(module, "DataLoader", lambda *args, **kwargs: DummyLoader())
+    monkeypatch.setattr(module, "Parser", lambda: DummyParser())
+
+    out = tmp_path / "identifier_map.json"
+    payload = build_identifier_frequency_map(
+        parquet_path="dummy.parquet",
+        output_json_path=str(out),
+        batch_size=100,
+        top_n=1,
+    )
+
+    assert payload["role_maps"]["cpp"].get("import_name", {}) == {}
 
 
 def test_parse_args_loads_all_values_from_config(tmp_path):

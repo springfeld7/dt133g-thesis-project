@@ -322,7 +322,7 @@ def make_profile_from_files(name: str, base_dir: str) -> ProfileDict:
     return profile
 
 
-def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
+def is_builtin(name: str, builtins_dict: dict) -> bool:
     """
     Check if a name is a builtin.
 
@@ -336,44 +336,39 @@ def is_builtin(raw_name: str, builtins_dict: dict) -> bool:
     Returns:
         bool: True if the name is found as a builtin, False otherwise.
     """
-    # Use optimized path if ProfileDict is available
+    if _has_reserved_identifier_fragment(name):
+        return True
+
     if isinstance(builtins_dict, ProfileDict):
-        return builtins_dict.is_builtin_cached(raw_name)
+        return builtins_dict.is_builtin_cached(name)
 
-    # Fallback for plain dicts (backward compatibility)
-    name = raw_name.strip()
-    if not name:
-        return False
+    return False
 
-    name_tokens = _builtin_tokens(name)
 
-    for key, value in builtins_dict.items():
-        if _matches_builtin_name(name, name_tokens, key):
+def _has_reserved_identifier_fragment(name: str) -> bool:
+    """Return True if a qualified name contains a reserved-looking identifier part.
+
+    Examples that should match:
+    - "__dunder"
+    - "_PrivateLike"
+    - "obj.__dunder"
+    - "ns::Class::_PrivateLike"
+    """
+    # Split only on qualification separators; underscores are part of the identifier.
+    for fragment in re.split(r"::|\.", name):
+        part = fragment.strip()
+        if not part:
+            continue
+        if part.startswith("__"):
             return True
-
-        for candidate in _iter_builtin_strings(value):
-            if _matches_builtin_name(name, name_tokens, candidate):
-                return True
-
+        if part.startswith("_") and len(part) > 1 and part[1].isupper():
+            return True
     return False
 
 
 def _builtin_tokens(value: str) -> set[str]:
     """Split a qualified builtin name into comparable parts."""
     return {part for part in re.split(r"::|[._]+", value) if part}
-
-
-def _matches_builtin_name(name: str, name_tokens: set[str], candidate: str) -> bool:
-    """Match by exact qualified name or by stable token membership."""
-    if name == candidate:
-        return True
-
-    # For qualified names (e.g. java.util), require exact match to avoid
-    # over-matching user identifiers that merely contain builtin fragments.
-    if len(name_tokens) != 1:
-        return False
-
-    return name in _builtin_tokens(candidate)
 
 
 def _iter_builtin_strings(value: object) -> Iterable[str]:

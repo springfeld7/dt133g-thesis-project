@@ -41,6 +41,9 @@ exclude = '''
 )/
 '''
 
+[tool.setuptools.packages.find]
+where = ["src", "external/VarCLR"]
+
 [build-system]
 requires = ["uv_build>=0.10.4,<0.11.0"]
 build-backend = "uv_build"

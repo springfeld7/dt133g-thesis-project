@@ -1,0 +1,3 @@
+[submodule "external/VarCLR"]
+	path = external/VarCLR
+	url = https://github.com/squaresLab/VarCLR.git

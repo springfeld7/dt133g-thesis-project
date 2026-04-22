@@ -214,18 +214,50 @@ def test_whitespace_before_control_structure_substitution():
     )
 
 
-def test_whitespace_runs_before_all_transforms():
-    """Test that whitespace-normalization runs before all transform rules when present."""
+def test_transforms_before_rename():
+    """Test that transformation rules run before rename-identifier."""
+
+    dci = make_mock_rule("dead-code-insertion", [])
+    css = make_mock_rule("control-structure-substitution", [])
+    rename = make_mock_rule("rename-identifier", [])
+
+    engine = MutationEngine([rename, css, dci])
+
+    ordered = [r.rule_name for r in engine._order_rules()]
+
+    assert ordered.index("dead-code-insertion") < ordered.index("rename-identifier")
+    assert ordered.index("control-structure-substitution") < ordered.index("rename-identifier")
+
+
+def test_all_rules_respect_dependency_constraints():
+    """Test that full rule set respects all dependency constraints."""
 
     ws = make_mock_rule("whitespace-normalization", [])
     dci = make_mock_rule("dead-code-insertion", [])
     css = make_mock_rule("control-structure-substitution", [])
+    rename = make_mock_rule("rename-identifier", [])
 
-    engine = MutationEngine([dci, css, ws])
+    engine = MutationEngine([rename, css, dci, ws])
 
-    ordered = [r.rule_name for r in engine._order_rules()]
+    execution = []
 
-    assert ordered.index("whitespace-normalization") < ordered.index("dead-code-insertion")
-    assert ordered.index("whitespace-normalization") < ordered.index(
+    def tracking(rule):
+        def apply(_, __):
+            execution.append(rule.rule_name)
+            return []
+
+        rule.apply.side_effect = apply
+        return rule
+
+    engine.rules = [tracking(r) for r in engine.rules]
+
+    engine.apply_mutations(make_valid_node())
+
+    # Only enforce constraints (not full order)
+    assert execution.index("whitespace-normalization") < execution.index("dead-code-insertion")
+    assert execution.index("whitespace-normalization") < execution.index(
         "control-structure-substitution"
     )
+
+    assert execution.index("dead-code-insertion") < execution.index("rename-identifier")
+    assert execution.index("control-structure-substitution") < execution.index("rename-identifier")

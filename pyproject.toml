@@ -12,6 +12,7 @@ dependencies = [
     "datasets>=4.8.4",
     "pandas>=3.0.1",
     "pyarrow>=23.0.1",
+    "python-dotenv>=1.2.2",
     "pyyaml>=6.0.2",
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=1.4.1",
@@ -27,6 +28,10 @@ proto-cli = "transtructiver.prototype.cli:main"
 cli = "transtructiver.cli:main"
 build-identifier-map = "transtructiver.mutation.rules.utils.identifier_frequency_map:main"
 parser = "transtructiver.parsing.parser:main"
+
+# Experiments scripts
+verify-login = "experiments.sample_selection.dataset_manager:main"
+step01 = "experiments._01_extract_baseline:run_step_01"
 
 [tool.black]
 line-length = 100

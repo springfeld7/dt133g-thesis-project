@@ -11,9 +11,9 @@ from transtructiver.parsing.parser import Parser
 class SampleAnalyzer:
     """
     Orchestrates the analysis of source code snippets with configurable filters.
-    
-    This class handles gatekeeping logic and structural quantification. By 
-    injecting target criteria at initialization, the analyzer remains 
+
+    This class handles gatekeeping logic and structural quantification. By
+    injecting target criteria at initialization, the analyzer remains
     flexible for different experimental scopes.
 
     Attributes:
@@ -24,7 +24,7 @@ class SampleAnalyzer:
 
     def __init__(self, target_languages: set = None, target_labels: set = None):
         """
-        Initializes the analyzer. If no criteria are passed, it defaults 
+        Initializes the analyzer. If no criteria are passed, it defaults
         to the standard thesis scope (Python/Java/Cpp + Human/Machine).
 
         Args:
@@ -33,11 +33,11 @@ class SampleAnalyzer:
         """
         # If nothing is passed, we use  specific thesis targets
         self.target_languages = target_languages or {"java", "python", "cpp"}
-        
+
         # We normalize labels to uppercase to match the DroidCollection schema
         labels = target_labels or {"MACHINE_GENERATED", "HUMAN_GENERATED"}
         self.target_labels = {iter_var.upper() for iter_var in labels}
-        
+
         self._parser = Parser()
 
     def get_valid_tree(self, code: str, lang: str, label: str) -> Node | None:
@@ -113,7 +113,7 @@ class SampleAnalyzer:
                 comments += node.end_point[0] - node.start_point[0] + 1
             elif node.type == "whitespace":
                 content = node.text if node.text else ""
-                weighted_content = content.replace('\t', '    ')
+                weighted_content = content.replace("\t", "    ")
                 whitespace += len(weighted_content)
 
         # Helper to avoid DivisionByZero errors
@@ -129,14 +129,14 @@ class SampleAnalyzer:
             "for_loop_density": for_loops / safe_lloc,
             "identifier_density": identifiers / safe_lloc,
             "comment_density": comments / safe_loc,
-            "whitespace_ratio": whitespace / safe_length
+            "whitespace_ratio": whitespace / safe_length,
         }
         return metrics
 
     def _normalize_lang(self, lang: str) -> str:
         """
         Maps DroidCollection language strings to TranStructIVer standards.
-        
+
         Example: 'C++' -> 'cpp', 'Java' -> 'java'
         """
         if not lang:

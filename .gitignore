@@ -66,3 +66,6 @@ yarn-error.log
 # IDE-specific directories
 .vscode/settings.json
 .vscode/extensions.json
+
+# VarCLR
+src/evaluation/varclr/saved

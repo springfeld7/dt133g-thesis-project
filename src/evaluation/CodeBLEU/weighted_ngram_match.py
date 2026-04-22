@@ -18,7 +18,8 @@ from fractions import Fraction
 import warnings
 from collections import Counter
 
-from utils import ngrams
+from .bleu import modified_precision
+from .utils import ngrams
 import pdb
 
 

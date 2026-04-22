@@ -3,10 +3,10 @@
 
 # -*- coding:utf-8 -*-
 import argparse
-import bleu
-import weighted_ngram_match
-import syntax_match
-import dataflow_match
+from . import bleu
+from . import weighted_ngram_match
+from . import syntax_match
+from . import dataflow_match
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--refs', type=str, nargs='+', required=True,

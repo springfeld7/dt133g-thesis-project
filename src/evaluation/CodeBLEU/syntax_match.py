@@ -1,12 +1,13 @@
 # Copyright (c) Microsoft Corporation. 
 # Licensed under the MIT license.
 
-from parser import DFG_python,DFG_java,DFG_ruby,DFG_go,DFG_php,DFG_javascript,DFG_csharp
-from parser import (remove_comments_and_docstrings,
+from .parser import DFG_python,DFG_java,DFG_ruby,DFG_go,DFG_php,DFG_javascript,DFG_csharp
+from .parser import (remove_comments_and_docstrings,
                    tree_to_token_index,
                    index_to_code_token,
                    tree_to_variable_index)
 from tree_sitter import Language, Parser
+from tree_sitter_language_pack import get_language
 
 dfg_function={
     'python':DFG_python,
@@ -22,9 +23,9 @@ def calc_syntax_match(references, candidate, lang):
     return corpus_syntax_match([references], [candidate], lang)
 
 def corpus_syntax_match(references, candidates, lang):   
-    JAVA_LANGUAGE = Language('parser/my-languages.so', lang)
+    LANGUAGE = get_language(lang)
     parser = Parser()
-    parser.set_language(JAVA_LANGUAGE)
+    parser.language = LANGUAGE
     match_count = 0
     total_count = 0
 

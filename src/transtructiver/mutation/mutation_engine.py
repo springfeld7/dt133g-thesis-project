@@ -30,7 +30,6 @@ class MutationEngine:
     _RULE_DEPENDENCIES = {
         "dead-code-insertion": ["whitespace-normalization"],
         "control-structure-substitution": ["whitespace-normalization"],
-        "rename-identifier": ["dead-code-insertion", "control-structure-substitution"],
     }
 
     def __init__(self, rules: List[MutationRule]):

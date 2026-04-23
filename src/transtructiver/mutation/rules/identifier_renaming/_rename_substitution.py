@@ -8,12 +8,104 @@ formatted according to language naming conventions using
 ``format_identifier``.
 """
 
+from operator import indexOf
 import random
-from difflib import SequenceMatcher
 
-from ....node import Node
-from ..utils.formatter import format_identifier
-from ..utils.identifier_frequency_map import load_identifier_frequency_map
+from transtructiver.node import Node
+from transtructiver.mutation.rules.utils.formatter import split_words, format_identifier
+
+
+# Canonical suffix map that collapses equivalent type names to shared tokens.
+_SUFFIXES = {
+"list": ["items", "elements", "arr", "array", "buffer", "sequence", "values", "collection", "vector", "series", "stream", "entries", "cluster", "bundle", "lineup", "store"],
+"tuple": ["n_tuple", "tup", "coordinate", "immutable_list", "struct", "coord", "point", "record", "row", "data"],
+"map": ["dictionary", "lookup_table", "kv_pairs", "object_map", "mapping", "lookup", "registry", "dict", "hash", "cache", "kv", "table"],
+"set": ["unique_collection", "bag", "membership_list", "distinct_vals", "distinct_values", "unique_items", "seen", "visited", "distinct", "pool"],
+"str": ["text", "message", "char_array", "chars", "msg", "lbl", "label", "raw", "content", "name"],
+"num": ["value", "digit", "scalar", "count", "idx", "constant", "total", "index", "offset", "amt", "size", "nmb"],
+"flag": ["toggle", "switch", "boolean", "bit", "indicator", "signal", "trigger", "check", "hint"],
+"func": ["handler", "callback", "cb", "fn", "method", "routine", "subroutine", "procedure", "hook", "callback", "logic", "task"],
+"cls": ["blueprint", "template", "type", "object", "model", "entity", "schema", "base", "impl", "wrapper", "component"],
+"attr": ["property", "prop", "field", "meta", "member", "state", "val", "key", "info", "metadata"],
+"var": ["reference", "pointer", "ref", "ptr", "identifier", "id", "bucket", "handle", "obj", "item", "temp", "res", "result", "entry"],
+"param": ["input", "cfg", "option", "opt", "arg", "param", "requirement", "req", "placeholder"],
+"arg": ["val", "passed_val", "data", "operand", "payload", "passed"],
+}
+
+
+_PREPOSITIONS = [
+    "aboard",
+    "about",
+    "above",
+    "absent",
+    "across",
+    "after",
+    "against",
+    "along",
+    "alongside",
+    "amid",
+    "amidst",
+    "among",
+    "amongst",
+    "around",
+    "as",
+    "astride",
+    "at",
+    "atop",
+    "before",
+    "afore",
+    "behind",
+    "below",
+    "beneath",
+    "beside",
+    "besides",
+    "between",
+    "beyond",
+    "by",
+    "circa",
+    "despite",
+    "down",
+    "during",
+    "except",
+    "for",
+    "from",
+    "in",
+    "inside",
+    "into",
+    "less",
+    "like",
+    "minus",
+    "near",
+    "nearer",
+    "nearest",
+    "of",
+    "off",
+    "on",
+    "onto",
+    "opposite",
+    "outside",
+    "over",
+    "past",
+    "per",
+    "save",
+    "since",
+    "through",
+    "throughout",
+    "to",
+    "toward",
+    "towards",
+    "under",
+    "underneath",
+    "until",
+    "up",
+    "upon",
+    "upside",
+    "versus",
+    "via",
+    "with",
+    "within",
+    "without",
+]
 
 
 def _build_substitute_name(node: Node, language: str) -> str:
@@ -39,67 +131,44 @@ def _build_substitute_name(node: Node, language: str) -> str:
         The new identifier string formatted to match language conventions.
         If no frequency map is available, the original text is returned.
     """
-    # Deterministic RNG for reproducible name selection in tests.
     _rng = random.Random(42)
 
     if not node.text:
         return ""
 
     old_text = node.text
-    label = node.semantic_label
-    frequency_map: dict[str, dict[str, int]] = {}
+    words = split_words(old_text)
+    rearranged = []
+    last = None
+    pos = 0
 
-    # Load a small role-keyed frequency map produced by the offline build
-    # step. The map structure is: { context_type -> { identifier -> count } }
-    if label and language in ["python", "java", "cpp"]:
-        frequency_map = load_identifier_frequency_map(
-            "output/identifier-frequency-map.json", language, label
-        )
+    for word in words:
+        w = word.lower()
 
-    # No external map available -> keep original name.
-    if not frequency_map:
+        # Keep context_type suffix fixed in last position.
+        if w in _SUFFIXES and indexOf(words, word) == len(words) - 1:
+            last = w
+            continue
+
+        # Ensure preposition is set with related words by moving insertion behind it.
+        if w in _PREPOSITIONS:
+            rearranged.insert(0, w)
+            pos = 1
+            continue
+
+        # Rearrange words by inserting them at the start of the list.
+        rearranged.insert(pos, w)
+    
+    if last:
+        # Replace context_type suffix.
+        subs = _SUFFIXES[last]
+        rearranged.append(subs[_rng.randint(0, len(subs) - 1)])
+        print(f"rearranged: {rearranged}")
+
+    # Should always be false. If not, _rename_appendage failed.
+    if all(word == old_text for word in rearranged):
         return old_text
-
-    # Build candidate pool: prefer context-specific identifiers first.
-    identifiers: list[str] = []
-
-    # Similarity thresholds
-    MIN_SIMILARITY = 0.3
-    MAX_SIMILARITY = 0.9
-
-    def is_similar(a: str, b: str) -> bool:
-        ratio = SequenceMatcher(None, a, b).ratio()
-        print(f"Ratio {ratio}")
-        return MIN_SIMILARITY <= ratio <= MAX_SIMILARITY
-
-    length_in_range = lambda x: len(x) in range(len(old_text) - 2, len(old_text) + 2)
-
-    if node.context_type:
-        identifier_map = frequency_map.get(node.context_type, {})
-        for i in identifier_map.keys():
-            if length_in_range(i):
-                identifiers.append(i)
-
-    # If context-specific pool is small, augment with generic identifiers.
-    if node.context_type != "none" and len(identifiers) < 20:
-        for i in frequency_map.get("none", {}).keys():
-            if length_in_range(i) and len(identifiers) < 40:
-                identifiers.append(i)
-
-    if not identifiers:
-        return old_text
-
-    similar_identifiers = []
-
-    for i in identifiers:
-        if is_similar(old_text, i):
-            similar_identifiers.append(i)
-
-    if similar_identifiers:
-        random_idx: int = _rng.randint(0, len(similar_identifiers) - 1)
-        new_text: str = similar_identifiers[random_idx]
-    else:
-        random_idx: int = _rng.randint(0, len(identifiers) - 1)
-        new_text: str = identifiers[random_idx]
+    
+    new_text = "_".join(rearranged)
 
     return format_identifier(node, new_text, language)

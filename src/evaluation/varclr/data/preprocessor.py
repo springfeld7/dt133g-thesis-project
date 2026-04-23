@@ -16,6 +16,7 @@ class Preprocessor:
     def __call__(self, sentence):
         return sentence
 
+
 class CodePreprocessor(Preprocessor):
     def __init__(self, tokenization=None, sp_model=None):
         self.tokenization = tokenization
@@ -34,10 +35,5 @@ class CodePreprocessor(Preprocessor):
 
     def _process(self, var):
         var = var.replace("@", "")
-        var = (
-            re.sub("([a-z]|^)([A-Z]{1})", r"\1_\2", var)
-            .lower()
-            .replace("_", " ")
-            .strip()
-        )
+        var = re.sub("([a-z]|^)([A-Z]{1})", r"\1_\2", var).lower().replace("_", " ").strip()
         return var

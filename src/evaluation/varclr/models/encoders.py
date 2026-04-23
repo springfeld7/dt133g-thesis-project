@@ -14,15 +14,17 @@ from . import urls_pretrained_model
 class Encoder(nn.Module):
     @staticmethod
     def build(args) -> "Encoder":
-        return {"bert": BERT}[args.model].from_args(
-            args
-        )
+        return {"bert": BERT}[args.model].from_args(args)
 
     @staticmethod
-    def from_pretrained(model_name: str, save_path: str = "src/evaluation/varclr/saved/") -> "Encoder":
+    def from_pretrained(
+        model_name: str, save_path: str = "src/evaluation/varclr/saved/"
+    ) -> "Encoder":
         return {
             "varclr-codebert": BERT,
-        }[model_name].load(save_path)
+        }[
+            model_name
+        ].load(save_path)
 
     @staticmethod
     def from_args(args) -> "Encoder":
@@ -38,9 +40,7 @@ class Encoder(nn.Module):
     def encode(self, inputs: Union[str, List[str]]) -> torch.Tensor:
         raise NotImplementedError
 
-    def score(
-        self, inputx: Union[str, List[str]], inputy: Union[str, List[str]]
-    ) -> List[float]:
+    def score(self, inputx: Union[str, List[str]], inputy: Union[str, List[str]]) -> List[float]:
         if type(inputx) != type(inputy):
             raise Exception("Input X and Y must be either string or list of strings.")
         if isinstance(inputx, list) and len(inputx) != len(inputy):
@@ -68,18 +68,17 @@ class Encoder(nn.Module):
     def decor_bert_forward(model_forward):
         """Decorate an encoder's forward pass to deal with raw inputs."""
         processor = CodePreprocessor()
-        tokenizer = AutoTokenizer.from_pretrained(
-            urls_pretrained_model.PRETRAINED_TOKENIZER
-        )
+        tokenizer = AutoTokenizer.from_pretrained(urls_pretrained_model.PRETRAINED_TOKENIZER)
 
         def tokenize_and_forward(self, inputs: Union[str, List[str]]) -> torch.Tensor:
             inputs = processor(inputs)
             return_dict = tokenizer(inputs, return_tensors="pt", padding=True)
-            return model_forward(
-                self, return_dict["input_ids"], return_dict["attention_mask"]
-            )[0].detach()
+            return model_forward(self, return_dict["input_ids"], return_dict["attention_mask"])[
+                0
+            ].detach()
 
         return tokenize_and_forward
+
 
 class BERT(Encoder):
     """VarCLR-CodeBERT Model."""
@@ -95,16 +94,14 @@ class BERT(Encoder):
 
     @staticmethod
     def load(save_path: str) -> "BERT":
-        gdown.cached_download( # type: ignore
+        gdown.cached_download(  # type: ignore
             urls_pretrained_model.PRETRAINED_CODEBERT_URL,
             os.path.join(save_path, "bert.zip"),
             hash=f"md5:{urls_pretrained_model.PRETRAINED_CODEBERT_MD5}",
-            postprocess=gdown.extractall, # type: ignore
+            postprocess=gdown.extractall,  # type: ignore
         )
         return BERT(
-            bert_model=os.path.join(
-                save_path, urls_pretrained_model.PRETRAINED_CODEBERT_FOLDER
-            )
+            bert_model=os.path.join(save_path, urls_pretrained_model.PRETRAINED_CODEBERT_FOLDER)
         )
 
     def forward(self, input_ids, attention_mask):

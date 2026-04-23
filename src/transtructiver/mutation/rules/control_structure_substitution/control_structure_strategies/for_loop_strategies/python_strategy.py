@@ -245,6 +245,66 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
 
         return unique_name
 
+    def _get_unique_iter_name(self, context: MutationContext, level: int) -> str:
+        """
+        Generate a unique iterator variable name based on transformation level.
+
+        Naming strategy:
+            - Level 0–1: "iter", "iter_1", ...
+            - Level 2: "it", "it1", "it2", ...
+            - Level 3: single letters ("a"–"z"), then "i1", "i2", ...
+
+        Args:
+            context (MutationContext): Holds all identifiers already used in the code.
+            level (int): Controls how compact the variable name should be.
+
+        Returns:
+            str: A unique iterator variable name.
+        """
+        taken = context.taken_names
+
+        def reserve(name: str) -> str:
+            """Reserve and return a name."""
+            taken.add(name)
+            return name
+
+        # ----------------------------
+        # LEVEL 0–1: "iter", "iter1", ...
+        # ----------------------------
+        if level <= 1:
+            base = "iter"
+            if base not in taken:
+                return reserve(base)
+
+            counter = 1
+            while (candidate := f"{base}{counter}") in taken:
+                counter += 1
+            return reserve(candidate)
+
+        # ----------------------------
+        # LEVEL 2: "it", "it1", ...
+        # ----------------------------
+        if level == 2:
+            if "it" not in taken:
+                return reserve("it")
+
+            counter = 1
+            while (candidate := f"it{counter}") in taken:
+                counter += 1
+            return reserve(candidate)
+
+        # ----------------------------
+        # LEVEL >=3: single-letter, then fallback
+        # ----------------------------
+        for c in "abcdefghijklmnopqrstuvwxyz":
+            if c not in taken:
+                return reserve(c)
+
+        counter = 1
+        while (candidate := f"i{counter}") in taken:
+            counter += 1
+        return reserve(candidate)
+
     def _find_body_insertion_index(self, node: Node) -> int:
         """
         Locates the index of the first non-formatting node following the colon.

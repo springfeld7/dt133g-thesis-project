@@ -10,12 +10,21 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "datasets>=4.8.4",
+<<<<<<< feature/dataset-loading-and-filtering
     "matplotlib>=3.10.8",
+=======
+    "gdown>=6.0.0",
+>>>>>>> main
     "pandas>=3.0.1",
     "pyarrow>=23.0.1",
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.2",
+<<<<<<< feature/dataset-loading-and-filtering
     "seaborn>=0.13.2",
+=======
+    "torch>=2.11.0",
+    "transformers>=5.5.4",
+>>>>>>> main
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=1.4.1",
     "tree-sitter-python>=0.25.0",

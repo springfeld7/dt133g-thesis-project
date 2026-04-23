@@ -52,7 +52,7 @@ class JavaForLoopStrategy(CstyleForLoopStrategy):
         }
 
     def apply(
-        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str
+        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str, level: int
     ) -> List[MutationRecord]:
         """
         Transforms a traditional Java for-loop into a while-loop equivalent.
@@ -62,27 +62,12 @@ class JavaForLoopStrategy(CstyleForLoopStrategy):
             rule (MutationRule): Rule instance used for recording mutations.
             context (MutationContext): Shared mutation context.
             indent_unit (str): The indentation unit for the language.
+            level (int): The transformation level to apply. (Unused for Java)
 
         Returns:
             List[MutationRecord]: A list of the performed mutations.
         """
         records = []
-        print(f"Start:\n{node.to_code()}")
-        print(f"Found valid node: {node.type}")
-        print(f"Node text: {node.text}")
-        print("Printing children for debugging:")
-        for child in node.children:
-            print(f" - {child.type}")
-            print(f"   Text: {child.text}")
-            if child.semantic_label:
-                print(f"   Semantic label: {child.semantic_label}")
-            for child_child in child.children:
-                print(f"   - {child_child.type}: {child_child.text}")
-                if child_child.semantic_label:
-                    print(f"     Semantic label: {child_child.semantic_label}")
-                print("   CChildren:")
-                for cc in child_child.children:
-                    print(f"     - {cc.type}: {cc.text}")
         for_node, init_nodes, condition_nodes, update_nodes, body = (
             self._extract_for_loop_components(node)
         )

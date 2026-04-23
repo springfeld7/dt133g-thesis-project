@@ -176,7 +176,7 @@ class TestJavaForLoopStrategy:
         root.parent = Node((0, 0), (0, 0), "module", children=[root])
 
         with patch.object(strategy, "_apply_indent_reformat", return_value=[]) as mock_reformat:
-            records = strategy.apply(root, mock_rule, mock_context, "    ")
+            records = strategy.apply(root, mock_rule, mock_context, "    ", level=0)
 
             # 1. Check that "{" was inserted for scope block
             assert any(rec.get("new_type") == "{" for rec in records)
@@ -238,7 +238,7 @@ class TestJavaForLoopStrategy:
             ],
         )
 
-        assert strategy.apply(root, mock_rule, mock_context, "    ") == []
+        assert strategy.apply(root, mock_rule, mock_context, "    ", level=0) == []
 
     def test_indent_reformat_only_affects_column_zero(self, strategy, mock_rule):
         """Ensures we don't break mid-line alignment."""

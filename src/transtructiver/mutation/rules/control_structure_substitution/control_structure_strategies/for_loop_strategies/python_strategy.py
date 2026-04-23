@@ -53,7 +53,7 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
         return True
 
     def apply(
-        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str
+        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str, level: int
     ) -> List[MutationRecord]:
         """
         Transforms Python 'for' loop into a 'while' loop using iterator protocol.
@@ -63,6 +63,7 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
             rule (MutationRule): Rule instance used for recording mutations.
             context (MutationContext): Shared mutation context.
             indent_unit (str): The indentation unit for the language.
+            level (int): The transformation level to apply.
 
         Returns:
             List[MutationRecord]: Transformation record.
@@ -85,19 +86,22 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
         records.append(self._substitute(in_node, "true", "True", rule))
 
         # Find indentation for the new nodes to be inserted
+        indent = ""
         target_node = node.parent.parent
-        ws_node = None
-        for child in reversed(target_node.children):
-            if child.type == "whitespace":
-                ws_node = child
-                break
-        if not ws_node:
-            return []  # Can't find indentation, abort transformation
+        if target_node:
+            ws_node = None
+            for child in reversed(target_node.children):
+                if child.type == "whitespace":
+                    ws_node = child
+                    break
+            if not ws_node:
+                return []  # Can't find indentation, abort transformation
 
-        # Get what will be needed for iterator initialization
-        indent = ws_node.text
+            # Get what will be needed for iterator initialization
+            indent = ws_node.text
+
         for_node_idx = node.children.index(for_node)
-        iter_var = self._get_unique_iter_name(context)
+        iter_var = self._get_unique_iter_name(context, level)
 
         # Insert iterator initialization before the transformed while loop
         records.extend(
@@ -205,7 +209,7 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
 
         return [rule.record_delete(node, n) for n in to_delete]
 
-    def _get_unique_iter_name(self, context: MutationContext) -> str:
+    def _get_unique_iter_name(self, context: MutationContext, level: int) -> str:
         """
         Generates a unique iterator variable name to avoid collisions with existing identifiers.
 
@@ -218,6 +222,7 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
         Args:
             context (MutationContext): The current mutation context containing the set
                 of all identifiers ('taken_names') found during the initial CST traversal.
+            level (int): The transformation level, which can be used to influence naming conventions.
 
         Returns:
             str: A unique string identifier (e.g., 'iter_var', 'iter_var_1', 'iter_var_2')

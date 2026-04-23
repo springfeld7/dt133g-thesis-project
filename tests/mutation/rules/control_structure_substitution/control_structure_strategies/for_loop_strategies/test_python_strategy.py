@@ -151,7 +151,7 @@ class TestPythonForLoopStrategy:
         mock_context.taken_names = set()
 
         with patch.object(strategy, "_find_body_insertion_index", return_value=8):
-            records = strategy.apply(loop_node, mock_rule, mock_context, "    ")
+            records = strategy.apply(loop_node, mock_rule, mock_context, "    ", level=0)
 
             # 1. Check Keyword Substitutions
             # We expect the 'old' type to be recorded

@@ -118,7 +118,9 @@ class BaseControlStructureStrategy(ABC):
         pass
 
     @abstractmethod
-    def apply(self, node: Node, context: MutationContext, indent_unit: str) -> List[MutationRecord]:
+    def apply(
+        self, node: Node, context: MutationContext, indent_unit: str, level: int
+    ) -> List[MutationRecord]:
         """
         Transforms a valid control structure into an equivalent form.
 
@@ -126,6 +128,7 @@ class BaseControlStructureStrategy(ABC):
             node (Node): The CST node representing the control structure.
             context (MutationContext): Context for mutation tracking.
             indent_unit (str): The indentation unit for the language.
+            level (int): The transformation level to apply.
 
         Returns:
             List[MutationRecord]: Records describing the transformation.

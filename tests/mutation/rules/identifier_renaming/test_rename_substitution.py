@@ -70,6 +70,7 @@ def create_node(text):
 
 # ==================== SIMPLE IDENTIFIERS (NO PREPOSITIONS/SUFFIXES) ====================
 
+
 def test_single_word_identifier(mock_formatter):
     """Single-word identifiers should remain unchanged."""
     node = create_node("variable")
@@ -99,6 +100,7 @@ def test_four_word_identifier(mock_formatter):
 
 
 # ==================== IDENTIFIERS WITH PREPOSITIONS ====================
+
 
 def test_preposition_in_middle(mock_formatter):
     """Preposition in middle should now also be reversed with other words."""
@@ -139,6 +141,7 @@ def test_consecutive_prepositions(mock_formatter):
 
 
 # ==================== IDENTIFIERS WITH SUFFIX TYPES ====================
+
 
 def test_list_suffix_replacement(mock_formatter):
     """Identifier ending with 'list' should replace with list suffixes."""
@@ -205,6 +208,7 @@ def test_cls_suffix_replacement(mock_formatter):
 
 # ==================== COMBINED: PREPOSITIONS + SUFFIXES ====================
 
+
 def test_preposition_and_suffix_combined(mock_formatter):
     """Identifier with both prepositions and suffix should handle both correctly."""
     node = create_node("coolAbilityForCharStr")
@@ -226,6 +230,7 @@ def test_multiple_prepositions_with_suffix(mock_formatter):
 
 
 # ==================== EDGE CASES ====================
+
 
 def test_empty_identifier(mock_formatter):
     """Empty identifier should return empty string."""
@@ -292,6 +297,7 @@ def test_deterministic_suffix_selection(mock_formatter):
 
 
 # ==================== REALISTIC IDENTIFIER PATTERNS ====================
+
 
 def test_getter_method_pattern(mock_formatter):
     """Realistic getter method: getCustomUserData."""
@@ -373,6 +379,7 @@ def test_nested_structure_pattern(mock_formatter):
 
 # ==================== MULTIPLE LANGUAGES ====================
 
+
 def test_different_language_java(mock_formatter):
     """Should work correctly for Java identifiers."""
     node = create_node("myDataFor")
@@ -399,14 +406,18 @@ def test_different_language_python(mock_formatter):
 
 # ==================== SPECIAL PATTERNS ====================
 
-@pytest.mark.parametrize("identifier,preposition", [
-    ("getDataAt", "at"),
-    ("moveItemIn", "in"),
-    ("searchWithin", "within"),
-    ("processBy", "by"),
-    ("queryWith", "with"),
-    ("transitionBetween", "between"),
-])
+
+@pytest.mark.parametrize(
+    "identifier,preposition",
+    [
+        ("getDataAt", "at"),
+        ("moveItemIn", "in"),
+        ("searchWithin", "within"),
+        ("processBy", "by"),
+        ("queryWith", "with"),
+        ("transitionBetween", "between"),
+    ],
+)
 def test_all_valid_prepositions(mock_formatter, identifier, preposition):
     """Test sampling of different prepositions are included in reversal."""
     node = create_node(identifier)
@@ -414,28 +425,30 @@ def test_all_valid_prepositions(mock_formatter, identifier, preposition):
     assert preposition in result
 
 
-@pytest.mark.parametrize("identifier,suffix_type", [
-    ("dataList", "list"),
-    ("dataTuple", "tuple"),
-    ("dataMap", "map"),
-    ("dataSet", "set"),
-    ("valueStr", "str"),
-    ("countNum", "num"),
-    ("isFlag", "flag"),
-    ("doFunc", "func"),
-    ("MyClassCls", "cls"),
-    ("fieldAttr", "attr"),
-    ("pointerVar", "var"),
-    ("inputParam", "param"),
-])
+@pytest.mark.parametrize(
+    "identifier,suffix_type",
+    [
+        ("dataList", "list"),
+        ("dataTuple", "tuple"),
+        ("dataMap", "map"),
+        ("dataSet", "set"),
+        ("valueStr", "str"),
+        ("countNum", "num"),
+        ("isFlag", "flag"),
+        ("doFunc", "func"),
+        ("MyClassCls", "cls"),
+        ("fieldAttr", "attr"),
+        ("pointerVar", "var"),
+        ("inputParam", "param"),
+    ],
+)
 def test_all_valid_suffixes(mock_formatter, identifier, suffix_type):
     """Test sampling of different suffix types are replaced."""
     node = create_node(identifier)
     result = _build_substitute_name(node, "python")
     expected_suffixes = _SUFFIXES[suffix_type]
     has_suffix = any(s in result for s in expected_suffixes)
-    assert has_suffix, \
-        f"{identifier} should have a {suffix_type} suffix replacement in {result}"
+    assert has_suffix, f"{identifier} should have a {suffix_type} suffix replacement in {result}"
 
 
 def test_arg_suffix_replacement(mock_formatter):

@@ -174,20 +174,19 @@ _OPERATORS = {
 }
 
 
-def _get_comment_template(text: str, type: str, words: int) -> dict[str, str]:
+def _get_comment_template(label: str, words: int) -> dict[str, str]:
     """
     Selects the appropriate comment template dictionary (short, medium, long)
     based on the number of words in the comment and the node type.
 
     Args:
-        text: The comment or node text.
         type: The node type (e.g., 'line_comment', 'block_comment').
         words: The number of words in the comment.
 
     Returns:
         A dictionary mapping semantic labels to template strings.
     """
-    comment_type = type.split("_")[0]
+    comment_type = label.split("_")[0]
     if words <= 3:
         return _SHORT_TEMPLATES[comment_type]
     if words <= 8:
@@ -488,8 +487,8 @@ def _replace_context_mapping(node: Node, ancestor: Node) -> str:
     words: int = len(re.findall(r"\w+", node.text)) if node.text else 0
 
     comment_template = (
-        _get_comment_template(node.text, node.type, words)
-        if node.text
+        _get_comment_template(node.semantic_label, words)
+        if node.semantic_label
         else _MEDIUM_TEMPLATES["line"]
     )
     template = ""

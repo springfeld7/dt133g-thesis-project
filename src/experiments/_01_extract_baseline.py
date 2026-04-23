@@ -160,10 +160,10 @@ def run_step_01():
     # ----------------------------
 
     # Global
-    df_global = pd.DataFrame([{
-        col: (global_sum[col] / global_count if global_count else 0)
-        for col in numeric_cols
-    }], index=["GLOBAL"])
+    df_global = pd.DataFrame(
+        [{col: (global_sum[col] / global_count if global_count else 0) for col in numeric_cols}],
+        index=["GLOBAL"],
+    )
 
     # Language-level
     df_language = pd.DataFrame.from_dict(lang_sum, orient="index")
@@ -179,10 +179,7 @@ def run_step_01():
     for col in numeric_cols:
         df_granular[col] = df_granular[col] / df_granular.index.map(granular_count)
 
-    df_granular.index = pd.MultiIndex.from_tuples(
-        df_granular.index,
-        names=["language", "label"]
-    )
+    df_granular.index = pd.MultiIndex.from_tuples(df_granular.index, names=["language", "label"])
 
     # ----------------------------
     # WRITE REPORT (PRETTY VERSION)

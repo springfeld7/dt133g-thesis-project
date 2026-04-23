@@ -26,7 +26,7 @@ class DatasetManager:
         stream (iterable): A streaming dataset object for on-the-fly data access.
     """
 
-    def __init__(self, repo_id: str = "project-droid/DroidCollection"):
+    def __init__(self, repo_id: str = "DaniilOr/DroidCollection"):
         self.repo_id = repo_id
         self.stream = None
 

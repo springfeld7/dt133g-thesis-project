@@ -1,14 +1,22 @@
-"""_01_extract_baseline.py
+"""
+_01_extract_baseline.py
 
 Step one of experiments: Extract the samples used for the baseline.
 """
 
 import hashlib
-import os
 from pathlib import Path
+from collections import defaultdict
+
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 from .sample_selection.dataset_manager import DatasetManager
 from .sample_selection.analysis import SampleAnalyzer
+
+
+BATCH_SIZE = 10_000
 
 
 def run_step_01():
@@ -18,80 +26,39 @@ def run_step_01():
     1. Streams data and filters for valid parse trees.
     2. Extracts stylistic metrics.
     3. Deduplicates via MD5 hashing.
-    4. Saves the pool to root/data/valid_samples/filtered_pool.parquet.
-    5. Saves a summary report to root/output/dataset_summary.txt.
+    4. Writes dataset incrementally to Parquet.
+    5. Computes summary statistics in a streaming fashion.
+    6. Saves summary report to output/dataset_summary.txt.
     """
+
     manager = DatasetManager()
     analyzer = SampleAnalyzer()
 
     manager.authenticate()
     stream = manager.get_iterator()
 
-    features = stream.features
-    print(f"\n[Dataset Shape/Schema]")
-    print(f"Columns: {list(features.keys())}")
-
+    print("\n[Dataset Shape/Schema]")
+    print(f"Columns: {list(stream.features.keys())}")
     total_rows = stream.info.splits["train"].num_examples
     print(f"Total Rows (Metadata): {total_rows}")
 
-    filtered_data = []
     print("--- Step 01: Streaming & Initial Filtering ---")
 
-    for entry in stream:
+    output_path = Path("data/valid_samples/valid_samples.parquet")
+    report_path = Path("output/dataset_summary.txt")
 
-        lang = entry.get("Language")
-        label = entry.get("Label")
-        code = entry.get("Code", "")
-        valid_tree = analyzer.get_valid_tree(code, lang, label)
-
-        if valid_tree:
-            # Metric Extraction
-            row_data = analyzer.calculate_metrics(code, lang, label, valid_tree)
-
-            row_data["code"] = code
-            row_data["code_hash"] = hashlib.md5(code.encode("utf-8")).hexdigest()
-            row_data["language"] = lang
-            row_data["label"] = label
-
-            filtered_data.append(row_data)
-
-            if len(filtered_data) % 1000 == 0:
-                print(f"Collected {len(filtered_data)} valid candidates...")
-
-    df = pd.DataFrame(filtered_data)
-
-    # Remove Duplicates by code_hash
-    df = df.drop_duplicates(subset="code_hash").reset_index(drop=True)
-    # Assign clean Index (0 to N-1)
-    df.insert(0, "index", range(len(df)))
-
-    # Organize Columns
-    columns_order = [
-        "index",
-        "code",
-        "language",
-        "label",
-        "char_count",
-        "loc",
-        "lloc",
-        "identifier_density",
-        "for_loop_density",
-        "comment_density",
-        "whitespace_ratio",
-        "code_hash",
-    ]
-    df = df[columns_order]
-
-    # --- IO OPERATIONS ---
-    data_path = Path("data/valid_samples/filtered_pool.parquet")
-    output_path = Path("output/dataset_summary.txt")
-    data_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Save the Parquet file to data/valid_samples
-    df.to_parquet(data_path, index=False)
+    writer = None
 
-    # Calculate Averages for the report
+    seen_hashes = set()
+    batch = []
+
+    # ----------------------------
+    # STREAMING STATS ACCUMULATORS
+    # ----------------------------
+
     numeric_cols = [
         "char_count",
         "loc",
@@ -102,33 +69,135 @@ def run_step_01():
         "whitespace_ratio",
     ]
 
-    # Define the grouping levels for the report
-    stats_granular = df.groupby(["language", "label"])[numeric_cols].mean()
-    stats_language = df.groupby(["language"])[numeric_cols].mean()
-    stats_global = df[numeric_cols].mean().to_frame().T
-    stats_global.index = ["GLOBAL"]
+    global_sum = defaultdict(float)
+    global_count = 0
 
-    # Write the summary report to output/dataset_summary.txt
-    with open(output_path, "w") as f:
-        f.write("===  STEP 01 - METRICS EXTRACTION SUMMARY ===\n")
-        f.write(f"Initial Samples Processed: {total_rows}\n")
-        f.write(f"Total Valid Unique Samples: {len(df)}\n\n")
+    lang_sum = defaultdict(lambda: defaultdict(float))
+    lang_count = defaultdict(int)
 
-        f.write("--- Averages per Language/Label ---\n")
-        f.write(stats_granular.to_string())
-        f.write("\n\n")
+    granular_sum = defaultdict(lambda: defaultdict(float))
+    granular_count = defaultdict(int)
 
-        f.write("--- Averages per Language (Combined Labels) ---\n")
-        f.write(stats_language.to_string())
-        f.write("\n\n")
+    # ----------------------------
+    # STREAM LOOP
+    # ----------------------------
+    for entry in stream:
 
-        f.write("--- Global Averages (Combined Everything) ---\n")
-        f.write(stats_global.to_string())
+        lang = entry.get("Language")
+        label = entry.get("Label")
+        code = entry.get("Code", "")
+
+        valid_tree = analyzer.get_valid_tree(code, lang, label)
+        if not valid_tree:
+            continue
+
+        code_hash = hashlib.md5(code.encode("utf-8")).hexdigest()
+        if code_hash in seen_hashes:
+            continue
+        seen_hashes.add(code_hash)
+
+        row_data = analyzer.calculate_metrics(code, lang, label, valid_tree)
+
+        row_data["code"] = code
+        row_data["code_hash"] = code_hash
+        row_data["language"] = lang
+        row_data["label"] = label
+
+        # ----------------------------
+        # UPDATE STATS (ONLINE)
+        # ----------------------------
+        global_count += 1
+
+        for col in numeric_cols:
+            val = row_data[col]
+            global_sum[col] += val
+            lang_sum[lang][col] += val
+            granular_sum[(lang, label)][col] += val
+
+        lang_count[lang] += 1
+        granular_count[(lang, label)] += 1
+
+        # ----------------------------
+        # BATCH WRITE
+        # ----------------------------
+        batch.append(row_data)
+
+        if len(batch) >= BATCH_SIZE:
+            df = pd.DataFrame(batch)
+            table = pa.Table.from_pandas(df)
+
+            if writer is None:
+                writer = pq.ParquetWriter(output_path, table.schema)
+
+            writer.write_table(table)
+
+            print(f"Wrote {len(batch)} rows...")
+
+            batch.clear()
+
+    # ----------------------------
+    # FINAL FLUSH
+    # ----------------------------
+    if batch:
+        df = pd.DataFrame(batch)
+        table = pa.Table.from_pandas(df)
+
+        if writer is None:
+            writer = pq.ParquetWriter(output_path, table.schema)
+
+        writer.write_table(table)
+
+        batch.clear()
+
+    if writer:
+        writer.close()
 
     print(f"\nStep 01 Complete.")
-    print(f"Pool saved to: {data_path}")
-    print(f"Averages report saved to: {output_path}")
+    print(f"Dataset saved to: {output_path}")
 
+    # ----------------------------
+    # FINAL SUMMARY COMPUTATION
+    # ----------------------------
 
-if __name__ == "__main__":
-    run_step_01()
+    # Global
+    df_global = pd.DataFrame(
+        [{col: (global_sum[col] / global_count if global_count else 0) for col in numeric_cols}],
+        index=["GLOBAL"],
+    )
+
+    # Language-level
+    df_language = pd.DataFrame.from_dict(lang_sum, orient="index")
+
+    for col in numeric_cols:
+        df_language[col] = df_language[col] / df_language.index.map(lang_count)
+
+    df_language.index.name = "language"
+
+    # Granular (language / label)
+    df_granular = pd.DataFrame.from_dict(granular_sum, orient="index")
+
+    for col in numeric_cols:
+        df_granular[col] = df_granular[col] / df_granular.index.map(granular_count)
+
+    df_granular.index = pd.MultiIndex.from_tuples(df_granular.index, names=["language", "label"])
+
+    # ----------------------------
+    # WRITE REPORT (PRETTY VERSION)
+    # ----------------------------
+
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("=== STEP 01 - METRICS EXTRACTION SUMMARY ===\n\n")
+        f.write(f"Total Valid Unique Samples: {global_count}\n\n")
+
+        f.write("--- Global Averages ---\n")
+        f.write(df_global.to_string())
+        f.write("\n\n")
+
+        f.write("--- Language Averages ---\n")
+        f.write(df_language.to_string())
+        f.write("\n\n")
+
+        f.write("--- Language / Label Averages ---\n")
+        f.write(df_granular.to_string())
+
+    print(f"Averages report saved to: {report_path}")

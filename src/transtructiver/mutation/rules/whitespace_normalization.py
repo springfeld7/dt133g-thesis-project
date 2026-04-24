@@ -169,6 +169,9 @@ class WhitespaceNormalizationRule(MutationRule):
 
         next_node = root.children[idx + 1]
 
+        if next_node.type in ("++", "--"):
+            return records
+
         # Space after comma/operator, or before an operator
         is_trigger_before = getattr(next_node, "field", None) == "operator"
         is_trigger_after = (child.type == ",") or (getattr(child, "field", None) == "operator")
@@ -255,13 +258,14 @@ class WhitespaceNormalizationRule(MutationRule):
             return records
 
         to_delete = []
-        to_delete.append(node)
 
         # Remove all whitespace in between newline nodes
         i = idx + 1
         while i < len(siblings) and siblings[i].type == "whitespace":
             to_delete.append(siblings[i])
             i += 1
+
+        to_delete.append(siblings[i])  # Add the next newline node
 
         for n in to_delete:
             records.append(self.record_delete(node.parent, n))

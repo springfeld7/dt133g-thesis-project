@@ -112,7 +112,7 @@ def test_record_substitute_creates_valid_record():
     node = DummyNode()
     rule = TestRule()
 
-    record = rule.record_substitute(node, old_type="old_type") 
+    record = rule.record_substitute(node, old_type="old_type")
 
     assert record.node_id == (3, 7)
     assert record.action == MutationAction.SUBSTITUTE

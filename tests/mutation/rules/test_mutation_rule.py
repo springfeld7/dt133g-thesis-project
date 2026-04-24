@@ -33,7 +33,7 @@ def test_concrete_rule_implementation():
                 MutationRecord(
                     node_id=(10, 5),
                     action=MutationAction.RENAME,
-                    metadata={"new_val": "x_var"},  # Fixed key from 'new_text' to 'new_val'
+                    metadata={"old_val": "x", "new_val": "x_var"},
                 )
             ]
 

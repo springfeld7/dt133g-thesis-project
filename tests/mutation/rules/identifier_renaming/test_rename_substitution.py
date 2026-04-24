@@ -1,192 +1,460 @@
-"""Unit tests for identifier renaming substitution logic with similarity thresholds."""
+"""Comprehensive unit tests for identifier substitution renaming logic.
+
+Tests cover:
+  - Simple identifiers (1-3 words, no prepositions/suffixes)
+  - Identifiers with single and multiple prepositions at various positions
+  - Identifiers with suffix type replacements (str, list, map, set, num, etc.)
+  - Combinations of prepositions and suffixes
+  - Edge cases (empty, single word, all prepositions, all suffixes)
+  - Case sensitivity (lowercase, UPPERCASE, camelCase, snake_case)
+  - Deterministic behavior (fixed RNG seed)
+"""
 
 from unittest.mock import Mock
+import pytest
+
+from transtructiver.node import Node
 from transtructiver.mutation.rules.identifier_renaming._rename_substitution import (
     _build_substitute_name,
+    _SUFFIXES,
 )
-from transtructiver.node import Node
 
 
-def test_returns_candidate_within_similarity(monkeypatch):
-    """Should return candidate if similarity is within thresholds."""
+def mock_split_words(identifier):
+    """Split on camelCase, snake_case, and whitespace."""
+    parts = []
+    current = []
+
+    for i, char in enumerate(identifier):
+        if char == "_" or char == "-" or char == " ":
+            if current:
+                parts.append("".join(current))
+                current = []
+        elif i > 0 and char.isupper() and identifier[i - 1].islower():
+            if current:
+                parts.append("".join(current))
+                current = [char]
+        else:
+            current.append(char)
+
+    if current:
+        parts.append("".join(current))
+
+    return parts
+
+
+def mock_format_identifier(node, text, language):
+    """Return text as-is to isolate rearrangement logic from formatting."""
+    return text
+
+
+@pytest.fixture
+def mock_formatter(monkeypatch):
+    """Patch external dependencies with mocks."""
     monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"none": {"fob": 1}},
+        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.split_words",
+        mock_split_words,
     )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "none"
-    assert _build_substitute_name(node, "python") == "fob"
-
-
-def test_rejects_too_similar_candidate(monkeypatch):
-    """Should return original if all candidates is too similar (ratio=1.0)."""
     monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"none": {"foo": 1}},
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "none"
-    assert _build_substitute_name(node, "python") == "foo"
-
-
-def test_fallback_to_dissimilar_candidate(monkeypatch):
-    """Should return dissimilar if similar candidate is missing."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"none": {"bar": 1}},
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "none"
-    assert _build_substitute_name(node, "python") == "bar"
-
-
-def test_multiple_candidates_selects_valid(monkeypatch):
-    """Should select a valid candidate from multiple options."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"none": {"foo": 1, "fob": 1, "bar": 1}},
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "none"
-    assert _build_substitute_name(node, "python") == "fob"
-
-
-def test_context_type_and_fallback(monkeypatch):
-    """Should use fallback context if needed and select valid candidate."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {
-            "number": {},
-            "none": {"fallback": 10, "fub": 8},
-        },
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "number"
-    assert _build_substitute_name(node, "python") == "fub"
-
-
-def test_returns_original_if_no_valid_candidates(monkeypatch):
-    """Should return original if no candidates are within similarity thresholds."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"none": {"completelydifferent": 1}},
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "none"
-    assert _build_substitute_name(node, "python") == "foo"
-
-
-def test_empty_node_text_returns_empty():
-    """Should return empty string if node.text is empty."""
-    node = Node((0, 0), (0, 0), "identifier", text="")
-    node.semantic_label = "variable_name"
-    node.context_type = "number"
-    assert _build_substitute_name(node, "python") == ""
-
-
-def test_no_frequency_map_returns_original(monkeypatch):
-    """Should return original if frequency map is empty."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {},
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "number"
-    assert _build_substitute_name(node, "python") == "foo"
-
-
-def test_unsupported_language_returns_original(monkeypatch):
-    """Should return original if language is unsupported."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"number": {"sub": 5}},
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "number"
-    assert _build_substitute_name(node, "rust") == "foo"
-
-
-def test_missing_semantic_label_returns_original(monkeypatch):
-    """Should return original if semantic_label is missing."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"number": {"sub": 5}},
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = None
-    node.context_type = "number"
-    assert _build_substitute_name(node, "python") == "foo"
-
-
-def test_multiple_languages(monkeypatch):
-    """Should select correct candidate for each supported language."""
-
-    def mock_load(path, lang, label):
-        maps = {
-            "python": {"number": {"py_var": 5}},
-            "java": {"number": {"javaVar": 5}},
-            "cpp": {"number": {"cpp_var": 5}},
-        }
-        return maps.get(lang, {})
-
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        mock_load,
+        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.format_identifier",
+        mock_format_identifier,
     )
 
-    node_py = Node((0, 0), (0, 5), "identifier", text="pyth_v")
-    node_py.semantic_label = "variable_name"
-    node_py.context_type = "number"
-    node_java = Node((0, 0), (0, 5), "identifier", text="javVar")
-    node_java.semantic_label = "variable_name"
-    node_java.context_type = "number"
-    node_cpp = Node((0, 0), (0, 5), "identifier", text="cpl_va")
-    node_cpp.semantic_label = "variable_name"
-    node_cpp.context_type = "number"
-    assert _build_substitute_name(node_py, "python") == "py_var"
-    assert _build_substitute_name(node_java, "java") == "javaVar"
-    assert _build_substitute_name(node_cpp, "cpp") == "cppVar"
+
+def create_node(text):
+    """Create a mock Node with the given text."""
+    node = Mock(spec=Node)
+    node.text = text
+    return node
 
 
-def test_deterministic_with_seed(monkeypatch):
-    """Should always return the same result for the same input (deterministic)."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {
-            "number": {f"id{i}": i for i in range(100)},
-        },
-    )
-    node = Node((0, 0), (0, 5), "identifier", text="foo")
-    node.semantic_label = "variable_name"
-    node.context_type = "number"
-    result1 = _build_substitute_name(node, "python")
-    result2 = _build_substitute_name(node, "python")
+# ==================== SIMPLE IDENTIFIERS (NO PREPOSITIONS/SUFFIXES) ====================
+
+
+def test_single_word_identifier(mock_formatter):
+    """Single-word identifiers should remain unchanged."""
+    node = create_node("variable")
+    result = _build_substitute_name(node, "python")
+    assert result == "variable"
+
+
+def test_two_word_identifier_no_preposition(mock_formatter):
+    """Two-word identifier without prepositions should reverse."""
+    node = create_node("coolAbility")
+    result = _build_substitute_name(node, "python")
+    assert result == "ability_cool"
+
+
+def test_three_word_identifier_no_preposition(mock_formatter):
+    """Three-word identifier should reverse to opposite order."""
+    node = create_node("myAwesomeFunction")
+    result = _build_substitute_name(node, "python")
+    assert result == "function_awesome_my"
+
+
+def test_four_word_identifier(mock_formatter):
+    """Four-word identifier should reverse completely."""
+    node = create_node("getCustomUserData")
+    result = _build_substitute_name(node, "python")
+    assert "data_user_custom_get" in result
+
+
+# ==================== IDENTIFIERS WITH PREPOSITIONS ====================
+
+
+def test_preposition_in_middle(mock_formatter):
+    """Preposition in middle should now also be reversed with other words."""
+    node = create_node("getDataFor")
+    result = _build_substitute_name(node, "python")
+    assert result == "for_data_get"
+
+
+def test_preposition_for_in_middle(mock_formatter):
+    """Test 'for' preposition specifically—now reversed with other words."""
+    node = create_node("coolAbilityForCharStr")
+    result = _build_substitute_name(node, "java")
+    str_suffixes = _SUFFIXES["str"]
+    has_str_suffix = any(suffix in result for suffix in str_suffixes)
+    assert "for_char_ability_cool" in result
+    assert has_str_suffix
+
+
+def test_preposition_at_start(mock_formatter):
+    """Preposition at the start should stay at start."""
+    node = create_node("inTestVariable")
+    result = _build_substitute_name(node, "python")
+    assert result == "in_variable_test"
+
+
+def test_multiple_prepositions(mock_formatter):
+    """Multiple prepositions should now be reversed with other words."""
+    node = create_node("getDataFromUserInDatabase")
+    result = _build_substitute_name(node, "python")
+    assert result == "in_database_from_user_data_get"
+
+
+def test_consecutive_prepositions(mock_formatter):
+    """Consecutive prepositions should now be reversed with other words."""
+    node = create_node("moveFromToFor")
+    result = _build_substitute_name(node, "python")
+    assert result == "for_to_from_move"
+
+
+# ==================== IDENTIFIERS WITH SUFFIX TYPES ====================
+
+
+def test_list_suffix_replacement(mock_formatter):
+    """Identifier ending with 'list' should replace with list suffixes."""
+    node = create_node("userDataList")
+    result = _build_substitute_name(node, "python")
+    list_suffixes = _SUFFIXES["list"]
+    has_list_suffix = any(suffix in result for suffix in list_suffixes)
+    assert has_list_suffix
+
+
+def test_str_suffix_replacement(mock_formatter):
+    """Identifier ending with 'str' should replace with str suffixes."""
+    node = create_node("characterStr")
+    result = _build_substitute_name(node, "python")
+    str_suffixes = _SUFFIXES["str"]
+    has_str_suffix = any(suffix in result for suffix in str_suffixes)
+    assert has_str_suffix
+
+
+def test_map_suffix_replacement(mock_formatter):
+    """Identifier ending with 'map' should use map suffixes."""
+    node = create_node("configMap")
+    result = _build_substitute_name(node, "python")
+    map_suffixes = _SUFFIXES["map"]
+    has_map_suffix = any(suffix in result for suffix in map_suffixes)
+    assert has_map_suffix
+
+
+def test_set_suffix_replacement(mock_formatter):
+    """Identifier ending with 'set' should use set suffixes."""
+    node = create_node("uniqueItemSet")
+    result = _build_substitute_name(node, "python")
+    set_suffixes = _SUFFIXES["set"]
+    has_set_suffix = any(suffix in result for suffix in set_suffixes)
+    assert has_set_suffix
+
+
+def test_num_suffix_replacement(mock_formatter):
+    """Identifier ending with 'num' should use num suffixes."""
+    node = create_node("maxNum")
+    result = _build_substitute_name(node, "python")
+    num_suffixes = _SUFFIXES["num"]
+    has_num_suffix = any(suffix in result for suffix in num_suffixes)
+    assert has_num_suffix
+
+
+def test_func_suffix_replacement(mock_formatter):
+    """Identifier ending with 'func' should use func suffixes."""
+    node = create_node("callbackFunc")
+    result = _build_substitute_name(node, "python")
+    func_suffixes = _SUFFIXES["func"]
+    has_func_suffix = any(suffix in result for suffix in func_suffixes)
+    assert has_func_suffix
+
+
+def test_cls_suffix_replacement(mock_formatter):
+    """Identifier ending with 'cls' should use cls suffixes."""
+    node = create_node("componentCls")
+    result = _build_substitute_name(node, "python")
+    cls_suffixes = _SUFFIXES["cls"]
+    has_cls_suffix = any(suffix in result for suffix in cls_suffixes)
+    assert has_cls_suffix
+
+
+# ==================== COMBINED: PREPOSITIONS + SUFFIXES ====================
+
+
+def test_preposition_and_suffix_combined(mock_formatter):
+    """Identifier with both prepositions and suffix should handle both correctly."""
+    node = create_node("coolAbilityForCharStr")
+    result = _build_substitute_name(node, "python")
+    assert "for_char_ability_cool" in result
+    str_suffixes = _SUFFIXES["str"]
+    has_str_suffix = any(suffix in result for suffix in str_suffixes)
+    assert has_str_suffix
+
+
+def test_multiple_prepositions_with_suffix(mock_formatter):
+    """Complex case: multiple prepositions + suffix at end."""
+    node = create_node("getDataFromUserInList")
+    result = _build_substitute_name(node, "python")
+    assert "in_from_user_data_get_array" in result
+    list_suffixes = _SUFFIXES["list"]
+    has_list_suffix = any(suffix in result for suffix in list_suffixes)
+    assert has_list_suffix
+
+
+# ==================== EDGE CASES ====================
+
+
+def test_empty_identifier(mock_formatter):
+    """Empty identifier should return empty string."""
+    node = create_node("")
+    result = _build_substitute_name(node, "python")
+    assert result == ""
+
+
+def test_none_text(mock_formatter):
+    """Node with None text should return empty string."""
+    node = create_node(None)
+    result = _build_substitute_name(node, "python")
+    assert result == ""
+
+
+def test_only_preposition(mock_formatter):
+    """Identifier that is only a preposition."""
+    node = create_node("for")
+    result = _build_substitute_name(node, "python")
+    assert result == "for"
+
+
+def test_only_suffix(mock_formatter):
+    """Identifier that is only a suffix type."""
+    node = create_node("list")
+    result = _build_substitute_name(node, "python")
+    list_suffixes = _SUFFIXES["list"]
+    has_list_suffix = any(suffix in result for suffix in list_suffixes)
+    assert has_list_suffix, print(f"Result {result} should have list suffix")
+
+
+def test_mixed_case_preposition_matching(mock_formatter):
+    """Prepositions should match case-insensitively and reverse with other words."""
+    node = create_node("myDataFOR")
+    result = _build_substitute_name(node, "python")
+    assert result == "for_data_my"
+
+
+def test_mixed_case_suffix_matching(mock_formatter):
+    """Suffixes should match case-insensitively."""
+    node = create_node("myDataSTR")
+    result = _build_substitute_name(node, "python")
+    str_suffixes = _SUFFIXES["str"]
+    has_str_suffix = any(suffix in result for suffix in str_suffixes)
+    assert has_str_suffix
+
+
+def test_five_word_identifier_no_special(mock_formatter):
+    """Longer identifier without prepositions/suffixes should fully reverse."""
+    node = create_node("myVeryAwesomeCustomFunction")
+    result = _build_substitute_name(node, "python")
+    assert result == "function_custom_awesome_very_my"
+
+
+def test_deterministic_suffix_selection(mock_formatter):
+    """Same identifier should always produce same suffix replacement (seed=42)."""
+    node1 = create_node("dataStr")
+    result1 = _build_substitute_name(node1, "python")
+
+    node2 = create_node("dataStr")
+    result2 = _build_substitute_name(node2, "python")
+
     assert result1 == result2
 
 
-def test_formatting_applied(monkeypatch):
-    """Should call format_identifier on the chosen candidate."""
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.load_identifier_frequency_map",
-        lambda path, lang, label: {"number": {"snake_case": 5}},
-    )
-    mock_formatter = Mock(return_value="FORMATTED_snake_case")
-    monkeypatch.setattr(
-        "transtructiver.mutation.rules.identifier_renaming._rename_substitution.format_identifier",
-        mock_formatter,
-    )
-    # Use an old_text with a single character difference to "snake_case" to pass similarity and length checks
-    node = Node((0, 0), (0, 5), "identifier", text="snake_styled")
-    node.semantic_label = "variable_name"
-    node.context_type = "number"
+# ==================== REALISTIC IDENTIFIER PATTERNS ====================
+
+
+def test_getter_method_pattern(mock_formatter):
+    """Realistic getter method: getCustomUserData."""
+    node = create_node("getCustomUserData")
+    result = _build_substitute_name(node, "java")
+    assert result == "data_user_custom_get"
+
+
+def test_setter_method_pattern(mock_formatter):
+    """Realistic setter method: setValueFor."""
+    node = create_node("setValueFor")
+    result = _build_substitute_name(node, "java")
+    assert result == "for_value_set"
+
+
+def test_database_query_pattern(mock_formatter):
+    """Realistic DB pattern: selectUsersFromDatabase."""
+    node = create_node("selectUsersFromDatabase")
     result = _build_substitute_name(node, "python")
-    mock_formatter.assert_called()
-    assert result == "FORMATTED_snake_case"
+    assert result == "from_database_users_select"
+
+
+def test_list_variable_pattern(mock_formatter):
+    """Realistic list: activeUsersList."""
+    node = create_node("activeUsersList")
+    result = _build_substitute_name(node, "python")
+    list_suffixes = _SUFFIXES["list"]
+    has_list_suffix = any(suffix in result for suffix in list_suffixes)
+    assert has_list_suffix
+
+
+def test_map_variable_pattern(mock_formatter):
+    """Realistic map: userNamesMap."""
+    node = create_node("userNamesMap")
+    result = _build_substitute_name(node, "python")
+    map_suffixes = _SUFFIXES["map"]
+    has_map_suffix = any(suffix in result for suffix in map_suffixes)
+    assert has_map_suffix
+
+
+def test_configuration_pattern(mock_formatter):
+    """Realistic config: loadConfigFrom."""
+    node = create_node("loadConfigFrom")
+    result = _build_substitute_name(node, "python")
+    assert result == "from_config_load"
+
+
+def test_event_handler_pattern(mock_formatter):
+    """Realistic event handler: onClickHandlerForButton."""
+    node = create_node("onClickHandlerForButton")
+    result = _build_substitute_name(node, "java")
+    assert result == "for_button_on_handler_click"
+
+
+def test_iterator_pattern(mock_formatter):
+    """Realistic iterator: iterateOverItemsFunc."""
+    node = create_node("iterateOverItemsFunc")
+    result = _build_substitute_name(node, "python")
+    func_suffixes = _SUFFIXES["func"]
+    has_func_suffix = any(suffix in result for suffix in func_suffixes)
+    assert has_func_suffix
+
+
+def test_validation_pattern(mock_formatter):
+    """Realistic validation: isValidUserInputFor."""
+    node = create_node("isValidUserInputFor")
+    result = _build_substitute_name(node, "java")
+    assert result == "for_input_user_valid_is"
+
+
+def test_nested_structure_pattern(mock_formatter):
+    """Realistic nested structure: getUsersFromDatabaseMap."""
+    node = create_node("getUsersFromDatabaseMap")
+    result = _build_substitute_name(node, "python")
+    map_suffixes = _SUFFIXES["map"]
+    has_map_suffix = any(suffix in result for suffix in map_suffixes)
+    assert has_map_suffix
+
+
+# ==================== MULTIPLE LANGUAGES ====================
+
+
+def test_different_language_java(mock_formatter):
+    """Should work correctly for Java identifiers."""
+    node = create_node("myDataFor")
+    result_java = _build_substitute_name(node, "java")
+    assert result_java is not None
+    assert "for" in result_java
+
+
+def test_different_language_cpp(mock_formatter):
+    """Should work correctly for C++ identifiers."""
+    node = create_node("getUserDataList")
+    result_cpp = _build_substitute_name(node, "cpp")
+    list_suffixes = _SUFFIXES["list"]
+    has_list_suffix = any(suffix in result_cpp for suffix in list_suffixes)
+    assert has_list_suffix
+
+
+def test_different_language_python(mock_formatter):
+    """Should work correctly for Python identifiers."""
+    node = create_node("process_user_data_from")
+    result_py = _build_substitute_name(node, "python")
+    assert result_py is not None
+
+
+# ==================== SPECIAL PATTERNS ====================
+
+
+@pytest.mark.parametrize(
+    "identifier,preposition",
+    [
+        ("getDataAt", "at"),
+        ("moveItemIn", "in"),
+        ("searchWithin", "within"),
+        ("processBy", "by"),
+        ("queryWith", "with"),
+        ("transitionBetween", "between"),
+    ],
+)
+def test_all_valid_prepositions(mock_formatter, identifier, preposition):
+    """Test sampling of different prepositions are included in reversal."""
+    node = create_node(identifier)
+    result = _build_substitute_name(node, "python")
+    assert preposition in result
+
+
+@pytest.mark.parametrize(
+    "identifier,suffix_type",
+    [
+        ("dataList", "list"),
+        ("dataTuple", "tuple"),
+        ("dataMap", "map"),
+        ("dataSet", "set"),
+        ("valueStr", "str"),
+        ("countNum", "num"),
+        ("isFlag", "flag"),
+        ("doFunc", "func"),
+        ("MyClassCls", "cls"),
+        ("fieldAttr", "attr"),
+        ("pointerVar", "var"),
+        ("inputParam", "param"),
+    ],
+)
+def test_all_valid_suffixes(mock_formatter, identifier, suffix_type):
+    """Test sampling of different suffix types are replaced."""
+    node = create_node(identifier)
+    result = _build_substitute_name(node, "python")
+    expected_suffixes = _SUFFIXES[suffix_type]
+    has_suffix = any(s in result for s in expected_suffixes)
+    assert has_suffix, f"{identifier} should have a {suffix_type} suffix replacement in {result}"
+
+
+def test_arg_suffix_replacement(mock_formatter):
+    """Identifier ending with 'arg' should use arg suffixes."""
+    node = create_node("functionArg")
+    result = _build_substitute_name(node, "python")
+    arg_suffixes = _SUFFIXES["arg"]
+    has_arg_suffix = any(suffix in result for suffix in arg_suffixes)
+    assert has_arg_suffix

@@ -23,7 +23,7 @@ def test_rename_valid_metadata():
     """
     Test that RENAME accepts valid metadata.
     """
-    metadata = {"new_val": "renamed_var"}
+    metadata = {"old_val": "original_var", "new_val": "renamed_var"}
     assert validate_action_metadata(MutationAction.RENAME, metadata)
 
 
@@ -114,6 +114,7 @@ def test_extra_top_level_keys_allowed():
     Test that extra top-level metadata keys do not break validation.
     """
     metadata = {
+        "old_val": "old",
         "new_val": "x",
         "extra": "ignored",
     }

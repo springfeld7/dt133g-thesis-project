@@ -101,14 +101,28 @@ class TestPythonForLoopStrategy:
     # -------------------------------------------------------------------------
 
     def test_get_unique_iter_name_collision(self, strategy, mock_context):
-        """Ensures 'iter_var' increments if the name is already in 'taken_names'."""
-        mock_context.taken_names.add("iter_var")
-        mock_context.taken_names.add("iter_var_1")
+        """Ensures 'iter' increments if the name is already in 'taken_names'."""
+        mock_context.taken_names.add("iter")
+        mock_context.taken_names.add("iter1")
+        mock_context.taken_names.add("a")
+        mock_context.taken_names.add("b")
 
-        name = strategy._get_unique_iter_name(mock_context)
+        name = strategy._get_unique_iter_name(mock_context, level=0)
 
-        assert name == "iter_var_2"
-        assert "iter_var_2" in mock_context.taken_names
+        assert name == "iter2"
+        assert "iter2" in mock_context.taken_names
+
+        name = strategy._get_unique_iter_name(mock_context, level=1)
+
+        assert name == "iter3"
+
+        name = strategy._get_unique_iter_name(mock_context, level=2)
+        assert name == "it"
+        name = strategy._get_unique_iter_name(mock_context, level=2)
+        assert name == "it1"
+
+        name = strategy._get_unique_iter_name(mock_context, level=3)
+        assert name == "c"
 
     # -------------------------------------------------------------------------
     # APPLY / TRANSFORMATION TESTS
@@ -151,7 +165,7 @@ class TestPythonForLoopStrategy:
         mock_context.taken_names = set()
 
         with patch.object(strategy, "_find_body_insertion_index", return_value=8):
-            records = strategy.apply(loop_node, mock_rule, mock_context, "    ")
+            records = strategy.apply(loop_node, mock_rule, mock_context, "    ", level=0)
 
             # 1. Check Keyword Substitutions
             # We expect the 'old' type to be recorded
@@ -160,13 +174,13 @@ class TestPythonForLoopStrategy:
 
             # 2. Check Iterator Initializer
             # Ensuring it uses the iter_var name
-            assert any("iter_var = iter(items)" in str(rec.get("new_text")) for rec in records)
+            assert any("iter = iter(items)" in str(rec.get("new_text")) for rec in records)
 
             # 3. Check Body insertions
             # Note: order in records list depends on your _insert_segments implementation
             all_text = "".join(str(rec.get("new_text", "")) for rec in records)
             assert "except StopIteration:" in all_text
-            assert "x = next(iter_var)" in all_text
+            assert "x = next(iter)" in all_text
             assert "break" in all_text
 
     def test_find_body_insertion_point(self, strategy):

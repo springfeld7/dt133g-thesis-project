@@ -123,7 +123,7 @@ def test_verify_delete_node():
 
     manifest = build_manifest(
         [
-            ((1, 0), MutationAction.DELETE, {}, "delete_rule"),
+            ((1, 0), MutationAction.DELETE, {"node_type": "call"}, "delete_rule"),
         ]
     )
 

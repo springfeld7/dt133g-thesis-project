@@ -99,6 +99,18 @@ def _build_rule_registry() -> dict[str, type[MutationRule]]:
 
 RULE_REGISTRY: dict[str, type[MutationRule]] = _build_rule_registry()
 
+_RULE_PARAM_PROPAGATIONS = {
+    "rename-identifier": {
+        "control-structure-substitution": {
+            "level": lambda v: v,
+        }
+    },
+    "whitespace-normalization": {
+        "dead-code-insertion": {
+            "indent_unit": lambda base_unit: " " * base_unit,
+        }
+    },
+}
 
 ####################################################################
 # Dataclasses and prototype helpers
@@ -185,18 +197,34 @@ def _build_engine(
     rule_params = rule_params or {}
     configured_rules = []
 
-    # Determine shared indentation for whitespace-normalization and dead-code-insertion
-    indent_unit = None
-    if "whitespace-normalization" in rules and "dead-code-insertion" in rules:
-        # If both rules are enabled, ensure they use the same base unit for indentation.
-        ws_params = rule_params.get("whitespace-normalization", {})
-        base_unit = ws_params.get("base_unit", DEFAULT_BASE_UNIT)
-        indent_unit = " " * base_unit
+    # ------------------------------------------------------------
+    # Parameter propagation between rules (generic system)
+    # ------------------------------------------------------------
+    for src_rule, targets in _RULE_PARAM_PROPAGATIONS.items():
+        if src_rule not in rule_params:
+            continue
 
-        dci_params = rule_params.setdefault("dead-code-insertion", {})
-        if dci_params.get("indent_unit") is None:
-            dci_params["indent_unit"] = indent_unit
+        src_params = rule_params.get(src_rule, {})
 
+        for target_rule, mappings in targets.items():
+            if target_rule not in rules:
+                continue
+
+            target_params = rule_params.setdefault(target_rule, {})
+
+            for key, transform in mappings.items():
+                if key not in src_params:
+                    continue
+
+                # do not override explicit CLI/user values
+                if key in target_params:
+                    continue
+
+                target_params[key] = transform(src_params[key])
+
+    # ------------------------------------------------------------
+    # Build rule instances
+    # ------------------------------------------------------------
     for rule_name in rules:
         rule_cls = RULE_REGISTRY[rule_name]
         params = dict(rule_params.get(rule_name) or {})

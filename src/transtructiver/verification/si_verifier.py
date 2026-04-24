@@ -254,19 +254,30 @@ class SIVerifier:
 
     def _is_deleted(self, node: Node, manifest: MutationManifest) -> bool:
         """
-        Helper to determine if an original node was marked for deletion.
+        Determines whether a given original CST node has been explicitly deleted
+        according to the mutation manifest.
+
+        A node is considered deleted only if:
+        - A manifest entry exists for its start_point
+        - The entry contains a DELETE action in its history
+        - The node type matches the recorded node_type in the manifest metadata
 
         Args:
-            node (Node): The node in the original tree to check.
+            node (Node): The node in the original CST to check.
             manifest (MutationManifest): The central mutation registry.
 
         Returns:
-            bool: True if the manifest contains a DELETE action for this node.
+            bool: True if the node is explicitly marked as deleted; otherwise False.
         """
         entry = manifest.get_entry(node.start_point)
-        return entry is not None and any(
-            h["action"] == MutationAction.DELETE for h in entry.history
-        )
+
+        if entry is None:
+            return False
+
+        is_deleted_action = any(h["action"] == MutationAction.DELETE for h in entry.history)
+        matches_node_type = node.type == entry.metadata.get("node_type")
+
+        return is_deleted_action and matches_node_type
 
     def _should_defer_manifest_entry(self, orig: Optional[Node], mut: Optional[Node]) -> bool:
         """

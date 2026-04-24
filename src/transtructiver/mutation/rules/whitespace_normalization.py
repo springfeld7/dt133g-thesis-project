@@ -32,16 +32,19 @@ class WhitespaceNormalizationRule(MutationRule):
     - INSERT: Applied when injecting new synthetic whitespace nodes (with sentinel coordinates).
 
     Attributes:
+        level (int): The mutation level.
         base_unit (int): The number of spaces per indentation level.
     """
 
-    def __init__(self, base_unit: int = DEFAULT_BASE_UNIT):
+    def __init__(self, level: int = 0, base_unit: int = DEFAULT_BASE_UNIT):
         """
         Initializes the rule with a specific indentation base unit.
 
         Args:
+            level (int): The mutation level.
             base_unit (int): Number of spaces per indentation level.
         """
+        self._level = level
         self.base_unit = base_unit
 
     def _is_indentation(self, node: Node) -> bool:

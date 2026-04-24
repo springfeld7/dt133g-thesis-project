@@ -261,7 +261,8 @@ class RenameIdentifiersRule(MutationRule):
             ):
                 existing = self._scope.resolve(node.text)
                 if existing is not None and existing != node.text:
-                    records.append(self.record_rename(node, existing))
+                    original_name = node.text
+                    records.append(self.record_rename(node, original_name, existing))
                     for child in reversed(node.children):
                         stack.append((child, False))
                     continue
@@ -274,7 +275,7 @@ class RenameIdentifiersRule(MutationRule):
             # Rename after scope setup so declarations and references resolve consistently.
             original_name = node.text
             new_name = self._resolve_name(node, original_name, language)
-            records.append(self.record_rename(node, new_name))
+            records.append(self.record_rename(node, original_name, new_name))
 
             for child in reversed(node.children):
                 stack.append((child, False))

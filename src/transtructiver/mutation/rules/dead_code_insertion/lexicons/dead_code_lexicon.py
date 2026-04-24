@@ -163,12 +163,6 @@ class DeadCodeLexicon(ABC):
                 # Fallback: treat unknown strategy as a simple assignment
                 content = self._build_transaction(var_name, value, prefix, True)
 
-        # Ensure a single trailing newline
-        print(
-            f"prepending prefix: '{prefix}' to content. Content ends with newline: {content.endswith('\n')}"
-        )  # Debug statement
-        print(f"Generated content before ensuring newline: '{content}'")  # Debug statement
-        print(f"representation of content: '{repr(content)}'")  # Debug statement
         return content
 
     def _build_transaction(

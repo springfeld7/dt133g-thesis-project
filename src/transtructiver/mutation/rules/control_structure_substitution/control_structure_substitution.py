@@ -29,6 +29,17 @@ class ControlStructureSubstitutionRule(MutationRule):
 
     rule_name = "control-structure-substitution"
 
+    def __init__(self, level: int = 0):
+        """
+        Initialize the rule with a specified transformation level passed to rename-identifiers rule,"
+        "or 0 for default.
+
+        Args:
+            level (int): The transformation level to apply, influencing the aggressiveness of renaming.
+        """
+        super().__init__()
+        self._level = level
+
     def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
         Entry point for the mutation rule.
@@ -75,6 +86,6 @@ class ControlStructureSubstitutionRule(MutationRule):
 
         # Apply transformations
         for strategy, node in targets:
-            records.extend(strategy.apply(node, self, context, indent_unit))
+            records.extend(strategy.apply(node, self, context, indent_unit, self._level))
 
         return records

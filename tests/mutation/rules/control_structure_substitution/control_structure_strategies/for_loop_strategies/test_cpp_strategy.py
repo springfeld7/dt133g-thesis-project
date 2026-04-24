@@ -145,7 +145,7 @@ class TestCppForLoopStrategy:
         root.parent = self._n("module", children=[root])
 
         with patch.object(strategy, "_apply_indent_reformat", return_value=[]):
-            records = strategy.apply(root, mock_rule, mock_context, "    ")
+            records = strategy.apply(root, mock_rule, mock_context, "    ", level=0)
 
             # Check keyword substitution
             mock_rule.record_substitute.assert_called_with(for_kw, "for")
@@ -185,4 +185,4 @@ class TestCppForLoopStrategy:
             "for_statement", children=[self._n("for"), self._n("expression_statement", "x=1;")]
         )
 
-        assert strategy.apply(root, mock_rule, mock_context, "    ") == []
+        assert strategy.apply(root, mock_rule, mock_context, "    ", level=0) == []

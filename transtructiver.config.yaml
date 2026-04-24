@@ -25,6 +25,7 @@ transformations:
   whitespace-normalization:
     enabled: false
     params:
+      level: 0                              # Default: 0
       base_unit: 4                          # Default: 4
   
   dead-code-insertion:

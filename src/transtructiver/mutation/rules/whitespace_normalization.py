@@ -8,6 +8,8 @@ uniform code formatting.
 
 from typing import List
 
+from matplotlib.style import context
+
 from transtructiver.mutation.mutation_context import MutationContext
 
 from .mutation_rule import MutationRule, MutationRecord
@@ -39,6 +41,7 @@ class WhitespaceNormalizationRule(MutationRule):
     Mutation Actions:
     - REFORMAT: Applied when modifying existing whitespace node text.
     - INSERT: Applied when injecting new synthetic whitespace nodes (with sentinel coordinates).
+    - DELETE: Applied when removing empty lines.
 
     Attributes:
         level (int): The mutation level.
@@ -48,7 +51,7 @@ class WhitespaceNormalizationRule(MutationRule):
     # CLI rule name (used by the auto-discovery in cli.py).
     rule_name = "whitespace-normalization"
 
-    def __init__(self, base_unit: int = DEFAULT_BASE_UNIT):
+    def __init__(self, level: int = 0, base_unit: int = DEFAULT_BASE_UNIT):
         """
         Initializes the rule with a specific indentation base unit.
 
@@ -57,6 +60,7 @@ class WhitespaceNormalizationRule(MutationRule):
             base_unit (int): Number of spaces per indentation level.
         """
         super().__init__()
+        self._level = level
         self.base_unit = base_unit
 
     def is_numeric(self, node: Node) -> bool:
@@ -228,6 +232,65 @@ class WhitespaceNormalizationRule(MutationRule):
             records.append(self.record_reformat(node, new_text))
         return records
 
+    def _handle_newline_node(
+        self, node: Node, idx: int, siblings: List[Node]
+    ) -> List[MutationRecord]:
+        """
+        Handles newline nodes, particularly for removing empty lines.
+
+        Args:
+            node (Node): The current newline node being inspected.
+            idx (int): The index of the current child node being inspected.
+            siblings (List[Node]): The list of sibling nodes.
+
+        Returns:
+            List[MutationRecord]: A list of mutation records for any changes made.
+        """
+        records: List[MutationRecord] = []
+
+        if not node.parent:
+            return records
+
+        if not self._is_empty_line(node, siblings, idx):
+            return records
+
+        to_delete = []
+        to_delete.append(node)
+
+        # Remove all whitespace in between newline nodes
+        i = idx + 1
+        while i < len(siblings) and siblings[i].type == "whitespace":
+            to_delete.append(siblings[i])
+            i += 1
+
+        for n in to_delete:
+            records.append(self.record_delete(node.parent, n))
+
+        return records
+
+    def _is_empty_line(self, node: Node, siblings: List[Node], idx: int) -> bool:
+        """
+        Detects empty lines in CST, which is when this node pattern occurs:
+        - newline + newline
+        - newline + (any number of whitespace) + newline
+
+        Args:
+            node (Node): The current newline node being inspected.
+            siblings (List[Node]): The list of sibling nodes.
+            idx (int): The index of the current child node being inspected.
+
+        Returns:
+            bool: True if the pattern matches an empty line, False otherwise.
+        """
+
+        i = idx + 1
+
+        # Skip over any whitespace nodes immediately following this newline
+        while i < len(siblings) and siblings[i].type == "whitespace":
+            i += 1
+
+        return i < len(siblings) and siblings[i].type == "newline"
+
     def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
         Applies the WhitespaceNormalizationRule to the CST.
@@ -235,6 +298,8 @@ class WhitespaceNormalizationRule(MutationRule):
         Traverses the tree to locate all nodes of type "whitespace", modifies
         their text content to match defined style standards, and records each
         change for tracking and verification.
+
+        If level is 1, then newline nodes are located and removed if they are empty lines.
 
         Args:
             root (Node): The root node of the CST to mutate.
@@ -250,6 +315,8 @@ class WhitespaceNormalizationRule(MutationRule):
 
             if child.type == "whitespace":
                 records.extend(self._normalize_whitespace(child))
+            elif child.type == "newline" and self._level >= 1:
+                records.extend(self._handle_newline_node(child, idx, root.children))
             else:
                 # Handle structural spacing issues like missing spaces after commas or around operators
                 records.extend(self._handle_structural_spacing(root, child, idx, context))

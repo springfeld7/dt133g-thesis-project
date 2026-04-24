@@ -33,7 +33,7 @@ def test_concrete_rule_implementation():
                 MutationRecord(
                     node_id=(10, 5),
                     action=MutationAction.RENAME,
-                    metadata={"new_val": "x_var"},  # Fixed key from 'new_text' to 'new_val'
+                    metadata={"old_val": "x", "new_val": "x_var"},
                 )
             ]
 
@@ -112,7 +112,7 @@ def test_record_substitute_creates_valid_record():
     node = DummyNode()
     rule = TestRule()
 
-    record = rule.record_substitute(node, old_type="old_type")
+    record = rule.record_substitute(node, old_type="old_type") 
 
     assert record.node_id == (3, 7)
     assert record.action == MutationAction.SUBSTITUTE

@@ -539,14 +539,14 @@ class TestRenameIdentifierCoreBehavior:
         assert all(record.action == MutationAction.RENAME for record in records)
         assert records[0].node_id == (1, 0)
 
-        assert records[0].metadata != {"new_val": "x"}
-        assert records[0].metadata == {"new_val": first_x.text}
+        assert records[0].metadata != {"old_val": "x", "new_val": "x"}
+        assert records[0].metadata == {"old_val": "x", "new_val": first_x.text}
 
-        assert records[1].metadata != {"new_val": "y"}
-        assert records[1].metadata == {"new_val": first_y.text}
+        assert records[1].metadata != {"old_val": "y", "new_val": "y"}
+        assert records[1].metadata == {"old_val": "y", "new_val": first_y.text}
 
-        assert records[2].metadata == {"new_val": second_x.text}
-        assert records[2].metadata == {"new_val": first_x.text}
+        assert records[2].metadata == {"old_val": "x", "new_val": second_x.text}
+        assert records[2].metadata == {"old_val": "x", "new_val": first_x.text}
 
 
 class TestRenameIdentifierScopeBehavior:

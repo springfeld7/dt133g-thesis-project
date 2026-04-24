@@ -85,7 +85,7 @@ class MutationRule(ABC):
             if node.semantic_label in labels:
                 yield node
 
-    def record_rename(self, node: Node, new_text: str) -> "MutationRecord":
+    def record_rename(self, node: Node, old_text: str, new_text: str) -> "MutationRecord":
         """Return a RENAME record and update node.text in one call.
 
         Args:
@@ -99,7 +99,7 @@ class MutationRule(ABC):
         return MutationRecord(
             node_id=node.start_point,
             action=MutationAction.RENAME,
-            metadata={"new_val": new_text},
+            metadata={"old_val": old_text, "new_val": new_text},
         )
 
     def record_reformat(self, node: Node, new_text: str) -> "MutationRecord":

@@ -8,10 +8,7 @@ uniform code formatting.
 
 from typing import List
 
-from matplotlib.style import context
-
-from transtructiver.mutation.mutation_context import MutationContext
-
+from ...mutation.mutation_context import MutationContext
 from .mutation_rule import MutationRule, MutationRecord
 from ...node import Node
 

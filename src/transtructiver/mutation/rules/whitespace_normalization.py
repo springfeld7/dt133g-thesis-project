@@ -249,21 +249,6 @@ class WhitespaceNormalizationRule(MutationRule):
         """
         to_delete: List[Node] = []
 
-        # to_delete = []
-
-        # # Remove all whitespace in between newline nodes
-        # i = idx + 1
-        # while i < len(siblings) and siblings[i].type == "whitespace":
-        #     to_delete.append(siblings[i])
-        #     i += 1
-
-        # to_delete.append(siblings[i])  # Add the next newline node
-
-        # for n in to_delete:
-        #     records.append(self.record_delete(node.parent, n))
-
-        # return records
-
         if not node.parent:
             return []
 

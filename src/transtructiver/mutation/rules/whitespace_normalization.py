@@ -235,9 +235,7 @@ class WhitespaceNormalizationRule(MutationRule):
             records.append(self.record_reformat(node, new_text))
         return records
 
-    def _handle_newline_node(
-        self, node: Node, idx: int, siblings: List[Node]
-    ) -> List[MutationRecord]:
+    def _handle_newline_node(self, node: Node, idx: int, siblings: List[Node]) -> List[Node]:
         """
         Handles newline nodes, particularly for removing empty lines.
 
@@ -247,30 +245,42 @@ class WhitespaceNormalizationRule(MutationRule):
             siblings (List[Node]): The list of sibling nodes.
 
         Returns:
-            List[MutationRecord]: A list of mutation records for any changes made.
+            List[Node]: A list of nodes to delete.
         """
-        records: List[MutationRecord] = []
+        to_delete: List[Node] = []
+
+        # to_delete = []
+
+        # # Remove all whitespace in between newline nodes
+        # i = idx + 1
+        # while i < len(siblings) and siblings[i].type == "whitespace":
+        #     to_delete.append(siblings[i])
+        #     i += 1
+
+        # to_delete.append(siblings[i])  # Add the next newline node
+
+        # for n in to_delete:
+        #     records.append(self.record_delete(node.parent, n))
+
+        # return records
 
         if not node.parent:
-            return records
+            return []
 
         if not self._is_empty_line(node, siblings, idx):
-            return records
+            return []
+        print(
+            f"SHOULD DELETE THIS ONE! node type: {node.type}, text: '{node.text}', start_point: {node.start_point}, end_point: {node.end_point}'"
+        )
+        to_delete.append(node)
 
-        to_delete = []
-
-        # Remove all whitespace in between newline nodes
+        # Skip whitespace after newline
         i = idx + 1
         while i < len(siblings) and siblings[i].type == "whitespace":
             to_delete.append(siblings[i])
             i += 1
 
-        to_delete.append(siblings[i])  # Add the next newline node
-
-        for n in to_delete:
-            records.append(self.record_delete(node.parent, n))
-
-        return records
+        return to_delete
 
     def _is_empty_line(self, node: Node, siblings: List[Node], idx: int) -> bool:
         """
@@ -297,35 +307,49 @@ class WhitespaceNormalizationRule(MutationRule):
 
     def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
-        Applies the WhitespaceNormalizationRule to the CST.
+        Traverses the CST and collects all mutation operations without modifying the tree.
 
-        Traverses the tree to locate all nodes of type "whitespace", modifies
-        their text content to match defined style standards, and records each
-        change for tracking and verification.
-
-        If level is 1, then newline nodes are located and removed if they are empty lines.
+        All structural changes (deletions) are deferred until traversal completes.
 
         Args:
             root (Node): The root node of the CST to mutate.
             context (MutationContext): The mutation context for tracking changes.
 
         Returns:
-            List[MutationRecord]: A list of all formatting changes performed,
-            capturing the original coordinates and the modified text content.
+            List[MutationRecord]: A list of all mutation records generated during traversal.
+        """
+        records, to_delete = self._apply_collect(root, context)
+
+        for node in to_delete:
+            records.append(self.record_delete(node.parent, node))
+
+        return records
+
+    def _apply_collect(
+        self, root: Node, context: MutationContext
+    ) -> tuple[List[MutationRecord], List[Node]]:
+        """
+        Collects mutation records and nodes to delete without mutating the tree during traversal.
+
+        Returns:
+            (records, to_delete)
         """
         records: List[MutationRecord] = []
+        to_delete: List[Node] = []
 
-        for idx, child in enumerate(list(root.children)):
+        children = list(root.children)
+        for idx, child in enumerate(children):
 
             if child.type == "whitespace":
                 records.extend(self._normalize_whitespace(child))
+
             elif child.type == "newline" and self._level >= 1:
-                records.extend(self._handle_newline_node(child, idx, root.children))
+                to_delete.extend(self._handle_newline_node(child, idx, root.children))
             else:
-                # Handle structural spacing issues like missing spaces after commas or around operators
                 records.extend(self._handle_structural_spacing(root, child, idx, context))
 
-            # Recurse through children
-            records.extend(self.apply(child, context))
+            records_child, delete_child = self._apply_collect(child, context)
+            records.extend(records_child)
+            to_delete.extend(delete_child)
 
-        return records
+        return records, to_delete

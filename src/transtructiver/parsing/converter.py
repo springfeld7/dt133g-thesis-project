@@ -8,6 +8,7 @@ into the internal Node model used by the mutation engine. Key features:
 - Maintains parent-child relationships in the output tree
 """
 
+from bisect import bisect_right
 from tree_sitter import Node as TSNode, Point
 from ..node import Node
 
@@ -42,12 +43,9 @@ def _byte_to_point(byte_offset: int, line_starts: list[int]) -> tuple[int, int]:
     Returns:
         tuple[int, int]: The (row, column) corresponding to the byte offset.
     """
-    # Find which line this byte offset is on
-    row = 0
-    for i, start in enumerate(line_starts):
-        if byte_offset < start:
-            break
-        row = i
+    # Binary search to find which line this byte offset is on
+    row = bisect_right(line_starts, byte_offset) - 1
+    row = max(0, row)  # Clamp to valid range
 
     # Column is the offset from the start of the line
     col = byte_offset - line_starts[row]
@@ -94,12 +92,14 @@ def _flush_whitespace(
     if current_ws:
         ws_start = _byte_to_point(current_start_byte, line_starts)
         ws_end = _byte_to_point(current_byte, line_starts)
-        return Node(
+        ws_node = Node(
             start_point=ws_start,
             end_point=ws_end,
             type="whitespace",
             text=current_ws,
         )
+        ws_node.is_named = False
+        return ws_node
     return None
 
 
@@ -163,14 +163,14 @@ def _space_nodes(
             # Add newline node
             nl_start = _byte_to_point(current_byte, line_starts)
             nl_end = _byte_to_point(current_byte + 1, line_starts)
-            nodes.append(
-                Node(
-                    start_point=nl_start,
-                    end_point=nl_end,
-                    type="newline",
-                    text="\n",
-                )
+            nl_node = Node(
+                start_point=nl_start,
+                end_point=nl_end,
+                type="newline",
+                text="\n",
             )
+            nl_node.is_named = False
+            nodes.append(nl_node)
             current_byte += 1
             current_start_byte = current_byte
             current_ws = ""
@@ -192,6 +192,7 @@ def convert_node(
     source_bytes: bytes,
     field: str | None = None,
     ws_map: dict | None = None,
+    line_starts: list[int] | None = None,
 ) -> Node:
     """Convert a Tree-sitter node to the project's Node structure.
 
@@ -204,16 +205,20 @@ def convert_node(
         source_bytes (bytes): The source code as bytes.
         field (str, optional): The field name of this node in its parent.
         ws_map (dict, optional): Whitespace map (unused, kept for compatibility).
+        line_starts (list[int], optional): Precomputed line start byte offsets.
+            Computed on first call, then passed recursively for efficiency.
 
     Returns:
         Node: The converted node with type, text (for leaves), children,
             and is_named status.
     """
-    # Precompute line starts for Point-to-byte conversion
-    line_starts = _line_start_bytes(source_bytes)
+    # Compute line starts only once on the first call
+    if line_starts is None:
+        line_starts = _line_start_bytes(source_bytes)
+
     code_len = len(source_bytes)
 
-    if ts_node.child_count == 0:
+    if ts_node.child_count == 0 or ts_node.is_error:
         text = source_bytes[ts_node.start_byte : ts_node.end_byte].decode("utf8")
         children = []
     else:
@@ -221,7 +226,7 @@ def convert_node(
         children = []
         # For root-level nodes (module), start from (0, 0) to capture leading whitespace
         # For other nodes, start from the node's own start_point
-        if ts_node.type == "module":
+        if not ts_node.parent:
             previous_end_point = Point(0, 0)
         else:
             previous_end_point = ts_node.start_point
@@ -235,8 +240,8 @@ def convert_node(
             )
             children.extend(ws_nodes)
 
-            # Recursively convert child node with its field name
-            children.append(convert_node(child, source_bytes, child_field, ws_map))
+            # Recursively convert child node with its field name, passing line_starts
+            children.append(convert_node(child, source_bytes, child_field, ws_map, line_starts))
             previous_end_point = child.end_point
 
         # Create whitespace nodes for trailing gap
@@ -255,6 +260,10 @@ def convert_node(
 
     # Store the field name on this node
     node.field = field
+
+    # Store True if name correspond to grammar rule
+    # False if name correspond to string literal
+    node.is_named = ts_node.is_named
 
     for child in node.children:
         child.parent = node

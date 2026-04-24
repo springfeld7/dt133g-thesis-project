@@ -5,10 +5,8 @@ It validates Semantic Isomorphism (SI) by ensuring that every transformation
 found in a mutated CST is authorized and documented within a MutationManifest.
 """
 
-import csv
-import os
 from typing import List, Optional
-from ..mutation.mutation_manifest import MutationManifest, ManifestEntry
+from ..mutation.mutation_manifest import MutationManifest
 from ..mutation.mutation_types import MutationAction
 from ..node import Node
 from .strategies.registry import STRATEGY_MAP
@@ -32,9 +30,22 @@ class SIVerifier:
             found during verification. This list is reset at the start of each verify() call.
     """
 
-    def __init__(self):
+    _STRICTNESS_DEFAULTS = {
+        "strict": 0,
+        "balanced": 3,
+        "lenient": 10,
+    }
+
+    def __init__(self, strictness: str = "strict", max_errors: int | None = None):
         self.strategies = STRATEGY_MAP
         self.errors: List[str] = []
+        self.strictness = strictness.lower()
+        if self.strictness not in self._STRICTNESS_DEFAULTS:
+            raise ValueError(
+                f"Unknown strictness '{strictness}'. "
+                f"Expected one of: {list(self._STRICTNESS_DEFAULTS.keys())}"
+            )
+        self.max_errors = max_errors
 
     def _report(self, msg: str) -> None:
         """Logs a discrepancy."""
@@ -63,9 +74,28 @@ class SIVerifier:
         self._halt = False  # Reset circuit breaker
 
         if manifest.has_structural_changes():
-            return self._verify_synchronized(original_tree, mutated_tree, manifest)
+            ok = self._verify_synchronized(original_tree, mutated_tree, manifest)
+        else:
+            ok = self._verify_aligned(original_tree, mutated_tree, manifest)
 
-        return self._verify_aligned(original_tree, mutated_tree, manifest)
+        if ok:
+            return True
+
+        threshold = self._effective_error_threshold()
+        if len(self.errors) <= threshold:
+            return True
+        return False
+
+    def _effective_error_threshold(self) -> int:
+        """Resolve effective verification error threshold.
+
+        Priority:
+        1) explicit max_errors
+        2) strictness default (strict=0, balanced=3, lenient=10)
+        """
+        if self.max_errors is not None:
+            return max(0, self.max_errors)
+        return self._STRICTNESS_DEFAULTS[self.strictness]
 
     def _verify_aligned(self, orig: Node, mut: Node, manifest: MutationManifest) -> bool:
         """
@@ -180,11 +210,20 @@ class SIVerifier:
         """
         # Determine the source of truth for the manifest lookup.
         # Original coordinates are the primary keys.
-        point = orig.start_point if orig else mut.start_point
+        if orig is not None:
+            point = orig.start_point
+        elif mut is not None:
+            point = mut.start_point
+        else:
+            self._report("Verifier received two None nodes.")
+            return False
         entry = manifest.get_entry(point)
 
         if entry is None:
             # IDENTITY CHECK: No mutation recorded, must be a perfect mirror
+            if orig is None or mut is None:
+                self._report(f"Unauthorized insertion/deletion at {point}")
+                return False
             if not self._verify_identity(orig, mut):
                 self._report(f"Unauthorized change at {point}")
                 return False
@@ -195,6 +234,14 @@ class SIVerifier:
         # when we have multiple actions on the same node when FLATTEN or SUBSTITUTE come into play.
         # For now it is even redudant to take the last action because there should only be one action per node.
         action = entry.history[-1]["action"]
+
+        # Coordinate-collision guard:
+        # Parent/child nodes can share start_point. If traversal hits an unchanged
+        # wrapper node that carries no own text, defer manifest consumption so the
+        # descendant token at the same coordinate can validate the recorded action.
+        if self._should_defer_manifest_entry(orig, mut):
+            return True
+
         strategy = self.strategies.get(action)
 
         if not strategy:
@@ -221,6 +268,26 @@ class SIVerifier:
             h["action"] == MutationAction.DELETE for h in entry.history
         )
 
+    def _should_defer_manifest_entry(self, orig: Optional[Node], mut: Optional[Node]) -> bool:
+        """
+        Return True when a manifest entry should be handled by a descendant node.
+
+        Parent and child CST nodes can share the same coordinates. When traversal
+        encounters an unchanged wrapper first, consuming the manifest entry there
+        would block the token-level node at the same coordinate from validating
+        the actual mutation.
+        """
+        if orig is None or mut is None:
+            return False
+
+        if not orig.children and not mut.children:
+            return False
+
+        if orig.text or mut.text:
+            return False
+
+        return self._verify_identity(orig, mut)
+
     def _verify_identity(self, orig: Node, mut: Node) -> bool:
         """
         Pure check for strict structural and content identity between two nodes.
@@ -232,42 +299,3 @@ class SIVerifier:
             and orig.start_point == mut.start_point
             and orig.end_point == mut.end_point
         )
-
-    def write_summary(self, snippet_id: str, verified: bool, log_path: str = "summary_log.csv"):
-        """
-        Records the outcome of a verification run to a specified CSV log.
-
-        This method facilitates both production auditing and isolated testing
-        by allowing the caller to specify the destination file.
-
-        Args:
-            snippet_id (str): Unique identifier for the snippet.
-            verified (bool): The success status of the isomorphism check.
-            log_path (str): The destination file path. Defaults to 'summary_log.csv'
-                for standard production runs.
-
-        Note:
-            - The file is opened in 'append' mode.
-            - If the path provided by a test (e.g., via tmp_path) does not exist,
-              Python will create it automatically upon the first write.
-        """
-        status = 1 if verified else 0
-        reason = (
-            "" if verified else (" | ".join(self.errors) if self.errors else "Unknown Mismatch")
-        )
-
-        # Ensure the directory exists
-        log_dir = os.path.dirname(log_path)
-        if log_dir and not os.path.exists(log_dir):
-            try:
-                os.makedirs(log_dir, exist_ok=True)
-            except OSError as e:
-                print(f"CRITICAL: Could not create log directory {log_dir}: {e}")
-                return
-
-        try:
-            with open(log_path, "a", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow([snippet_id, status, reason])
-        except (PermissionError, IOError) as e:
-            print(f"ERROR: Failed to write to {log_path}: {e}")

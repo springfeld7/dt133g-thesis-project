@@ -6,9 +6,12 @@ reporting mechanism for tracking changes via original source coordinates.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple
-from ..mutation_types import MutationAction
+from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple
+
+from ..mutation_context import MutationContext
+from ..mutation_types import MutationAction
 from ..mutation_types import MutationAction, validate_action_metadata
 from ...node import Node
 
@@ -41,23 +44,139 @@ class MutationRule(ABC):
 
     Subclasses implement the apply method to modify a Tree-Sitter tree
     and return change records used for manifest generation.
+
+    Class attribute (optional):
+        rule_name (str): The CLI name used to select this rule (e.g. "my-rule").
+            If not set, a name is auto-derived from the class name by stripping
+            the trailing "Rule" suffix and converting to kebab-case.
     """
 
     def __init__(self):
         self.name = self.__class__.__name__
 
     @abstractmethod
-    def apply(self, root: Node) -> List[MutationRecord]:
+    def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
         Applies a mutation to the CST and returns a log of modifications.
 
         Args:
             root (Any): The root node of the tree to be mutated.
+            context (MutationContext, optional): Context object for sharing state across rules.
 
         Returns:
             List[MutationRecord]: Records of all modifications made.
         """
         pass
+
+    # ------------------------------------------------------------------
+    # Convenience helpers — used instead of constructing
+    # MutationRecord objects manually.
+    # ------------------------------------------------------------------
+
+    def iter_by_label(self, root: Node, *labels: str) -> Iterator[Node]:
+        """Yield every node in the tree whose semantic_label is in *labels*.
+
+        Example::
+
+            for node in self.iter_by_label(root, "variable_name", "parameter_name"):
+                ...
+        """
+        for node in root.traverse():
+            if node.semantic_label in labels:
+                yield node
+
+    def record_rename(self, node: Node, new_text: str) -> "MutationRecord":
+        """Return a RENAME record and update node.text in one call.
+
+        Args:
+            node: The identifier node to rename.
+            new_text: The replacement identifier text.
+
+        Returns:
+            A MutationRecord ready to append to your records list.
+        """
+        node.text = new_text
+        return MutationRecord(
+            node_id=node.start_point,
+            action=MutationAction.RENAME,
+            metadata={"new_val": new_text},
+        )
+
+    def record_reformat(self, node: Node, new_text: str) -> "MutationRecord":
+        """Return a REFORMAT record and update node.text in one call.
+
+        Args:
+            node: The node whose text should be reformatted.
+            new_text: The replacement text.
+
+        Returns:
+            A MutationRecord ready to append to your records list.
+        """
+        node.text = new_text
+        return MutationRecord(
+            node_id=node.start_point,
+            action=MutationAction.REFORMAT,
+            metadata={"new_val": new_text},
+        )
+
+    def record_insert(
+        self, point: tuple[int, int], insertion_point: tuple[int, int], new_text: str, new_type: str
+    ) -> "MutationRecord":
+        """
+        Return an INSERT record for a new node to be added at *point*.
+
+        Args:
+            point: The insert point of the node.
+            insertion_point: The point where the node will be inserted in relation to the original
+            new_text: The text of the inserted node.
+            new_type: The type of the inserted node.
+
+        Returns:
+            A MutationRecord ready to append to your records list.
+        """
+        return MutationRecord(
+            node_id=point,
+            action=MutationAction.INSERT,
+            metadata={
+                "new_val": new_text,
+                "node_type": new_type,
+                "insertion_point": insertion_point,
+            },
+        )
+
+    def record_delete(self, parent: Node, node: Node) -> "MutationRecord":
+        """Remove *node* from *parent* and return a DELETE record.
+
+        Args:
+            parent: The direct parent node that owns *node*.
+            node: The node to remove from the tree.
+
+        Returns:
+            A MutationRecord ready to append to your records list.
+        """
+        parent.remove_child(node)
+        return MutationRecord(
+            node_id=node.start_point,
+            action=MutationAction.DELETE,
+            metadata={"node_type": node.type, "content": node.text},
+        )
+
+    def record_substitute(self, node: Node, old_type: str) -> "MutationRecord":
+        """
+        Creates and returns a SUBSTITUTE record for a node whose type and/or text has been changed.
+
+        Args:
+            node: The node to be replaced.
+            old_type: The type of the original node.
+
+        Returns:
+            A MutationRecord ready to append to your records list.
+        """
+        return MutationRecord(
+            node_id=node.start_point,
+            action=MutationAction.SUBSTITUTE,
+            metadata={"old_type": old_type, "new_type": node.type, "new_val": node.text},
+        )
 
     def __repr__(self) -> str:
         """

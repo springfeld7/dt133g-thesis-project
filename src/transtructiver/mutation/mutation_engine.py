@@ -5,9 +5,12 @@ and recording every change in a centralized MutationManifest. This provides
 a verifiable history of how each node in the tree was modified.
 """
 
+from collections import defaultdict
+import heapq
 from typing import List
 from .rules.mutation_rule import MutationRecord, MutationRule
 from .mutation_manifest import MutationManifest
+from .mutation_context import MutationContext
 from ..node import Node
 
 
@@ -23,6 +26,13 @@ class MutationEngine:
         rules (List[MutationRule]): Sequence of rules to be executed.
     """
 
+    # Define rule dependencies to ensure correct execution order
+    _RULE_DEPENDENCIES = {
+        "dead-code-insertion": ["whitespace-normalization"],
+        "control-structure-substitution": ["whitespace-normalization"],
+        "rename-identifier": ["dead-code-insertion", "control-structure-substitution"],
+    }
+
     def __init__(self, rules: List[MutationRule]):
         """
         Initialize the MutationEngine with a list of rules.
@@ -31,6 +41,7 @@ class MutationEngine:
             rules (List[MutationRule]): List of mutation rule objects.
         """
         self.rules: List[MutationRule] = rules
+        self.manifest: MutationManifest = MutationManifest()
 
     def apply_mutations(self, cst: Node) -> MutationManifest:
         """
@@ -38,7 +49,8 @@ class MutationEngine:
 
         Rules are applied sequentially. This method populates the transformation Manifest
         by aggregating mutation records from each rule, which serves as the
-        source of truth for downstream verification.
+        source of truth for downstream verification. The result is also stored
+        as ``self.manifest`` for post-hoc inspection by the caller.
 
         Args:
             cst (Node): The root node of the CST to mutate.
@@ -47,11 +59,68 @@ class MutationEngine:
             MutationManifest: The complete transformation Manifest.
         """
         manifest = MutationManifest()
-        for rule in self.rules:
-            local_changes = rule.apply(cst)
+        context = MutationContext()
+
+        ordered_rules = self._order_rules()
+
+        for rule in ordered_rules:
+            local_changes = rule.apply(cst, context)
             self._merge_to_manifest(manifest, local_changes, rule.name)
 
+        self.manifest = manifest
         return manifest
+
+    def _order_rules(self) -> List[MutationRule]:
+        """Order rules using dependency constraints (topological sort).
+
+        Only enforces constraints between rules that are present.
+        Preserves original order where no constraints apply.
+
+        Returns:
+            List[MutationRule]: Rules ordered according to dependencies.
+        """
+
+        # Preserve original order as tie-breaker
+        original_order = {r.rule_name: i for i, r in enumerate(self.rules)}
+
+        # Map rule_name -> rule instance
+        rule_map = {r.rule_name: r for r in self.rules}
+
+        in_degree = {name: 0 for name in rule_map}
+        graph = defaultdict(list)
+
+        # Build graph ONLY for rules that exist in this run
+        for rule, deps in self._RULE_DEPENDENCIES.items():
+            if rule not in rule_map:
+                continue
+
+            for dep in deps:
+                if dep not in rule_map:
+                    continue
+
+                graph[dep].append(rule)
+                in_degree[rule] += 1
+
+        # Priority queue ensures stable ordering based on original input order
+        queue = [(original_order[name], name) for name in rule_map if in_degree[name] == 0]
+        heapq.heapify(queue)
+
+        ordered_names = []
+
+        while queue:
+            _, current = heapq.heappop(queue)
+            ordered_names.append(current)
+
+            for neighbor in graph[current]:
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    heapq.heappush(queue, (original_order[neighbor], neighbor))
+
+        # Detect cycles (should never happen unless config is wrong)
+        if len(ordered_names) != len(rule_map):
+            raise ValueError("Cycle detected in rule dependencies")
+
+        return [rule_map[name] for name in ordered_names]
 
     def _merge_to_manifest(
         self, manifest: MutationManifest, changes: List[MutationRecord], rule_name: str

@@ -7,6 +7,7 @@ identity checks, strategy dispatch, and edge cases.
 import csv
 import pytest
 from src.transtructiver.verification.si_verifier import SIVerifier
+from src.transtructiver.reporting.summary_logger import write_summary
 from src.transtructiver.node import Node
 from src.transtructiver.mutation.mutation_manifest import MutationManifest
 from src.transtructiver.mutation.mutation_types import MutationAction
@@ -92,16 +93,16 @@ def test_verify_insert_node():
     assign = ("assignment", "x = 1", (0, 2), (0, 5))
     root_orig = make_tree_with_children([assign])
 
-    inserted = make_node("call", "print(x)", start=(-1, 0), end=(1, 8))
+    inserted = make_node("call", "print(x)", start=(-1, -1), end=(1, 8))
     root_mut = make_node("module", "")
     root_mut.children.extend([make_node(*assign), inserted])
 
     manifest = build_manifest(
         [
             (
-                (-1, 0),
+                (-1, -1),
                 MutationAction.INSERT,
-                {"new_val": "print(x)", "node_type": "call"},
+                {"new_val": "print(x)", "node_type": "call", "insertion_point": (1, 8)},
                 "insert_rule",
             ),
         ]
@@ -147,7 +148,7 @@ def test_verify_composite_mutations():
     func_mut = make_node("function_def", "def foo():", start=(0, 2), end=(0, 10))
     assign_mut = make_node("assignment", "x=1", start=(1, 2), end=(1, 7))  # reformat
     call_mut = make_node("call", "print(y)", start=(2, 2), end=(2, 10))  # rename
-    inserted_var = make_node("assignment", "y = 2", start=(-1, 0), end=(0, 0))  # insert
+    inserted_var = make_node("assignment", "y = 2", start=(-1, -1), end=(2, 10))  # insert
     root_mut.children.append(func_mut)
     func_mut.children.extend([assign_mut, call_mut, inserted_var])
 
@@ -156,9 +157,9 @@ def test_verify_composite_mutations():
             ((1, 2), MutationAction.REFORMAT, {"new_val": "x=1"}, "reformat_rule"),
             ((2, 2), MutationAction.RENAME, {"new_val": "print(y)"}, "rename_rule"),
             (
-                (-1, 0),
+                (-1, -1),
                 MutationAction.INSERT,
-                {"new_val": "y = 2", "node_type": "assignment"},
+                {"new_val": "y = 2", "node_type": "assignment", "insertion_point": (2, 10)},
                 "insert_rule",
             ),
             ((3, 0), MutationAction.DELETE, {}, "delete_rule"),
@@ -269,7 +270,7 @@ def test_write_summary_creates_file(verifier, tmp_path):
     snippet_id = "snippet_1"
     verified = True
 
-    verifier.write_summary(snippet_id, verified, log_path=str(log_file))
+    write_summary(snippet_id, verified, errors=verifier.errors, log_path=str(log_file))
 
     # File should exist
     assert log_file.exists()

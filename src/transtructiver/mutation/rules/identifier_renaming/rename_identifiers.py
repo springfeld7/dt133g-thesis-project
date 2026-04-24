@@ -8,10 +8,9 @@ MutationRecord entries for each rename action.
 """
 
 from ....node import Node
+from ...mutation_context import MutationContext
 from ..mutation_rule import MutationRecord, MutationRule
-from ...mutation_types import MutationAction
-from ....parsing.annotation.annotator import ROOT_TO_LANGUAGE
-from ._scope_manager import ScopeManager
+from ....utils.scope_manager import ScopeManager
 from ._name_generator import NameGenerator
 
 
@@ -27,6 +26,9 @@ class RenameIdentifiersRule(MutationRule):
     - ``NameGenerator``: base name and suffix generation
     - ``apply()``: CST traversal and MutationRecord emission
     """
+
+    # CLI rule name (used by the auto-discovery in cli.py).
+    rule_name = "rename-identifier"
 
     # Public target keywords mapped to the semantic labels produced by annotation.
     _TARGET_TO_LABEL = {
@@ -45,18 +47,19 @@ class RenameIdentifiersRule(MutationRule):
         "root",
         "function_scope",
         "class_scope",
-        "block_scope",
+        "condition_scope",
         "loop_scope",
     }
 
     # Node field names treated as declarations rather than references.
     _DECLARATION_FIELDS = {
-        "left",
         "name",
         "declarator",
         "parameter",
         "pattern",
         "function",
+        "left",
+        "attribute",
     }
 
     def __init__(self, level: int = 0, targets: list[str] | None = None) -> None:
@@ -66,7 +69,6 @@ class RenameIdentifiersRule(MutationRule):
             level: Naming strategy level passed to :class:`NameGenerator`.
             targets: Optional rename target keywords such as ``variable``,
                 ``parameter``, ``property``, ``function``, or ``class``.
-                When omitted, the default targets are variables and parameters.
         """
         super().__init__()
         self.level = level
@@ -100,7 +102,8 @@ class RenameIdentifiersRule(MutationRule):
     def _is_renamable_identifier(self, node: Node) -> bool:
         """Return whether the identifier is eligible for renaming."""
         return (
-            node.type == "identifier"
+            "identifier" in node.type
+            and not bool(node.builtin)
             and bool(node.text)
             and node.semantic_label in self.allowed_labels
         )
@@ -147,35 +150,47 @@ class RenameIdentifiersRule(MutationRule):
     # Naming
     # ------------------------------------------------------------------
 
-    def _make_scoped_name(self, node: Node, original_name: str, language: str) -> str:
-        """Generate a deterministic rename, adding a depth suffix when shadowing."""
-        base_name = self._namer.make_name(node, language)
+    def _make_scoped_name(self, node: Node, _original_name: str, language: str) -> str:
+        """Generate a deterministic rename for the current identifier."""
+        return self._namer.make_name(node, language)
 
-        if not self._scope:
-            return base_name
+    def _name_exists_in_visible_scope(self, candidate: str) -> bool:
+        """Return whether a generated name already exists in any active scope."""
+        return any(candidate in scope.values() for scope in self._scope._scopes)
 
-        # Reuse the generated base name, but mark it when it shadows an outer binding.
-        outer = self._scope.resolve(original_name)
-        if outer is not None:
-            return f"{base_name}_s{self._scope.depth() - 1}"
-
-        return base_name
+    def _bump_name(self, base: str, index: int, language: str) -> str:
+        """Create a deterministic disambiguated variant of ``base``."""
+        if language == "python":
+            return f"{base}_{index}"
+        return f"{base}{index}"
 
     def _resolve_name(self, node: Node, original_name: str, language: str) -> str:
         """Return the new name for an identifier, registering it in scope as needed."""
         if self._is_declaration_identifier(node):
             current = self._scope.current()
-            if current is not None and original_name not in current:
-                # First declaration in this scope establishes the binding for later references.
-                self._scope.declare(
-                    original_name, self._make_scoped_name(node, original_name, language)
-                )
-            resolved = self._scope.resolve(original_name)
-            return (
-                resolved
-                if resolved is not None
-                else self._make_scoped_name(node, original_name, language)
-            )
+            if current is not None and original_name in current:
+                return current[original_name]
+
+            outer_existing = self._scope.resolve(original_name)
+
+            # Targeted shadow handling: when a parameter declaration shadows
+            # an outer binding (e.g., class field), keep a distinct local name.
+            if node.semantic_label == "parameter_name" and outer_existing is not None:
+                base_name = self._make_scoped_name(node, original_name, language)
+                new_name = base_name
+                bump_index = 1
+                while new_name == outer_existing or self._name_exists_in_visible_scope(new_name):
+                    new_name = self._bump_name(base_name, bump_index, language)
+                    bump_index += 1
+                self._scope.declare(original_name, new_name)
+                return new_name
+
+            if outer_existing is not None:
+                return outer_existing
+
+            new_name = self._make_scoped_name(node, original_name, language)
+            self._scope.declare(original_name, new_name)
+            return new_name
 
         existing = self._scope.resolve(original_name)
         if existing is not None:
@@ -189,26 +204,28 @@ class RenameIdentifiersRule(MutationRule):
     # Entry point
     # ------------------------------------------------------------------
 
-    def apply(self, root: Node) -> list[MutationRecord]:
+    def apply(self, root: Node, context: MutationContext) -> list[MutationRecord]:
         """Apply identifier renaming to an annotated CST root.
 
         Args:
             root: Annotated CST root node.
+            context: MutationContext for this mutation application,
+                     unused by this rule but available for future extensions.
 
         Returns:
             A list of MutationRecord entries for performed rename actions.
 
         Raises:
-            ValueError: If the root node type is not a supported language root.
+            ValueError: If root.language is missing.
         """
         if root is None:
             return []
 
-        language = ROOT_TO_LANGUAGE.get(root.type)
+        language = root.language.lower() if root.language else None
         if language is None:
             raise ValueError(
-                f"Unsupported root type '{root.type}'. "
-                f"Supported: {list(ROOT_TO_LANGUAGE.keys())}"
+                "No language found on root node. "
+                "Set root.language before applying RenameIdentifiersRule."
             )
 
         self._scope.reset()
@@ -227,6 +244,28 @@ class RenameIdentifiersRule(MutationRule):
                 self._scope.enter_scope()
                 stack.append((node, True))
 
+            # Skip renaming for builtins
+            if node.semantic_label == "builtin_name":
+                for child in reversed(node.children):
+                    stack.append((child, False))
+                continue
+
+            # If a binding is already known for this identifier in the current
+            # scope stack, rename it regardless of semantic label coverage.
+            # This keeps declaration/reference renames consistent even when
+            # a reference node was not annotated as variable_name/parameter_name.
+            if (
+                "identifier" in node.type
+                and node.text
+                and not self._is_declaration_identifier(node)
+            ):
+                existing = self._scope.resolve(node.text)
+                if existing is not None and existing != node.text:
+                    records.append(self.record_rename(node, existing))
+                    for child in reversed(node.children):
+                        stack.append((child, False))
+                    continue
+
             if not self._is_renamable_identifier(node) or not node.text:
                 for child in reversed(node.children):
                     stack.append((child, False))
@@ -235,9 +274,7 @@ class RenameIdentifiersRule(MutationRule):
             # Rename after scope setup so declarations and references resolve consistently.
             original_name = node.text
             new_name = self._resolve_name(node, original_name, language)
-            node.text = new_name
-            metadata = {"new_val": new_name}
-            records.append(MutationRecord(node.start_point, MutationAction.RENAME, metadata))
+            records.append(self.record_rename(node, new_name))
 
             for child in reversed(node.children):
                 stack.append((child, False))

@@ -37,7 +37,7 @@ class ContentVerificationStrategy(VerificationStrategy):
         expected_text = meta.get("new_val")
 
         # Manifest Integrity Check
-        if expected_text is None:
+        if orig and expected_text is None:
             errors.append(f"Manifest Error: Missing 'new_val' in metadata at {orig.start_point}")
             return errors
 

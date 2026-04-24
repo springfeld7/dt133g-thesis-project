@@ -57,15 +57,24 @@ def test_synthetic_node_record():
                 MutationRecord(
                     node_id=(-1, -1),
                     action=MutationAction.INSERT,
-                    metadata={"new_val": "pass", "node_type": "stmt"},
+                    metadata={
+                        "new_val": "pass",
+                        "node_type": "stmt",
+                        "insertion_point": (0, 0),  # required by verifier
+                    },
                 )
             ]
 
     rule = InsertDeadCodeRule()
     results = rule.apply(None)  # type: ignore[abstract]
 
+    # Check synthetic coordinates
     assert results[0].node_id[0] < 0
+    # Check action
     assert results[0].action == MutationAction.INSERT
+    # Check insertion_point exists
+    assert "insertion_point" in results[0].metadata
+    assert results[0].metadata["insertion_point"] == (0, 0)
 
 
 def test_invalid_metadata_raises_error():
@@ -85,3 +94,30 @@ def test_repr_output():
 
     rule = TestRule()
     assert repr(rule) == "<TestRule>"
+
+
+def test_record_substitute_creates_valid_record():
+    """Ensure SUBSTITUTE record is created with correct metadata."""
+
+    class DummyNode:
+        def __init__(self):
+            self.start_point = (3, 7)
+            self.type = "new_type"
+            self.text = "new_text"
+
+    class TestRule(MutationRule):
+        def apply(self, root):
+            return []
+
+    node = DummyNode()
+    rule = TestRule()
+
+    record = rule.record_substitute(node, old_type="old_type")
+
+    assert record.node_id == (3, 7)
+    assert record.action == MutationAction.SUBSTITUTE
+    assert record.metadata == {
+        "old_type": "old_type",
+        "new_type": "new_type",
+        "new_val": "new_text",
+    }

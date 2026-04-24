@@ -4,9 +4,10 @@ import pytest
 from transtructiver.mutation.rules.identifier_renaming.rename_identifiers import (
     RenameIdentifiersRule,
 )
+from transtructiver.mutation.rules.identifier_renaming import _rename_appendage as appendage_mod
 from transtructiver.node import Node
-from transtructiver.mutation.rules.mutation_rule import MutationRecord
 from transtructiver.mutation.mutation_types import MutationAction
+from transtructiver.mutation.mutation_context import MutationContext
 
 
 # ===== Helpers =====
@@ -24,6 +25,11 @@ def label_nodes(root: Node) -> Node:
     """Annotate semantic labels and fields from CST structure only."""
     _wire_parents(root)
     root.semantic_label = "root"
+    if not getattr(root, "language", None):
+        if root.type == "module":
+            root.language = "python"
+        elif root.type == "program":
+            root.language = "java"
 
     # Phase 1: scope/type nodes.
     for node in root.traverse():
@@ -181,46 +187,109 @@ def make_program_bar_function_tree() -> tuple[Node, Node]:
     return label_nodes(root), function_name
 
 
-def make_scoped_tree_with_shadowing() -> Node:
-    """Create a scope tree where inner and outer declarations share a name."""
+def make_control_scope_assignment_tree(
+    control_node_type: str,
+    control_scope_label: str,
+) -> tuple[Node, Node, Node, Node, Node]:
+    """Create a function tree with assignments nested inside a control scope.
+
+    The inner assignments should resolve to the outer function-scope bindings,
+    not introduce a separate control-flow scope binding stack.
+    """
+    outer_x = Node((1, 0), (1, 1), "identifier", text="x")
+    outer_y = Node((2, 0), (2, 1), "identifier", text="y")
+    inner_x = Node((4, 4), (4, 5), "identifier", text="x")
+    inner_y = Node((5, 4), (5, 5), "identifier", text="y")
+
     root = Node(
         (0, 0),
-        (0, 0),
+        (6, 0),
         "module",
         children=[
             Node(
                 (1, 0),
-                (1, 5),
-                "assignment",
-                children=[Node((1, 0), (1, 1), "identifier", text="x")],
-            ),
-            Node(
-                (2, 0),
-                (5, 0),
+                (5, 10),
                 "function_definition",
                 children=[
-                    Node((2, 4), (2, 7), "identifier", text="foo"),
+                    Node(
+                        (1, 0),
+                        (1, 10),
+                        "assignment",
+                        children=[
+                            outer_x,
+                            Node((1, 2), (1, 3), "operator", text="="),
+                            Node((1, 4), (1, 5), "number", text="1"),
+                        ],
+                    ),
+                    Node(
+                        (2, 0),
+                        (2, 10),
+                        "assignment",
+                        children=[
+                            outer_y,
+                            Node((2, 2), (2, 3), "operator", text="="),
+                            Node((2, 4), (2, 5), "number", text="2"),
+                        ],
+                    ),
                     Node(
                         (3, 0),
-                        (5, 0),
-                        "block",
+                        (6, 0),
+                        control_node_type,
                         children=[
                             Node(
                                 (3, 4),
-                                (3, 9),
-                                "assignment",
+                                (3, 10),
+                                "condition",
                                 children=[Node((3, 4), (3, 5), "identifier", text="x")],
                             ),
-                            Node((4, 4), (4, 5), "identifier", text="x"),
+                            Node(
+                                (4, 2),
+                                (6, 0),
+                                "block",
+                                children=[
+                                    Node(
+                                        (4, 4),
+                                        (4, 10),
+                                        "assignment",
+                                        children=[
+                                            inner_x,
+                                            Node((4, 6), (4, 7), "operator", text="="),
+                                            Node((4, 8), (4, 9), "number", text="3"),
+                                        ],
+                                    ),
+                                    Node(
+                                        (5, 4),
+                                        (5, 10),
+                                        "assignment",
+                                        children=[
+                                            inner_y,
+                                            Node((5, 6), (5, 7), "operator", text="="),
+                                            Node((5, 8), (5, 9), "number", text="4"),
+                                        ],
+                                    ),
+                                ],
+                            ),
                         ],
                     ),
                 ],
-            ),
-            Node((6, 0), (6, 1), "identifier", text="x"),
+            )
         ],
     )
 
-    return label_nodes(root)
+    labeled_root = label_nodes(root)
+    control_scope_node = labeled_root.children[0].children[2]
+    control_scope_node.semantic_label = control_scope_label
+    return labeled_root, outer_x, outer_y, inner_x, inner_y
+
+
+def make_condition_scope_assignment_tree() -> tuple[Node, Node, Node, Node, Node]:
+    """Create a function tree with assignments nested inside an if-statement."""
+    return make_control_scope_assignment_tree("if_statement", "condition_scope")
+
+
+def make_loop_scope_assignment_tree() -> tuple[Node, Node, Node, Node, Node]:
+    """Create a function tree with assignments nested inside a for-statement."""
+    return make_control_scope_assignment_tree("for_statement", "loop_scope")
 
 
 def make_typed_parameter_tree() -> tuple[Node, Node]:
@@ -305,6 +374,58 @@ def make_assignment_type_tree() -> tuple[Node, Node, Node]:
     return label_nodes(root), values_id, message_id
 
 
+def make_class_field_and_parameter_shadow_tree() -> tuple[Node, Node, Node, Node]:
+    """Create a class where a method parameter shadows a field name."""
+    field_id = Node((1, 4), (1, 5), "identifier", text="x")
+    parameter_id = Node((2, 12), (2, 13), "identifier", text="x")
+    parameter_use = Node((3, 8), (3, 9), "identifier", text="x")
+
+    root = Node(
+        (0, 0),
+        (4, 0),
+        "module",
+        children=[
+            Node(
+                (0, 0),
+                (4, 0),
+                "class_definition",
+                children=[
+                    field_id,
+                    Node(
+                        (2, 4),
+                        (4, 0),
+                        "function_definition",
+                        children=[
+                            Node(
+                                (2, 11),
+                                (2, 14),
+                                "typed_parameter",
+                                children=[parameter_id],
+                            ),
+                            Node((3, 8), (3, 9), "block", children=[parameter_use]),
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+
+    _wire_parents(root)
+    root.language = "python"
+    root.semantic_label = "root"
+    class_node = root.children[0]
+    class_node.semantic_label = "class_scope"
+    function_node = class_node.children[1]
+    function_node.semantic_label = "function_scope"
+    field_id.semantic_label = "property_name"
+    field_id.field = "name"
+    parameter_id.semantic_label = "parameter_name"
+    parameter_id.field = "name"
+    parameter_use.semantic_label = "variable_name"
+
+    return root, field_id, parameter_id, parameter_use
+
+
 # ===== Fixtures =====
 
 
@@ -358,12 +479,6 @@ def program_bar_function_tree() -> tuple[Node, Node]:
 
 
 @pytest.fixture
-def scoped_tree_with_shadowing() -> Node:
-    """Create tree where inner scope declares the same identifier as outer scope."""
-    return make_scoped_tree_with_shadowing()
-
-
-@pytest.fixture
 def typed_parameter_tree() -> tuple[Node, Node]:
     """Function tree with one typed parameter and its identifier node."""
     return make_typed_parameter_tree()
@@ -373,6 +488,12 @@ def typed_parameter_tree() -> tuple[Node, Node]:
 def assignment_type_tree() -> tuple[Node, Node, Node]:
     """Module tree with typed assignment declarations and identifier nodes."""
     return make_assignment_type_tree()
+
+
+@pytest.fixture
+def mutation_context() -> MutationContext:
+    """Provide a fresh MutationContext for tests that need it."""
+    return MutationContext()
 
 
 # ===== Test Cases =====
@@ -387,18 +508,18 @@ class TestRenameIdentifierCoreBehavior:
 
         assert rule.name == "RenameIdentifiersRule"
 
-    def test_rename_identifier_rule_apply_with_none_root(self):
+    def test_rename_identifier_rule_apply_with_none_root(self, mutation_context):
         """Ensure apply handles None root safely."""
         rule = RenameIdentifiersRule()
 
-        assert rule.apply(None) == []  # type: ignore
+        assert rule.apply(None, mutation_context) == []  # type: ignore
 
-    def test_rename_identifier_rule_mutates_node_text(self, sample_tree):
+    def test_rename_identifier_rule_mutates_node_text(self, sample_tree, mutation_context):
         """Ensure apply renames identifier node text values consistently."""
         first_x, first_y, second_x, non_identifier = sample_tree.children
 
         rule = RenameIdentifiersRule()
-        rule.apply(sample_tree)
+        rule.apply(sample_tree, mutation_context)
 
         assert first_x.text != "x"
         assert first_y.text != "y"
@@ -407,12 +528,12 @@ class TestRenameIdentifierCoreBehavior:
         assert non_identifier.text == "1"
         assert second_x.text == first_x.text
 
-    def test_rename_identifier_rule_returns_mutation_records(self, sample_tree):
+    def test_rename_identifier_rule_returns_mutation_records(self, sample_tree, mutation_context):
         """Ensure apply returns correct mutation records for renamed identifiers."""
         first_x, first_y, second_x, _ = sample_tree.children
 
         rule = RenameIdentifiersRule()
-        records = rule.apply(sample_tree)
+        records = rule.apply(sample_tree, mutation_context)
 
         assert len(records) == 3
         assert all(record.action == MutationAction.RENAME for record in records)
@@ -429,167 +550,219 @@ class TestRenameIdentifierCoreBehavior:
 
 
 class TestRenameIdentifierScopeBehavior:
-    """Scope handling and shadowing behavior."""
+    """Scope handling behavior."""
 
-    def test_rename_identifier_rule_uses_scope_stack_for_shadowing(
-        self, scoped_tree_with_shadowing: Node
+    def test_rename_identifier_rule_clears_scope_state_between_runs(
+        self, sample_tree, mutation_context
     ):
-        """Inner declaration of same name should not reuse outer scope rename."""
-        rule = RenameIdentifiersRule()
-        records: list[MutationRecord] = rule.apply(scoped_tree_with_shadowing)
-
-        renamed_x_nodes: list[Node] = [
-            node
-            for node in scoped_tree_with_shadowing.traverse()
-            if node.type == "identifier" and node.start_point in {(1, 0), (3, 4), (4, 4), (6, 0)}
-        ]
-        renamed_values: dict[tuple[int, int], str | None] = {
-            node.start_point: node.text for node in renamed_x_nodes
-        }
-
-        assert len(records) == 4
-        # Outer x and outer use should be equal
-        assert renamed_values[(1, 0)] == renamed_values[(6, 0)]
-        # Inner x and inner use should be equal
-        assert renamed_values[(3, 4)] == renamed_values[(4, 4)]
-        # Outer x and inner x should not be equal
-        assert renamed_values[(1, 0)] != renamed_values[(3, 4)]
-
-    def test_rename_identifier_rule_clears_scope_state_between_runs(self, sample_tree):
         """Internal scope stack should be reset after apply finishes."""
         rule = RenameIdentifiersRule()
-        rule.apply(sample_tree)
+        rule.apply(sample_tree, mutation_context)
 
         assert rule.scope == []
+
+    @pytest.mark.parametrize(
+        ("tree_factory", "scope_name"),
+        [
+            (make_condition_scope_assignment_tree, "condition_scope"),
+            (make_loop_scope_assignment_tree, "loop_scope"),
+        ],
+    )
+    def test_rename_identifier_rule_keeps_control_flow_assignments_in_function_scope(
+        self, tree_factory, scope_name, mutation_context
+    ):
+        """Control-flow scopes should not split function-scope variable bindings."""
+        root, outer_x, outer_y, inner_x, inner_y = tree_factory()
+
+        # Ensure the fixture path matches the intended scope type for this regression.
+        assert root.children[0].children[2].semantic_label == scope_name
+
+        rule = RenameIdentifiersRule()
+        rule.apply(root, mutation_context)
+
+        assert outer_x.text == inner_x.text
+        assert outer_y.text == inner_y.text
+
+    def test_rename_identifier_rule_disambiguates_parameter_from_class_field(
+        self, mutation_context
+    ):
+        """A method parameter shadowing a field should receive a distinct rename."""
+        root, field_id, parameter_id, parameter_use = make_class_field_and_parameter_shadow_tree()
+
+        rule = RenameIdentifiersRule(targets=["property", "parameter", "variable"])
+        rule.apply(root, mutation_context)
+
+        assert field_id.text != parameter_id.text
+        assert parameter_use.text == parameter_id.text
 
 
 class TestRenameIdentifierTargeting:
     """Target selection and configuration validation behavior."""
 
     def test_rename_identifier_rule_skips_unannotated_identifiers(
-        self, unannotated_identifier_tree
+        self, unannotated_identifier_tree, mutation_context
     ):
         """Identifiers without semantic labels should not be renamed."""
         root, ident = unannotated_identifier_tree
 
         rule = RenameIdentifiersRule()
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert records == []
         assert ident.text == "x"
 
-    def test_rename_identifier_rule_skips_non_variable_annotations(self, module_function_tree):
+    def test_rename_identifier_rule_skips_non_variable_annotations(
+        self, module_function_tree, mutation_context
+    ):
         """Only variable-like semantic labels should be renamed by default."""
         root, function_name = module_function_tree
 
         rule = RenameIdentifiersRule()
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert records == []
         assert function_name.text == "foo"
 
     def test_rename_identifier_rule_can_target_function_names_by_keyword(
-        self, module_function_tree
+        self, module_function_tree, mutation_context
     ):
         """Keyword-based targeting should allow function_name renames."""
         root, function_name = module_function_tree
 
         rule = RenameIdentifiersRule(targets=["function"])
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
-        assert function_name.text == "foo_fn"
+        assert function_name.text == "foo_func"
 
-    def test_rename_identifier_rule_can_target_only_parameter_names(self, variable_parameter_tree):
+    def test_rename_identifier_rule_can_target_only_parameter_names(
+        self, variable_parameter_tree, mutation_context
+    ):
         """Target keywords should restrict renaming to selected semantic labels."""
         root, variable_id, parameter_id = variable_parameter_tree
 
         rule = RenameIdentifiersRule(targets=["parameter"])
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
         assert variable_id.text == "x"
-        assert parameter_id.text == "pp"
+        assert parameter_id.text == "p_param"
 
     def test_rename_identifier_rule_rejects_unknown_target_keyword(self):
         """Unknown keyword should raise a clear configuration error."""
         with pytest.raises(ValueError, match="Unsupported rename target keyword"):
             RenameIdentifiersRule(targets=["not_a_real_target"])
 
+    def test_rename_identifier_rule_skips_builtin_identifiers(self, mutation_context):
+        """Identifiers labeled as 'builtin_name' should not be renamed."""
+        builtin_id = Node((1, 0), (1, 1), "identifier", text="len")
+        builtin_id.semantic_label = "builtin_name"
+        root = Node((0, 0), (0, 10), "module", children=[builtin_id])
+        root.language = "python"
+        _wire_parents(root)
+
+        rule = RenameIdentifiersRule()
+        records = rule.apply(root, mutation_context)
+
+        assert records == []
+        assert builtin_id.text == "len"
+
 
 class TestRenameIdentifierSuffixInference:
     """Type/suffix inference behavior for declarations."""
 
-    def test_rename_identifier_rule_uses_parameter_type_for_suffix(self, typed_parameter_tree):
+    def test_rename_identifier_rule_uses_parameter_type_for_suffix(
+        self, typed_parameter_tree, mutation_context
+    ):
         """Typed parameters should receive a type-aware suffix when possible."""
         root, parameter_id = typed_parameter_tree
 
         rule = RenameIdentifiersRule(targets=["parameter"])
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
         assert parameter_id.text == "items_list"
 
     def test_rename_identifier_rule_uses_assignment_value_type_for_suffix(
-        self, assignment_type_tree
+        self, assignment_type_tree, mutation_context
     ):
         """Assignment declarations should infer suffixes from assigned values."""
         root, values_id, message_id = assignment_type_tree
 
         rule = RenameIdentifiersRule(targets=["variable"])
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert len(records) == 2
-        assert values_id.text == "valuess"
-        assert message_id.text == "messagee"
+        assert values_id.text == "values_list"
+        assert message_id.text == "message_str"
 
 
 class TestRenameIdentifierFormatting:
     """Language-specific formatting and fallback behavior."""
 
-    def test_rename_identifier_rule_uses_java_style_for_program_root(self, program_function_tree):
+    def test_rename_identifier_rule_uses_java_style_for_program_root(
+        self, program_function_tree, mutation_context
+    ):
         """Program roots should use non-Python naming style formatting."""
         root, function_name = program_function_tree
 
         rule = RenameIdentifiersRule(targets=["function"])
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
-        assert function_name.text == "fooFn"
+        assert function_name.text == "fooFunc"
 
-    def test_rename_identifier_rule_formats_python_and_java_differently(self):
+    def test_rename_identifier_rule_formats_python_and_java_differently(self, mutation_context):
         """Suffix formatting should differ between module and program roots."""
         python_root, python_function = make_module_function_tree()
         java_root, java_function = make_program_function_tree()
 
         python_rule = RenameIdentifiersRule(targets=["function"])
         java_rule = RenameIdentifiersRule(targets=["function"])
-        python_rule.apply(python_root)
-        java_rule.apply(java_root)
+        python_rule.apply(python_root, mutation_context)
+        java_rule.apply(java_root, mutation_context)
 
-        assert python_function.text == "foo_fn"
-        assert java_function.text == "fooFn"
+        assert python_function.text == "foo_func"
+        assert java_function.text == "fooFunc"
 
-    def test_rename_identifier_rule_empty_suffix_fallback_is_stable(self, variable_only_tree):
+    def test_rename_identifier_rule_empty_suffix_fallback_is_stable(
+        self, variable_only_tree, mutation_context
+    ):
         """When no suffix can be inferred, renaming should use fallback behavior."""
         root, variable_id = variable_only_tree
 
         rule = RenameIdentifiersRule(targets=["variable"])
-        records = rule.apply(root)
+        records = rule.apply(root, mutation_context)
 
         assert len(records) == 1
-        assert variable_id.text == "dataa"
+        assert variable_id.text == "data_var"
+
+    def test_rename_identifier_rule_uses_tmp_when_label_has_no_suffix_mapping(
+        self, variable_only_tree, mutation_context, monkeypatch
+    ):
+        """Labeled identifiers with no inferred suffix should use the ``_tmp`` fallback."""
+        root, variable_id = variable_only_tree
+
+        fallback = dict(appendage_mod._SEMANTIC_FALLBACK_SUFFIXES)
+        fallback.pop("variable_name", None)
+        monkeypatch.setattr(appendage_mod, "_SEMANTIC_FALLBACK_SUFFIXES", fallback)
+
+        rule = RenameIdentifiersRule(targets=["variable"])
+        records = rule.apply(root, mutation_context)
+
+        assert len(records) == 1
+        assert variable_id.text == "data_tmp"
 
     def test_rename_identifier_rule_overwrites_language_each_apply_run(
-        self, program_bar_function_tree
+        self, program_bar_function_tree, mutation_context
     ):
         """Language chosen per root should not leak between consecutive apply calls."""
         python_root, python_function = make_module_function_tree()
         java_root, java_function = program_bar_function_tree
 
         rule = RenameIdentifiersRule(targets=["function"])
-        rule.apply(python_root)
-        rule.apply(java_root)
+        rule.apply(python_root, mutation_context)
+        rule.apply(java_root, mutation_context)
 
-        assert python_function.text == "foo_fn"
-        assert java_function.text == "barFn"
+        assert python_function.text == "foo_func"
+        assert java_function.text == "barFunc"

@@ -7,13 +7,22 @@ uniform code formatting.
 """
 
 from typing import List
+
+from transtructiver.mutation.mutation_context import MutationContext
+
 from .mutation_rule import MutationRule, MutationRecord
-from ..mutation_types import MutationAction
 from ...node import Node
 
 
 # Default number of spaces per indentation level
 DEFAULT_BASE_UNIT = 4
+NUMERIC_TYPES = (
+    "float",
+    "integer",
+    "number_literal",
+    "decimal_integer_literal",
+    "decimal_floating_point",
+)
 
 
 class WhitespaceNormalizationRule(MutationRule):
@@ -36,7 +45,10 @@ class WhitespaceNormalizationRule(MutationRule):
         base_unit (int): The number of spaces per indentation level.
     """
 
-    def __init__(self, level: int = 0, base_unit: int = DEFAULT_BASE_UNIT):
+    # CLI rule name (used by the auto-discovery in cli.py).
+    rule_name = "whitespace-normalization"
+
+    def __init__(self, base_unit: int = DEFAULT_BASE_UNIT):
         """
         Initializes the rule with a specific indentation base unit.
 
@@ -44,8 +56,12 @@ class WhitespaceNormalizationRule(MutationRule):
             level (int): The mutation level.
             base_unit (int): Number of spaces per indentation level.
         """
-        self._level = level
+        super().__init__()
         self.base_unit = base_unit
+
+    def is_numeric(self, node: Node) -> bool:
+        """Checks if a node represents a numeric literal."""
+        return any(t in node.type for t in NUMERIC_TYPES)
 
     def _is_indentation(self, node: Node) -> bool:
         """
@@ -128,7 +144,9 @@ class WhitespaceNormalizationRule(MutationRule):
 
         return False
 
-    def _handle_structural_spacing(self, root: Node, child: Node, idx: int) -> List[MutationRecord]:
+    def _handle_structural_spacing(
+        self, root: Node, child: Node, idx: int, context: MutationContext
+    ) -> List[MutationRecord]:
         """
         Handles missing spaces after commas and around operators by injection.
 
@@ -136,6 +154,7 @@ class WhitespaceNormalizationRule(MutationRule):
             root (Node): The parent node.
             child (Node): The current child node being inspected.
             idx (int): The current index of the child in the live children list.
+            context (MutationContext): The mutation context for tracking state across rules.
 
         Returns:
             List[MutationRecord]: Records of any injected whitespace nodes.
@@ -150,11 +169,15 @@ class WhitespaceNormalizationRule(MutationRule):
         is_trigger_before = getattr(next_node, "field", None) == "operator"
         is_trigger_after = (child.type == ",") or (getattr(child, "field", None) == "operator")
 
+        # Skip inserting a space if the previous node is '-' and next node is numeric
+        if child.type == "-" and self.is_numeric(next_node):
+            return records
+
         # Insert a space if needed and not already present
         if (is_trigger_before or is_trigger_after) and next_node.type != "whitespace":
             new_ws = Node(
-                start_point=(-1, -1),
-                end_point=(-1, -1),
+                start_point=(context.next_id(), -1),
+                end_point=child.end_point,
                 type="whitespace",
                 text=" ",
             )
@@ -162,13 +185,11 @@ class WhitespaceNormalizationRule(MutationRule):
             root.children.insert(idx + 1, new_ws)
 
             records.append(
-                MutationRecord(
-                    node_id=child.end_point,
-                    action=MutationAction.INSERT,
-                    metadata={
-                        "new_val": " ",
-                        "node_type": "whitespace",
-                    },
+                self.record_insert(
+                    new_ws.start_point,
+                    insertion_point=child.end_point,
+                    new_text=" ",
+                    new_type="whitespace",
                 )
             )
         return records
@@ -204,17 +225,10 @@ class WhitespaceNormalizationRule(MutationRule):
 
         # Only update if there is a change to avoid unnecessary mutations
         if new_text != original_text:
-            node.text = new_text
-            records.append(
-                MutationRecord(
-                    node_id=node.start_point,
-                    action=MutationAction.REFORMAT,
-                    metadata={"new_val": new_text},
-                )
-            )
+            records.append(self.record_reformat(node, new_text))
         return records
 
-    def apply(self, root: Node) -> List[MutationRecord]:
+    def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """
         Applies the WhitespaceNormalizationRule to the CST.
 
@@ -224,6 +238,7 @@ class WhitespaceNormalizationRule(MutationRule):
 
         Args:
             root (Node): The root node of the CST to mutate.
+            context (MutationContext): The mutation context for tracking changes.
 
         Returns:
             List[MutationRecord]: A list of all formatting changes performed,
@@ -237,9 +252,9 @@ class WhitespaceNormalizationRule(MutationRule):
                 records.extend(self._normalize_whitespace(child))
             else:
                 # Handle structural spacing issues like missing spaces after commas or around operators
-                records.extend(self._handle_structural_spacing(root, child, idx))
+                records.extend(self._handle_structural_spacing(root, child, idx, context))
 
             # Recurse through children
-            records.extend(self.apply(child))
+            records.extend(self.apply(child, context))
 
         return records

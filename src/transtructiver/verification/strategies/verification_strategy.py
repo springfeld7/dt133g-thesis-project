@@ -9,7 +9,7 @@ mutated CST adheres to the structural and content constraints defined in the man
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from src.transtructiver.mutation.mutation_manifest import ManifestEntry
+from ...mutation.mutation_manifest import ManifestEntry
 from ...node import Node
 
 

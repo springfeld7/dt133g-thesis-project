@@ -15,216 +15,63 @@ Key concepts:
 - Lazy-loaded annotators prevent circular imports
 """
 
+import os
+
 from collections.abc import Callable
 
 from ...node import Node
-
-
-# Maps root node types (language-specific syntax tree roots) to language names.
-# This determines which language-specific annotator to use.
-ROOT_TO_LANGUAGE = {
-    "module": "python",
-    "program": "java",
-    "translation_unit": "cpp",
-}
-
-
-# Cross-language semantic labels for scope-defining node types.
-# Maps language-specific node type names to unified semantic labels that represent
-# similar constructs across Python, Java, and C++. This enables the mutation engine
-# and other tools to treat equivalent structures uniformly regardless of language.
-#
-# Examples:
-#   - Python's 'function_definition', Java's 'method_declaration', and C++'s
-#     'function_declarator' all map to 'function_scope'
-#   - Blocks/compounds map to 'block_scope' for scope tracking
-UNIFIED_TYPE_LABELS = {
-    **dict.fromkeys(
-        [
-            "function_definition",
-            "method_declaration",
-            "constructor_declaration",
-            "compact_constructor_declaration",
-            "function_declarator",
-            "lambda",
-        ],
-        "function_scope",
-    ),
-    **dict.fromkeys(
-        [
-            "class_definition",
-            "class_declaration",
-            "class_specifier",
-            "struct_specifier",
-            "interface_declaration",
-            "record_declaration",
-            "enum_declaration",
-            "annotation_type_declaration",
-        ],
-        "class_scope",
-    ),
-    **dict.fromkeys(["block", "compound_statement", "class_body"], "block_scope"),
-    **dict.fromkeys(["for_statement", "while_statement", "for_range_loop"], "loop_scope"),
-}
-
-
-# Language-specific semantic labels for declaration ancestors.
-# Maps (language, ancestor_node_type) pairs to semantic labels that classify
-# the identifiers within those contexts. For example, an identifier within a
-# 'formal_parameter' context in Java gets labeled 'parameter_name'.
-#
-# Used to annotate identifiers based on their declaration context, enabling
-# mutation rules to selectively target specific identifier categories.
-NAMING_ANCESTOR_LABELS = {
-    "python": {
-        **dict.fromkeys(["global_statement", "nonlocal_statement", "arguments"], "variable_name"),
-        **dict.fromkeys(
-            ["parameters", "typed_parameter", "default_parameter", "typed_default_parameter"],
-            "parameter_name",
-        ),
-        "function_definition": "function_name",
-        "class_definition": "class_name",
-        "type": "type_name",
-    },
-    "java": {
-        **dict.fromkeys(
-            ["method_declaration", "annotation_type_element_declaration"], "function_name"
-        ),
-        "formal_parameter": "parameter_name",
-        "variable_declarator": "variable_name",
-        **dict.fromkeys(
-            [
-                "class_declaration",
-                "constructor_declaration",
-                "compact_constructor_declaration",
-                "record_declaration",
-                "interface_declaration",
-                "annotation_type_declaration",
-                "enum_declaration",
-            ],
-            "class_name",
-        ),
-    },
-    "cpp": {
-        **dict.fromkeys(["function_declarator", "function_definition"], "function_name"),
-        **dict.fromkeys(["class_specifier", "struct_specifier", "enum_specifier"], "class_name"),
-        **dict.fromkeys(
-            ["init_declarator", "field_declaration", "enumerator", "preproc_def"], "variable_name"
-        ),
-        "parameter_declaration": "parameter_name",
-        "namespace_definition": "namespace_name",
-        "type_alias_declaration": "type_name",
-    },
-}
-
-
-def get_unified_type_label(node_type: str) -> str | None:
-    """Return the cross-language semantic label for a structural node type.
-
-    Maps language-specific node types (like 'method_declaration') to unified
-    semantic labels (like 'function_scope') that represent the same concept
-    across Python, Java, and C++.
-
-    Args:
-        node_type (str): The language-specific node type to look up.
-
-    Returns:
-        str | None: The unified semantic label ('function_scope', 'class_scope',
-            'block_scope', 'loop_scope'), or None if the node type is not a
-            recognized scope-defining construct.
-
-    Example:
-        >>> get_unified_type_label('method_declaration')
-        'function_scope'
-        >>> get_unified_type_label('class_definition')
-        'class_scope'
-        >>> get_unified_type_label('identifier')
-        None
-    """
-    return UNIFIED_TYPE_LABELS.get(node_type)
-
-
-def get_naming_ancestor_label(language: str, ancestor_type: str) -> str | None:
-    """Return semantic label for declaration ancestor within a language.
-
-    Maps a declaration ancestor node type to a semantic label within a specific
-    language context. This is used by annotators to classify identifiers based
-    on their declaration context.
-
-    Args:
-        language (str): The programming language ('python', 'java', or 'cpp').
-        ancestor_type (str): The ancestor node type (e.g., 'formal_parameter',
-            'function_definition', 'class_declaration').
-
-    Returns:
-        str | None: The semantic label ('variable_name', 'parameter_name',
-            'function_name', 'class_name', 'type_name', etc.), or None if
-            the ancestor type is not recognized for the language.
-
-    Example:
-        >>> get_naming_ancestor_label('python', 'function_definition')
-        'function_name'
-        >>> get_naming_ancestor_label('java', 'formal_parameter')
-        'parameter_name'
-    """
-    return NAMING_ANCESTOR_LABELS.get(language, {}).get(ancestor_type)
+from .annotators import BaseAnnotator
 
 
 # Registry mapping language keys to their annotate functions.
-# Populated on first use by _ensure_registry_populated() to avoid
-# circular imports with the language-specific annotator modules.
-_ANNOTATOR_REGISTRY: dict[str, Callable[[Node], Node]] = {}
+_ANNOTATOR_REGISTRY: dict[str, Callable[[Node, dict[str, str]], Node]] = {}
 
 
-def _ensure_registry_populated() -> None:
-    """Populate the annotator registry on first use.
+def register_annotator(language: str, func: Callable[[Node, dict[str, str]], Node]) -> None:
+    """Register a language annotator function.
 
-    Uses lazy imports to prevent circular dependencies between this dispatcher
-    module and the language-specific annotator modules.
+    Args:
+        language (str): Language key (e.g., 'python', 'java', 'cpp').
+        func (Callable[[Node], Node]): Annotator function for the language.
     """
-    if _ANNOTATOR_REGISTRY:
-        return
-    from .python_annotator import annotate_python
-    from .java_annotator import annotate_java
-    from .cpp_annotator import annotate_cpp
-
-    # Register all built-in annotators together after the lazy imports succeed.
-    _ANNOTATOR_REGISTRY.update(
-        {
-            "python": annotate_python,
-            "java": annotate_java,
-            "cpp": annotate_cpp,
-        }
-    )
+    _ANNOTATOR_REGISTRY[language.lower()] = func
 
 
 def annotate(root: Node) -> Node:
     """Annotate a node tree with semantic labels based on language.
 
     Main entry point for semantic annotation. Determines the programming
-    language from the root node type and dispatches to the registered
+    language from ``root.language`` and dispatches to the registered
     language-specific annotator. Each identifier node receives a
     semantic_label describing its declaration context (e.g., variable_name,
     function_name, parameter_name).
 
     Args:
-        root (Node): The root node of the syntax tree to annotate. Should be a
-            language-specific root type (module, program, or translation_unit).
+        root (Node): The root node of the syntax tree to annotate.
+            ``root.language`` must be set (e.g., "python", "java", "cpp").
+        profile (object): The language profile (e.g., LanguageProfile) for builtin/type checking.
 
     Returns:
         Node: The same root node with semantic_label attributes set on all
             identifier and scope-defining nodes throughout the tree.
 
     Raises:
-        ValueError: If the root node type is not recognized as a supported
-            language root (not 'module', 'program', or 'translation_unit').
+        ValueError: If ``root.language`` is not present or unsupported.
     """
-    language = ROOT_TO_LANGUAGE.get(root.type)
-    if language is None:
+
+    explicit_language = getattr(root, "language", None)
+    if not explicit_language:
         raise ValueError(
-            f"No annotator found for root node type '{root.type}'. "
-            f"Supported types: {list(ROOT_TO_LANGUAGE.keys())}"
+            "No language found on root node. Set root.language before calling annotate()."
         )
 
-    _ensure_registry_populated()
-    return _ANNOTATOR_REGISTRY[language](root)
+    language = BaseAnnotator.normalize_language_key(explicit_language)
+
+    # Load the correct LanguageProfile for the language
+    from .builtin_checker import make_profile_from_files
+
+    base_dir = os.path.join(os.path.dirname(__file__), f"profiles/{language}")
+    profile = make_profile_from_files(language, base_dir)
+
+    annotator = BaseAnnotator.for_language(language)
+    return annotator.annotate(root, profile)

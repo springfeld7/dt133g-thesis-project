@@ -5,7 +5,7 @@ Defines the InsertVerificationStrategy for validating node additions.
 
 from typing import List, Optional
 
-from src.transtructiver.mutation.mutation_types import MutationAction
+from ...mutation.mutation_types import MutationAction
 from ...mutation.mutation_manifest import ManifestEntry
 from ...node import Node
 from .verification_strategy import VerificationStrategy
@@ -47,6 +47,16 @@ class InsertVerificationStrategy(VerificationStrategy):
             last_action = entry.history[-1]["action"]
             return [
                 f"Unauthorized insertion: Manifest expected {last_action} for node at {mut.start_point}"
+            ]
+
+        insertion_point = entry.metadata.get("insertion_point")
+        if insertion_point is None:
+            return [f"Missing insertion_point metadata for node {mut.type}"]
+
+        # Inserted node should be at insertion_point
+        if mut.end_point != insertion_point:
+            return [
+                f"Logic Error: Inserted node {mut.type} ends before intended insertion_point {insertion_point}"
             ]
 
         return []

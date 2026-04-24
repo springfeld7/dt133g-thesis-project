@@ -9,10 +9,10 @@ from tree_sitter import Node as TSNode
 
 from ..node import Node
 from .converter import convert_node
-from .annotation import annotate
+from .annotation.annotator import annotate
 
 
-def adapt(ts_node: TSNode, source_bytes: bytes) -> Node:
+def adapt(ts_node: TSNode, source_bytes: bytes, language: str | None = None) -> Node:
     """Convert and annotate a Tree-sitter node to an internal Node.
 
     This is the main adapter function that performs two steps:
@@ -32,7 +32,11 @@ def adapt(ts_node: TSNode, source_bytes: bytes) -> Node:
     # Step 1: Convert Tree-sitter node to internal Node representation
     node = convert_node(ts_node, source_bytes)
 
-    # Step 2: Apply semantic annotations based on language
+    # Preserve parser language to disambiguate roots shared by many grammars
+    if language:
+        node.language = language.lower()
+
+    # Step 2: Apply semantic + context annotations based on language.
     annotated_node = annotate(node)
 
     return annotated_node

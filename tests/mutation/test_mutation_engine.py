@@ -22,6 +22,7 @@ def make_mock_rule(name, returned_records):
     """
     rule = MagicMock()
     rule.name = name
+    rule.rule_name = name
     rule.apply.return_value = returned_records
     return rule
 
@@ -183,3 +184,80 @@ def test_rule_name_used_even_if_action_none():
     entry = manifest.get_entry((1, 1))
     assert entry.history[0]["rule"] == "RuleNone"
     assert entry.history[0]["action"] is None
+
+
+def test_whitespace_before_dead_code_insertion():
+    """Test that whitespace-normalization runs before dead-code-insertion."""
+
+    ws = make_mock_rule("whitespace-normalization", [])
+    dci = make_mock_rule("dead-code-insertion", [])
+
+    engine = MutationEngine([dci, ws])
+
+    ordered = [r.rule_name for r in engine._order_rules()]
+
+    assert ordered.index("whitespace-normalization") < ordered.index("dead-code-insertion")
+
+
+def test_whitespace_before_control_structure_substitution():
+    """Test that whitespace-normalization runs before control-structure-substitution."""
+
+    ws = make_mock_rule("whitespace-normalization", [])
+    css = make_mock_rule("control-structure-substitution", [])
+
+    engine = MutationEngine([css, ws])
+
+    ordered = [r.rule_name for r in engine._order_rules()]
+
+    assert ordered.index("whitespace-normalization") < ordered.index(
+        "control-structure-substitution"
+    )
+
+
+def test_transforms_before_rename():
+    """Test that transformation rules run before rename-identifier."""
+
+    dci = make_mock_rule("dead-code-insertion", [])
+    css = make_mock_rule("control-structure-substitution", [])
+    rename = make_mock_rule("rename-identifier", [])
+
+    engine = MutationEngine([rename, css, dci])
+
+    ordered = [r.rule_name for r in engine._order_rules()]
+
+    assert ordered.index("dead-code-insertion") < ordered.index("rename-identifier")
+    assert ordered.index("control-structure-substitution") < ordered.index("rename-identifier")
+
+
+def test_all_rules_respect_dependency_constraints():
+    """Test that full rule set respects all dependency constraints."""
+
+    ws = make_mock_rule("whitespace-normalization", [])
+    dci = make_mock_rule("dead-code-insertion", [])
+    css = make_mock_rule("control-structure-substitution", [])
+    rename = make_mock_rule("rename-identifier", [])
+
+    engine = MutationEngine([rename, css, dci, ws])
+
+    execution = []
+
+    def tracking(rule):
+        def apply(_, __):
+            execution.append(rule.rule_name)
+            return []
+
+        rule.apply.side_effect = apply
+        return rule
+
+    engine.rules = [tracking(r) for r in engine.rules]
+
+    engine.apply_mutations(make_valid_node())
+
+    # Only enforce constraints (not full order)
+    assert execution.index("whitespace-normalization") < execution.index("dead-code-insertion")
+    assert execution.index("whitespace-normalization") < execution.index(
+        "control-structure-substitution"
+    )
+
+    assert execution.index("dead-code-insertion") < execution.index("rename-identifier")
+    assert execution.index("control-structure-substitution") < execution.index("rename-identifier")

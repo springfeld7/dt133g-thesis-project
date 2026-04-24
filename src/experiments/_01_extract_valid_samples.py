@@ -1,7 +1,11 @@
-"""
-_01_extract_baseline.py
+"""_01_extract_valid_samples.py
 
-Step one of experiments: Extract the samples used for the baseline.
+Step one of experiments: Extract the valid samples from the DroidCollection dataset.
+Valid samples are defined as those that:
+
+    - Belong to one of the following languages: Python, Java, or C++
+    - Have a label of either MACHINE_GENERATED or HUMAN_GENERATED
+    - Are successfully parsed by TranStructiver without any ERROR nodes in the resulting parse tree
 """
 
 import hashlib

@@ -332,7 +332,7 @@ def run_pipeline(
             # Write original/mutated code pair
             original_code = orig_cst.to_code()
             mutated_code = mut_cst.to_code()
-            outputs.write_dataset_row(idx, snippet_id, original_code, mutated_code)
+            outputs.write_dataset_row(idx, snippet_id, original_code, mutated_code, language)
 
             # Verify semantic preservation and append to summary log
             verified = verifier.verify(orig_cst, mut_cst, engine.manifest)

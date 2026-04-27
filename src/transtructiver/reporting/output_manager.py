@@ -175,6 +175,7 @@ class OutputManager:
                 ("snippet_id", pa.string()),
                 ("original_code", pa.string()),
                 ("mutated_code", pa.string()),
+                ("language", pa.string()),
             ]
         )
         compression = "gzip" if self.compress_output else "snappy"
@@ -208,6 +209,7 @@ class OutputManager:
         snippet_id: str,
         original_code: str,
         mutated_code: str,
+        language: str,
     ) -> None:
         """Append one original/mutated code pair row to parquet output.
 
@@ -225,6 +227,7 @@ class OutputManager:
                 "snippet_id": [snippet_id],
                 "original_code": [original_code],
                 "mutated_code": [mutated_code],
+                "language": [language],
             }
         )
         self.dataset_parquet_writer.write_table(table)

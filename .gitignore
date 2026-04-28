@@ -69,3 +69,7 @@ yarn-error.log
 
 # VarCLR
 src/evaluation/varclr/saved
+
+# Data
+data/
+output/transformations/

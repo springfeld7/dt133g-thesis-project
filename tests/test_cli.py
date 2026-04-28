@@ -80,8 +80,8 @@ def test_run_pipeline_happy_path_writes_artifacts_and_summary(monkeypatch, tmp_p
         def write_manifest(self, idx, snippet_id, entries):
             self.manifest_calls.append((idx, snippet_id, entries))
 
-        def write_dataset_row(self, idx, snippet_id, original_code, mutated_code):
-            self.dataset_calls.append((idx, snippet_id, original_code, mutated_code))
+        def write_dataset_row(self, idx, snippet_id, original_code, mutated_code, language):
+            self.dataset_calls.append((idx, snippet_id, original_code, mutated_code, language))
 
         def output_paths_summary(self):
             return ("manifest.jsonl", "augmented_dataset.parquet", "summary_log.csv")

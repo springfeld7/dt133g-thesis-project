@@ -1,11 +1,10 @@
 """Substitution helpers for identifier renaming.
 
-This module chooses replacement identifier texts using a precomputed
-frequency map keyed by semantic label and optional context type. The
-selection logic prefers context-aware candidates but falls back to the
-generic ("none") bucket when needed. The resulting candidate is then
-formatted according to language naming conventions using
-``format_identifier``.
+This module rebuilds an identifier by splitting it into words, moving
+recognized prepositions to the front, and replacing a trailing type-like
+suffix with a deterministic synonym from ``_SUFFIXES``. The resulting
+candidate is then formatted according to language naming conventions
+using ``format_identifier``.
 """
 
 from operator import indexOf
@@ -248,25 +247,20 @@ _PREPOSITIONS = [
 def _build_substitute_name(node: Node, language: str) -> str:
     """Generate a substitution text for an identifier node.
 
-    Selection strategy:
-      1. If a precompiled frequency map exists for the node's semantic
-         label and language, attempt to pick a candidate from the map.
-      2. Prefer candidates that match the identifier's ``context_type``
-         (for example, the declared type of a variable). If too few
-         context-specific candidates are available, augment the pool with
-         generic candidates from the ``"none"`` bucket.
-      3. Pick a candidate deterministically using a fixed PRNG seed so
-         unit tests and builds are reproducible.
+    The transformation is intentionally simple and reproducible:
+      1. Split the existing identifier into words.
+      2. Reverse the token order while keeping prepositions grouped at the
+         front of the rebuilt name.
+      3. If the final token matches a known suffix family, replace it with
+         a deterministic synonym chosen from ``_SUFFIXES``.
 
     Args:
-        node: The identifier node being renamed. Useful fields are
-            ``semantic_label`` (e.g. "variable_name") and ``context_type``
-            (inferred type like "list").
+        node: The identifier node being renamed.
         language: Language key (e.g. "python", "java", "cpp").
 
     Returns:
         The new identifier string formatted to match language conventions.
-        If no frequency map is available, the original text is returned.
+        If no text is available, an empty string is returned.
     """
     _rng = random.Random(42)
 
@@ -282,7 +276,7 @@ def _build_substitute_name(node: Node, language: str) -> str:
     for word in words:
         w = word.lower()
 
-        # Keep context_type suffix fixed in last position.
+        # Keep known suffix tokens fixed in last position.
         if w in _SUFFIXES and indexOf(words, word) == len(words) - 1:
             last = w
             continue
@@ -297,11 +291,11 @@ def _build_substitute_name(node: Node, language: str) -> str:
         rearranged.insert(pos, w)
 
     if last:
-        # Replace context_type suffix.
+        # Replace trailing suffix token.
         subs = _SUFFIXES[last]
         rearranged.append(subs[_rng.randint(0, len(subs) - 1)])
-        print(f"rearranged: {rearranged}")
 
+    # If no rearrangement occurred, preserve the original text.
     # Should always be false. If not, _rename_appendage failed.
     if all(word == old_text for word in rearranged):
         return old_text

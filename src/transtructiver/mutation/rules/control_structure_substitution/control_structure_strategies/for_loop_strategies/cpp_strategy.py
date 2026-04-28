@@ -76,8 +76,10 @@ class CppForLoopStrategy(CstyleForLoopStrategy):
         update_source = self._emit_stmt(update_node.to_code()) if update_node else None
 
         # Delete init and update nodes from the for loop header and clean up remaining formatting tokens
-        records.extend(self._delete_nodes([init_node], rule))
-        records.extend(self._delete_nodes([update_node], rule))
+        if init_node is not None:
+            records.extend(self._delete_nodes([init_node], rule))
+        if update_node is not None:
+            records.extend(self._delete_nodes([update_node], rule))
         records.extend(self._clean_for_loop_header(node, rule))
 
         records.append(self._substitute(for_node, "while", "while", rule))

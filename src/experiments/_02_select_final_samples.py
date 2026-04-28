@@ -27,7 +27,7 @@ OUTPUT_PATH = Path("data/final_samples/final_samples.parquet")
 
 RANDOM_SEED = 42
 
-TARGET_TOTAL = 10200
+TARGET_TOTAL = 5100
 LANGUAGES = ["C++", "Java", "Python"]
 
 N_LANG = TARGET_TOTAL // len(LANGUAGES)
@@ -64,10 +64,8 @@ def compute_percentile_bounds(df: pd.DataFrame) -> dict:
         lang_df = df[df["language"] == lang]
 
         bounds[lang] = {
-            "char_max": min(
+            "char_max":
                 lang_df["char_count"].quantile(0.95),
-                MAX_CHAR_ABSOLUTE
-            ),
             "lloc_max": lang_df["lloc"].quantile(0.95),
         }
 

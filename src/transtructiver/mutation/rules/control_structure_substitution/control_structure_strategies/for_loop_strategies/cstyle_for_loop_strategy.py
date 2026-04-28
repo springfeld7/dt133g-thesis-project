@@ -126,7 +126,7 @@ class CstyleForLoopStrategy(BaseForLoopStrategy):
                 inside = True
             elif c.type == ")":
                 inside = False
-            elif inside and c.type in ("whitespace", ";", ","):
+            elif inside and c.type in ("whitespace", "newline", ";", ","):
                 nodes_to_delete.append(c)
 
         for n in nodes_to_delete:

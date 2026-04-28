@@ -123,9 +123,9 @@ def run_experiment(exp: dict):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        PYTHON_CMD,
-        "-m",
-        "transtructiver.cli",
+        "uv",
+        "run",
+        "cli",
         str(INPUT_FILE),
         *exp["rules"],
         "--output-dir",

@@ -120,13 +120,26 @@ class ParquetDataLoader(AbstractDataLoader):
         Returns:
             Iterator[tuple[int, str, str]]: Yields (global_index, code, language).
         """
+    def iter_snippets(self, batch_size: int, start_index: int) -> Iterator[tuple[int, dict]]:
+        """
+        Stream full rows from parquet, preserving all metadata.
+
+        Args:
+            batch_size (int): Number of rows per batch.
+            start_index (int): Index to start streaming from.
+
+        Returns:
+            Iterator[tuple[int, dict]]: Yields (global_index, row_dict).
+        """
+
         parquet_file = pq.ParquetFile(self.filepath)
         global_index = 0
-        for batch in parquet_file.iter_batches(batch_size=batch_size, columns=["code", "language"]):
-            batch_dict = batch.to_pydict()
-            codes = batch_dict.get("code", [])
-            languages = batch_dict.get("language", [])
-            for code, language in zip(codes, languages):
+
+        for batch in parquet_file.iter_batches(batch_size=batch_size):
+            df = batch.to_pandas()
+
+            for _, row in df.iterrows():
                 if global_index >= start_index:
-                    yield global_index, code, language
+                    yield global_index, row.to_dict()
+
                 global_index += 1

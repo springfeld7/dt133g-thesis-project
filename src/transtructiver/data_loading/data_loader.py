@@ -110,17 +110,6 @@ class ParquetDataLoader(AbstractDataLoader):
     Implements iter_snippets() for efficient batch streaming.
     """
 
-    def iter_snippets(self, batch_size: int, start_index: int) -> Iterator[tuple[int, str, str]]:
-        """Stream snippets from parquet in bounded-size batches.
-
-        Args:
-            batch_size (int): Number of rows per batch.
-            start_index (int): Index to start streaming from.
-
-        Returns:
-            Iterator[tuple[int, str, str]]: Yields (global_index, code, language).
-        """
-
     def iter_snippets(self, batch_size: int, start_index: int) -> Iterator[tuple[int, dict]]:
         """
         Stream full rows from parquet, preserving all metadata.

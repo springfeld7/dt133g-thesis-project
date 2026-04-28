@@ -306,7 +306,11 @@ def run_pipeline(
             language = row.get("language")
 
             _prototype_log(f"\n[{snippet_id}] Parsing...")
+            if not code or not language:
+                continue
+
             orig_cst, parse_err = parser.parse(code, language)
+
             if orig_cst is None:
                 stats.parse_skipped += 1
                 _prototype_log(f"  Skipped ({parse_err})")

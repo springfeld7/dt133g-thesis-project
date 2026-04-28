@@ -146,7 +146,7 @@ class OutputManager:
             return os.path.join(self.output_dir, "augmented_dataset.parquet")
         return os.path.join(self.output_dir, f"augmented_dataset-{shard_id:06d}.parquet")
 
-    def _ensure_shard(self, snippet_index: int) -> None:
+    def _ensure_shard(self, snippet_index: int, metadata: dict | None = None) -> None:
         """Rotate output handles when shard boundary changes.
 
         Args:
@@ -177,17 +177,12 @@ class OutputManager:
                 ("mutated_code", pa.string()),
                 ("language", pa.string()),
                 ("has_mutation_applied", pa.bool_()),
-                ("char_count", pa.int64()),
-                ("loc", pa.int64()),
-                ("lloc", pa.int64()),
-                ("for_loop_density", pa.float64()),
-                ("identifier_density", pa.float64()),
-                ("comment_density", pa.float64()),
-                ("whitespace_ratio", pa.float64()),
-                ("code_hash", pa.string()),
-                ("label", pa.string()),
             ]
         )
+
+        if metadata:
+            schema.with_metadata(metadata)
+
         compression = "gzip" if self.compress_output else "snappy"
         self.dataset_parquet_writer = pq.ParquetWriter(
             dataset_parquet_path,
@@ -235,11 +230,6 @@ class OutputManager:
             metadata (dict | None): Additional dataset metadata (e.g., char_count, lloc, label).
         """
 
-        self._ensure_shard(snippet_index)
-
-        if self.dataset_parquet_writer is None:
-            raise RuntimeError("Parquet dataset writer is not initialized.")
-
         # Base row (core schema)
         row_dict = {
             "snippet_id": [snippet_id],
@@ -254,6 +244,11 @@ class OutputManager:
             for k, v in metadata.items():
                 if k not in row_dict:
                     row_dict[k] = [v]
+
+        self._ensure_shard(snippet_index, metadata)
+
+        if self.dataset_parquet_writer is None:
+            raise RuntimeError("Parquet dataset writer is not initialized.")
 
         table = pa.table(row_dict)
 

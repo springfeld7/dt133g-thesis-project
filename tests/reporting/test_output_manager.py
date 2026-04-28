@@ -26,24 +26,24 @@ def test_output_paths_summary_single_file(tmp_path):
     assert summary_path.endswith("summary_log.csv")
 
 
-# def test_output_manager_writes_manifest_and_dataset(tmp_path):
-#     """Test OutputManager writes manifest and dataset files correctly."""
-#     module = importlib.import_module("transtructiver.reporting.output_manager")
+def test_output_manager_writes_manifest_and_dataset(tmp_path):
+    """Test OutputManager writes manifest and dataset files correctly."""
+    module = importlib.import_module("transtructiver.reporting.output_manager")
 
-#     with module.OutputManager(
-#         str(tmp_path), max_rows_per_shard=0, compress_output=False
-#     ) as manager:
-#         manager.write_manifest(0, "row_0", [{"node_id": [0, 0], "history": [], "metadata": {}}])
-#         manager.write_dataset_row(0, "row_0", "original", "mutated", "python")
+    with module.OutputManager(
+        str(tmp_path), max_rows_per_shard=0, compress_output=False
+    ) as manager:
+        manager.write_manifest(0, "row_0", [{"node_id": [0, 0], "history": [], "metadata": {}}])
+        manager.write_dataset_row(0, "row_0", "original", "mutated", "python")
 
-#     manifest_file = tmp_path / "manifest.jsonl"
-#     dataset_file = tmp_path / "augmented_dataset.parquet"
-#     summary_file = tmp_path / "summary_log.csv"
+    manifest_file = tmp_path / "manifest.jsonl"
+    dataset_file = tmp_path / "augmented_dataset.parquet"
+    summary_file = tmp_path / "summary_log.csv"
 
-#     assert manifest_file.exists()
-#     assert dataset_file.exists()
-#     assert summary_file.exists()
+    assert manifest_file.exists()
+    assert dataset_file.exists()
+    assert summary_file.exists()
 
-#     payload = json.loads(manifest_file.read_text(encoding="utf-8").strip())
-#     assert payload["snippet_id"] == "row_0"
-#     assert payload["entries"][0]["node_id"] == [0, 0]
+    payload = json.loads(manifest_file.read_text(encoding="utf-8").strip())
+    assert payload["snippet_id"] == "row_0"
+    assert payload["entries"][0]["node_id"] == [0, 0]

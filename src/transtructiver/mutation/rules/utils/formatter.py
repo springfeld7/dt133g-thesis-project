@@ -16,6 +16,7 @@ from ....node import Node
 _IS_TITLE = {
     "python": lambda n: n.semantic_label == "class_name",
     "java": lambda n: n.semantic_label == "class_name",
+    "cpp": lambda n: n.semantic_label == "class_name",
 }
 
 
@@ -30,7 +31,6 @@ def _is_title(node: Node, language: str) -> bool:
 
 def _format_snake_case(words: list[str]) -> str:
     """Format an identifier using snake_case style."""
-    print(words)
     if all(len(w) == 1 for w in words):
         return "".join(words).lower()
     return "_".join(words).lower()
@@ -83,6 +83,9 @@ def format_identifier(node: Node, new_text: str, language: str) -> str:
         selected language and semantic kind.
     """
     words = split_words(new_text)
+
+    if not words:
+        return ""
 
     if words[0] == "destruct":
         if _is_title(node, language):

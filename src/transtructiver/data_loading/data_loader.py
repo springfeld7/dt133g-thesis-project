@@ -120,6 +120,7 @@ class ParquetDataLoader(AbstractDataLoader):
         Returns:
             Iterator[tuple[int, str, str]]: Yields (global_index, code, language).
         """
+
     def iter_snippets(self, batch_size: int, start_index: int) -> Iterator[tuple[int, dict]]:
         """
         Stream full rows from parquet, preserving all metadata.

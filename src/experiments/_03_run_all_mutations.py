@@ -47,7 +47,6 @@ EXPERIMENTS = [
         "rules": ["rename-identifier"],
         "params": {"rename-identifier": {"level": 3}},
     },
-
     # -------------------------
     # comment deletion
     # -------------------------
@@ -55,7 +54,6 @@ EXPERIMENTS = [
         "name": "comment_deletion",
         "rules": ["comment-deletion"],
     },
-
     # -------------------------
     # comment normalization
     # -------------------------
@@ -64,7 +62,6 @@ EXPERIMENTS = [
         "rules": ["comment-normalization"],
         "params": {"comment-normalization": {"level": 0}},
     },
-
     # -------------------------
     # whitespace normalization
     # -------------------------
@@ -78,7 +75,6 @@ EXPERIMENTS = [
         "rules": ["whitespace-normalization"],
         "params": {"whitespace-normalization": {"level": 1}},
     },
-
     # -------------------------
     # dead-code-insertion
     # -------------------------
@@ -102,7 +98,6 @@ EXPERIMENTS = [
         "rules": ["dead-code-insertion"],
         "params": {"dead-code-insertion": {"level": 3}},
     },
-
     # -------------------------------
     # control structure substitution
     # -------------------------------
@@ -115,6 +110,7 @@ EXPERIMENTS = [
 # -----------------------------
 # EXECUTION
 # -----------------------------
+
 
 def run_experiment(exp: dict):
     """Run a single mutation experiment via CLI pipeline."""

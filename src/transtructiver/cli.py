@@ -347,7 +347,8 @@ def run_pipeline(
                 mutated_code,
                 language,
                 has_mutation_applied=not engine.manifest.is_empty(),
-                metadata=metadata)
+                metadata=metadata,
+            )
 
             # Verify semantic preservation and append to summary log
             verified = verifier.verify(orig_cst, mut_cst, engine.manifest)

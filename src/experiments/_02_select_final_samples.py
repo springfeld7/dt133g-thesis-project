@@ -1,5 +1,4 @@
-"""
-_02_select_final_samples.py
+"""_02_select_final_samples.py
 
 Step two of experiments: Select final evaluation samples from validated dataset.
 
@@ -28,7 +27,12 @@ OUTPUT_PATH = Path("data/final_samples/final_samples.parquet")
 RANDOM_SEED = 42
 
 TARGET_TOTAL = 5100
-LANGUAGES = ["C++", "Java", "Python"]
+LANGUAGES = ["cpp", "java", "python"]
+LANGUAGE_MAP = {
+    "C++": "cpp",
+    "Java": "java",
+    "Python": "python",
+}
 
 N_LANG = TARGET_TOTAL // len(LANGUAGES)
 N_PER_GROUP = N_LANG // 2
@@ -88,6 +92,8 @@ def run_step_02():
     # LOAD DATA
     # -----------------------------
     df = pd.read_parquet(INPUT_PATH)
+
+    df["language"] = df["language"].map(LANGUAGE_MAP)
 
     print("\n=== INITIAL DATASET ===")
     print(f"Total samples: {len(df)}")

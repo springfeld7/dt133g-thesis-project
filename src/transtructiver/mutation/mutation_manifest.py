@@ -143,3 +143,12 @@ class MutationManifest:
                 }
             )
         return result
+
+    def is_empty(self) -> bool:
+        """
+        Checks if the manifest has any recorded mutations.
+
+        Returns:
+            bool: True if no entries have been added; False otherwise.
+        """
+        return len(self._entries) == 0

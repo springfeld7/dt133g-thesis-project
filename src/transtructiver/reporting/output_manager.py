@@ -176,6 +176,16 @@ class OutputManager:
                 ("original_code", pa.string()),
                 ("mutated_code", pa.string()),
                 ("language", pa.string()),
+                ("has_mutation_applied", pa.bool_()),
+                ("char_count", pa.int64()),
+                ("loc", pa.int64()),
+                ("lloc", pa.int64()),
+                ("for_loop_density", pa.float64()),
+                ("identifier_density", pa.float64()),
+                ("comment_density", pa.float64()),
+                ("whitespace_ratio", pa.float64()),
+                ("code_hash", pa.string()),
+                ("label", pa.string()),
             ]
         )
         compression = "gzip" if self.compress_output else "snappy"
@@ -210,6 +220,8 @@ class OutputManager:
         original_code: str,
         mutated_code: str,
         language: str,
+        has_mutation_applied: bool = False,
+        metadata: dict | None = None,
     ) -> None:
         """Append one original/mutated code pair row to parquet output.
 
@@ -218,18 +230,33 @@ class OutputManager:
             snippet_id (str): Unique snippet identifier.
             original_code (str): Original code string.
             mutated_code (str): Mutated code string.
+            language (str): Programming language of the snippet.
+            has_mutation_applied (bool): Whether any mutation was applied.
+            metadata (dict | None): Additional dataset metadata (e.g., char_count, lloc, label).
         """
+
         self._ensure_shard(snippet_index)
+
         if self.dataset_parquet_writer is None:
             raise RuntimeError("Parquet dataset writer is not initialized.")
-        table = pa.table(
-            {
-                "snippet_id": [snippet_id],
-                "original_code": [original_code],
-                "mutated_code": [mutated_code],
-                "language": [language],
-            }
-        )
+
+        # Base row (core schema)
+        row_dict = {
+            "snippet_id": [snippet_id],
+            "original_code": [original_code],
+            "mutated_code": [mutated_code],
+            "language": [language],
+            "has_mutation_applied": [has_mutation_applied],
+        }
+
+        # Attach extra metadata columns (carefully, no overwrites of core fields)
+        if metadata:
+            for k, v in metadata.items():
+                if k not in row_dict:
+                    row_dict[k] = [v]
+
+        table = pa.table(row_dict)
+
         self.dataset_parquet_writer.write_table(table)
 
     def output_paths_summary(self) -> tuple[str, str, str]:

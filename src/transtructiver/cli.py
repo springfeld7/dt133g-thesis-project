@@ -297,11 +297,13 @@ def run_pipeline(
         max_rows_per_shard=pipeline_options.max_rows_per_shard,
         compress_output=pipeline_options.compress_output,
     ) as outputs:
-        for idx, code, language in loader.iter_snippets(
+        for idx, row in loader.iter_snippets(
             batch_size=pipeline_options.batch_size,
             start_index=start_index,
         ):
             snippet_id = f"row_{idx}"
+            code = row.get("code")
+            language = row.get("language")
 
             _prototype_log(f"\n[{snippet_id}] Parsing...")
             orig_cst, parse_err = parser.parse(code, language)
@@ -332,7 +334,21 @@ def run_pipeline(
             # Write original/mutated code pair
             original_code = orig_cst.to_code()
             mutated_code = mut_cst.to_code()
-            outputs.write_dataset_row(idx, snippet_id, original_code, mutated_code, language)
+
+            # Keep all other metadata fields from the original row, except code/language which we handle separately
+            metadata = dict(row)
+            metadata.pop("code", None)
+            metadata.pop("language", None)
+            is_mutated = engine.manifest.is_empty() is False
+            outputs.write_dataset_row(
+                idx,
+                snippet_id,
+                original_code,
+                mutated_code,
+                language,
+                has_mutation_applied=not engine.manifest.is_empty(),
+                metadata=metadata,
+            )
 
             # Verify semantic preservation and append to summary log
             verified = verifier.verify(orig_cst, mut_cst, engine.manifest)

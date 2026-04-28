@@ -1,5 +1,4 @@
-"""
-_02_select_final_samples.py
+"""_02_select_final_samples.py
 
 Step two of experiments: Select final evaluation samples from validated dataset.
 

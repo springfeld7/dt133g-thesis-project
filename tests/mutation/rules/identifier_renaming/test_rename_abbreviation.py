@@ -18,6 +18,11 @@ def testsplit_words_splits_underscore_and_camelcase():
     assert split_words("") == []
 
 
+def test_compress_words_no_words():
+    """Test abbreviation returns empty string for empty words list."""
+    assert _compress_words([], "python") == ""
+
+
 def test_compress_words_single_word():
     """Test abbreviation for single-word identifiers."""
     # <=3 chars: keep as is

@@ -15,6 +15,10 @@ into an equivalent while-loop:
 
 from typing import List, Optional
 
+from tests.mutation.rules.control_structure_substitution.test_control_structure_substitution import (
+    rule,
+)
+
 from ......node import Node
 from .....mutation_context import MutationContext
 from ....mutation_rule import MutationRule, MutationRecord
@@ -76,8 +80,10 @@ class CppForLoopStrategy(CstyleForLoopStrategy):
         update_source = self._emit_stmt(update_node.to_code()) if update_node else None
 
         # Delete init and update nodes from the for loop header and clean up remaining formatting tokens
-        records.extend(self._delete_nodes([init_node], rule))
-        records.extend(self._delete_nodes([update_node], rule))
+        if init_node is not None:
+            records.extend(self._delete_nodes([init_node], rule))
+        if update_node is not None:
+            records.extend(self._delete_nodes([update_node], rule))
         records.extend(self._clean_for_loop_header(node, rule))
 
         records.append(self._substitute(for_node, "while", "while", rule))

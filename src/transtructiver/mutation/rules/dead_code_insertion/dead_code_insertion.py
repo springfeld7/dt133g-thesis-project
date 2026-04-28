@@ -213,12 +213,36 @@ class DeadCodeInsertionRule(MutationRule):
             List[MutationRecord]: Records of all code insertions performed.
         """
         self._scope.reset()
-        records: List[MutationRecord] = []
-        candidates: List[tuple[Node, str]] = []
-        insertion_probability = (self._level + 1) * self._LEVEL_PROBABILITY
+        candidates = self._collect_candidates(root, strategy)
+
+        if not candidates:
+            return []
+
+        target_count = self._compute_insertion_budget(candidates)
+        selected = self._select_candidates(candidates, target_count)
+        return self._execute_insertion_pass(root, selected, context, strategy, lexicon)
+
+    def _execute_insertion_pass(self, root, selected, context, strategy, lexicon):
+        """
+        Executes a deterministic insertion pass based on the selected candidates.
+
+        Args:
+            root (Node): The CST root node.
+            selected (List[tuple[Node, str]]): The list of selected insertion points.
+            context (MutationContext): The mutation context for tracking state across rules.
+            strategy (InsertionStrategy): Structural rules for the language.
+            lexicon (DeadCodeLexicon): Generator for the code strings.
+
+        Returns:
+            List[MutationRecord]: Records of all code insertions performed.
+        """
+        self._scope.reset()
+
+        selected_targets = {id(child): (container, child) for container, child in selected}
+        records = []
 
         # Iterative stack: (node, is_exit_marker)
-        stack: List[tuple[Node, bool]] = [(root, False)]
+        stack: list[tuple[Node, bool]] = [(root, False)]
 
         while stack:
             node, is_exit = stack.pop()
@@ -237,58 +261,55 @@ class DeadCodeInsertionRule(MutationRule):
             if "identifier" in node.type and node.text:
                 self._scope.declare(node.text, "exists")
 
-            if self._is_valid_container(node, strategy):
-                self._scan_and_inject(
-                    node, strategy, lexicon, context, insertion_probability, candidates, records
-                )
+            # Perform insertion if this node+child is selected
+            if id(node) in selected_targets:
+                container, child = selected_targets[id(node)]
+                prefix = strategy.get_indent_prefix(container)
 
-            # Push children in reverse for DFS order
+                records.append(self._inject_dead_code(child, prefix, lexicon, context))
+
             for child in reversed(node.children):
                 stack.append((child, False))
 
-        # Guarantee one insertion if we found candidates but didn't hit the random chance
-        if not records and candidates:
-            self._ensure_minimum_mutation(candidates, records, lexicon, context)
-
-        self._scope.reset()
         return records
 
-    def _scan_and_inject(
-        self,
-        node: Node,
-        strategy: InsertionStrategy,
-        lexicon: DeadCodeLexicon,
-        context: MutationContext,
-        prob: float,
-        candidates: List[tuple[Node, str]],
-        records: List[MutationRecord],
-    ) -> None:
+    def _collect_candidates(
+        self, root: Node, strategy: InsertionStrategy
+    ) -> List[tuple[Node, Node]]:
         """
-        Processes a block's children for potential code injection.
+        Collects all valid insertion points for dead code injection.
+
+        Traverses the CST to identify valid container nodes and their child nodes where dead code
+        can be injected according to the provided strategy.
 
         Args:
-            node (Node): The block node whose children are being scanned.
-            strategy (InsertionStrategy): The language-specific insertion strategy.
-            lexicon (DeadCodeLexicon): The lexicon for generating dead code snippets.
-            context (MutationContext): The mutation context for tracking state across rules.
-            prob (float): The probability of performing an insertion at each valid gap.
-            candidates (List[tuple[Node, str]]): A list to collect valid insertion points for fallback.
-            records (List[MutationRecord]): A list to collect MutationRecords of performed insertions.
+            root (Node): The root of the CST to traverse.
+            strategy (InsertionStrategy): Language-specific rules for determining
+                valid containers, gaps, and termination points within blocks.
+
+        Returns:
+            List[tuple[Node, Node]]: A list of candidate insertion points,
+            where each tuple contains:
+                - container node (the block or scope containing the insertion point)
+                - target node (the child node before which insertion may occur)
         """
-        prefix = strategy.get_indent_prefix(node)
-        if prefix is None:
-            return
+        candidates: List[tuple[Node, Node]] = []
 
-        preceding = None
-        for child in list(node.children):
-            if strategy.is_valid_gap(child, preceding):
-                candidates.append((child, prefix))
-                if self._rng.random() > prob:
-                    records.append(self._inject_dead_code(child, prefix, lexicon, context))
+        for node in root.traverse():
+            if not self._is_valid_container(node, strategy):
+                continue
 
-            if strategy.is_terminal(child):
-                break
-            preceding = child
+            preceding = None
+            for child in node.children:
+                if strategy.is_valid_gap(child, preceding):
+                    candidates.append((node, child))
+
+                if strategy.is_terminal(child):
+                    break
+
+                preceding = child
+
+        return candidates
 
     def _inject_dead_code(
         self, target: Node, prefix: str, lexicon: DeadCodeLexicon, context: MutationContext
@@ -328,6 +349,58 @@ class DeadCodeInsertionRule(MutationRule):
             new_text=dead_code,
             new_type="dead_code",
         )
+
+    def _compute_insertion_budget(self, candidates: list) -> int:
+        """
+        Computes the exact number of dead code insertions based on a fixed
+        insertion rate per 100 candidate insertion points, scaled by mutation level.
+
+        The model is deterministic and uses ceiling rounding to ensure that
+        small candidate sets still produce meaningful mutation when applicable.
+
+        Insertion rates per 100 candidates by level:
+            Level 0 → 2 insertions
+            Level 1 → 4 insertions
+            Level 2 → 8 insertions
+            Level 3 → 16 insertions
+
+        Args:
+            candidates (list): List of valid insertion candidates.
+
+        Returns:
+            int: Number of insertions to perform (clamped to available candidates).
+        """
+
+        n = len(candidates)
+        if n == 0:
+            return 0
+
+        per_100_rates = {
+            0: 2,
+            1: 4,
+            2: 8,
+            3: 16,
+        }
+
+        rate = per_100_rates.get(
+            self._level, 2
+        )  # Default to level 0 rate if level is out of bounds
+        budget = round((n * rate) / 100)
+
+        return budget if budget > 0 else 1  # Ensure at least one insertion if candidates exist
+
+    def _select_candidates(self, candidates, k):
+        """
+        Randomly selects k candidates from the list of valid insertion points.
+
+        Args:
+            candidates (list): List of valid insertion candidates.
+            k (int): Number of candidates to select.
+
+        Returns:
+            list: A randomly selected subset of candidates for insertion.
+        """
+        return self._rng.sample(candidates, k)
 
     def _is_valid_container(self, node: Node, strategy: InsertionStrategy) -> bool:
         """
@@ -405,22 +478,3 @@ class DeadCodeInsertionRule(MutationRule):
                 self._scope.declare(candidate, "injected")
                 return candidate
         return self._get_var_name("idx")
-
-    def _ensure_minimum_mutation(
-        self,
-        candidates: List[tuple[Node, str]],
-        records: List[MutationRecord],
-        lexicon: DeadCodeLexicon,
-        context: MutationContext,
-    ) -> None:
-        """
-        Performs a single guaranteed injection from the available candidates.
-
-        Args:
-            candidates (List[tuple[Node, str]]): A list of valid insertion points collected during traversal.
-            records (List[MutationRecord]): The list of MutationRecords to append to if an insertion is performed.
-            lexicon (DeadCodeLexicon): The lexicon to generate the dead code string.
-            context (MutationContext): The context for the mutation.
-        """
-        child, prefix = self._rng.choice(candidates)
-        records.append(self._inject_dead_code(child, prefix, lexicon, context))

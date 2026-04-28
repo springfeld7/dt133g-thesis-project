@@ -46,6 +46,7 @@ MAX_CHAR_ABSOLUTE = 6000
 # THRESHOLD COMPUTATION
 # -----------------------------
 
+
 def compute_percentile_bounds(df: pd.DataFrame) -> dict:
     """
     Compute language-specific upper bounds using 95th percentile
@@ -64,8 +65,7 @@ def compute_percentile_bounds(df: pd.DataFrame) -> dict:
         lang_df = df[df["language"] == lang]
 
         bounds[lang] = {
-            "char_max":
-                lang_df["char_count"].quantile(0.95),
+            "char_max": lang_df["char_count"].quantile(0.95),
             "lloc_max": lang_df["lloc"].quantile(0.95),
         }
 
@@ -75,6 +75,7 @@ def compute_percentile_bounds(df: pd.DataFrame) -> dict:
 # -----------------------------
 # PIPELINE
 # -----------------------------
+
 
 def run_step_02():
     """
@@ -95,9 +96,9 @@ def run_step_02():
     # HARD VALIDITY FILTERING
     # -----------------------------
     df = df[
-        (df["lloc"] >= MIN_LLOC) &
-        (df["char_count"] >= MIN_CHAR) &
-        (df["char_count"] <= MAX_CHAR_ABSOLUTE)
+        (df["lloc"] >= MIN_LLOC)
+        & (df["char_count"] >= MIN_CHAR)
+        & (df["char_count"] <= MAX_CHAR_ABSOLUTE)
     ].copy()
 
     print("\n=== AFTER HARD FILTERING ===")
@@ -122,8 +123,7 @@ def run_step_02():
         b = bounds[lang]
 
         lang_df = lang_df[
-            (lang_df["lloc"] <= b["lloc_max"]) &
-            (lang_df["char_count"] <= b["char_max"])
+            (lang_df["lloc"] <= b["lloc_max"]) & (lang_df["char_count"] <= b["char_max"])
         ]
 
         filtered_parts.append(lang_df)
@@ -150,9 +150,7 @@ def run_step_02():
                     f"required={N_PER_GROUP}, available={len(subset)}"
                 )
 
-            sampled_parts.append(
-                subset.sample(n=N_PER_GROUP, random_state=RANDOM_SEED)
-            )
+            sampled_parts.append(subset.sample(n=N_PER_GROUP, random_state=RANDOM_SEED))
 
     final_df = pd.concat(sampled_parts).reset_index(drop=True)
 

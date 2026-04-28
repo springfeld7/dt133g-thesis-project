@@ -15,10 +15,6 @@ into an equivalent while-loop:
 
 from typing import List, Optional
 
-from tests.mutation.rules.control_structure_substitution.test_control_structure_substitution import (
-    rule,
-)
-
 from ......node import Node
 from .....mutation_context import MutationContext
 from ....mutation_rule import MutationRule, MutationRecord

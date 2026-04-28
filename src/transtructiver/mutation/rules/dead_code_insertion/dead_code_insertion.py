@@ -40,13 +40,6 @@ class DeadCodeInsertionRule(MutationRule):
 
     rule_name = "dead-code-insertion"
 
-    # The level probability of insertion is calculated as follows:
-    # Level 0: 1 * (0.5 / 4) = 0.125 (12.5% chance)
-    # Level 1: 2 * (0.5 / 4) = 0.25 (25% chance)
-    # Level 2: 3 * (0.5 / 4) = 0.375 (37.5% chance)
-    # Level 3: 4 * (0.5 / 4) = 0.5 (50% chance)
-    _LEVEL_PROBABILITY = 0.5 / 4
-
     # A pool of natural variable names to choose from for injected code, enhancing plausibility.
     _NATURAL_VAR_NAMES = [
         "val",
@@ -125,8 +118,7 @@ class DeadCodeInsertionRule(MutationRule):
         Initializes the rule with configuration for intensity and determinism.
 
         Args:
-            level (int): Intensity level (0-3). 0 is sparse (~10% chance),
-                3 is dense (~40% chance).
+            level (int): Intensity level (0-3). Higher levels increase the number of insertions.
             seed (int): Seed for the internal random number generator.
             indent_unit (str): The string used for indentation in injected code,
                                if None, it will be auto-detected from the CST or default to 4 spaces.

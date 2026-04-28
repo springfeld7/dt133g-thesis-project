@@ -6,11 +6,9 @@ from .parser import (
     remove_comments_and_docstrings,
     tree_to_token_index,
     index_to_code_token,
-    tree_to_variable_index,
 )
-from tree_sitter import Language, Parser
+from tree_sitter import Parser
 from tree_sitter_language_pack import get_language
-import pdb
 
 dfg_function = {
     "python": DFG_python,
@@ -42,16 +40,19 @@ def corpus_dataflow_match(references, candidates, lang):
         candidate = candidates[i]
         for reference in references_sample:
             try:
-                candidate = remove_comments_and_docstrings(candidate, "java")
+                candidate = remove_comments_and_docstrings(candidate, lang)
             except:
                 pass
             try:
-                reference = remove_comments_and_docstrings(reference, "java")
+                reference = remove_comments_and_docstrings(reference, lang)
             except:
                 pass
 
             cand_dfg = get_data_flow(candidate, parser)
             ref_dfg = get_data_flow(reference, parser)
+
+            # print(cand_dfg)
+            # print(f"\n{ref_dfg}\n")
 
             normalized_cand_dfg = normalize_dataflow(cand_dfg)
             normalized_ref_dfg = normalize_dataflow(ref_dfg)

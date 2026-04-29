@@ -95,7 +95,7 @@ def collect_comment_labels(root: Node):
 @pytest.fixture
 def comment_rule():
     """Fixture providing a reusable CommentDeletion instance."""
-    return CommentDeletionRule()
+    return CommentDeletionRule(level=3)
 
 
 @pytest.fixture

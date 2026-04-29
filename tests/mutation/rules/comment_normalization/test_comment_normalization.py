@@ -43,13 +43,13 @@ def label_nodes(root: Node) -> Node:
     return root
 
 
-def make_line_comment_tree(length: int = 1, comment_text="// comment") -> Node:
+def make_line_comment_tree(length: int = 1, comment_text="//comment") -> Node:
     """Create a root node with a single line comment."""
     text = comment_text
     if length > 3:
-        text = "// this comment has five words"
+        text = "//this comment has five words"
     if length > 8:
-        text = "// this is a comment with more than eight words"
+        text = "//this is a comment with more than eight words"
     comment = Node((1, 0), (1, len(text)), "line_comment", text=text)
     root = Node((0, 0), (2, 0), "program", children=[comment])
     return label_nodes(root)
@@ -67,6 +67,14 @@ def make_block_comment_tree(length: int = 1, comment_text="/* comment */") -> No
     return label_nodes(root)
 
 
+def make_multiline_block_comment_tree() -> Node:
+    """Create a root node with a multiline block comment."""
+    text = "/* hello,\nworld 🚀! */"
+    comment = Node((1, 0), (2, len("world 🚀! */")), "block_comment", text=text)
+    root = Node((0, 0), (3, 0), "program", children=[comment])
+    return label_nodes(root)
+
+
 def make_python_docstring_tree(length: int = 1) -> Node:
     """Create a root node with a Python triple-quoted docstring."""
     text = "''' comment '''"
@@ -81,7 +89,7 @@ def make_python_docstring_tree(length: int = 1) -> Node:
 
 
 def make_comment_in_scope_tree(
-    scope_type="method_declaration", comment_type="line_comment", text="// comment"
+    scope_type="method_declaration", comment_type="line_comment", text="//comment"
 ) -> Node:
     """Create a scope node (function/class/loop/condition) with a comment child."""
     comment = Node((2, 0), (2, len(text)), comment_type, text=text)
@@ -93,14 +101,14 @@ def make_comment_in_scope_tree(
 def make_comment_after_terminal_tree() -> Node:
     """Create a block with a return statement followed by a comment."""
     return_stmt = Node((1, 0), (1, 6), "return_statement", text="return")
-    comment = Node((2, 0), (2, 10), "line_comment", text="// after return")
+    comment = Node((2, 0), (2, 10), "line_comment", text="//after return")
     block = Node((0, 0), (3, 0), "block", children=[return_stmt, comment])
     return label_nodes(block)
 
 
 def make_multiple_comments_tree() -> Node:
     """Create a root node with multiple comments."""
-    c1 = Node((1, 0), (1, 8), "line_comment", text="// foo")
+    c1 = Node((1, 0), (1, 8), "line_comment", text="//foo")
     c2 = Node((2, 0), (2, 8), "block_comment", text="/* bar */")
     root = Node((0, 0), (3, 0), "program", children=[c1, c2])
     return label_nodes(root)
@@ -143,25 +151,25 @@ def python_docstring_tree():
 @pytest.fixture
 def function_scope_comment_tree():
     """Returns a method_declaration node with a line comment child."""
-    return make_comment_in_scope_tree("method_declaration", "line_comment", "// in function")
+    return make_comment_in_scope_tree("method_declaration", "line_comment", "//in function")
 
 
 @pytest.fixture
 def class_scope_comment_tree():
     """Returns a class_declaration node with a line comment child."""
-    return make_comment_in_scope_tree("class_declaration", "line_comment", "// in class")
+    return make_comment_in_scope_tree("class_declaration", "line_comment", "//in class")
 
 
 @pytest.fixture
 def loop_scope_comment_tree():
     """Returns a for_statement node with a line comment child."""
-    return make_comment_in_scope_tree("for_statement", "line_comment", "// in loop")
+    return make_comment_in_scope_tree("for_statement", "line_comment", "//in loop")
 
 
 @pytest.fixture
 def condition_scope_comment_tree():
     """Returns an if_statement node with a line comment child."""
-    return make_comment_in_scope_tree("if_statement", "line_comment", "// in condition")
+    return make_comment_in_scope_tree("if_statement", "line_comment", "//in condition")
 
 
 @pytest.fixture
@@ -174,6 +182,12 @@ def comment_after_terminal_tree():
 def multiple_comments_tree():
     """Returns a program root with multiple comments."""
     return make_multiple_comments_tree()
+
+
+@pytest.fixture
+def multiline_block_comment_tree():
+    """Returns a program root with a multiline block comment."""
+    return make_multiline_block_comment_tree()
 
 
 @pytest.fixture
@@ -197,6 +211,16 @@ class TestCommentNormalizationCoreBehavior:
         """Ensure apply handles None root safely."""
         rule = CommentNormalizationRule()
         assert rule.apply(None, mutation_context) == []  # type: ignore
+
+    def test_level_one_uses_context_mapping(self, mutation_context):
+        """Level 1 should use the context-based replacement strategy."""
+        tree = make_comment_in_scope_tree("method_declaration", "line_comment", "//in function")
+        comment_text = tree.children[0].text
+        rule = CommentNormalizationRule(level=1)
+        records = rule.apply(tree, mutation_context)
+        assert len(records) == 1
+        assert "new_val" in records[0].metadata
+        assert records[0].metadata.get("new_val") != comment_text
 
     @pytest.mark.parametrize("length", [1, 4, 9])
     def test_normalizes_line_comment(self, length, mutation_context):
@@ -329,13 +353,30 @@ class TestCommentNormalizationFormatting:
 
     def test_comment_with_special_characters(self, mutation_context):
         """It normalizes comments containing special characters or unicode."""
-        tree = make_line_comment_tree(comment_text="// cömment 🚀")
+        tree = make_line_comment_tree(comment_text="//cömment 🚀")
         comment_text = tree.children[0].text
         rule = CommentNormalizationRule()
         records = rule.apply(tree, mutation_context)
         assert len(records) == 1
         assert "new_val" in records[0].metadata
         assert records[0].metadata.get("new_val") != comment_text
+
+    def test_multiline_block_comment_is_normalized(
+        self, multiline_block_comment_tree, mutation_context
+    ):
+        """It normalizes block comments that span multiple lines."""
+        comment_text = multiline_block_comment_tree.children[0].text
+        rule = CommentNormalizationRule()
+        records = rule.apply(multiline_block_comment_tree, mutation_context)
+
+        assert len(records) == 1
+        assert "new_val" in records[0].metadata
+        new_val = str(records[0].metadata.get("new_val"))
+        assert new_val != comment_text
+        assert "\n" in new_val
+        assert "hello" in new_val
+        assert "world" in new_val
+        assert "🚀" not in new_val
 
 
 class TestCommentNormalizationErrorHandling:

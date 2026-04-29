@@ -4,7 +4,10 @@ Provides the SampleAnalyzer class for filtering and quantifying
 stylistic attributes of source code samples from the DroidCollection.
 """
 
-from transtructiver.node import Node
+from typing import Iterator, cast
+
+from tree_sitter import Node as TSNode, Parser as TSParser
+from tree_sitter_language_pack import SupportedLanguage, get_language
 from transtructiver.parsing.parser import Parser
 
 
@@ -38,9 +41,10 @@ class SampleAnalyzer:
         labels = target_labels or {"MACHINE_GENERATED", "HUMAN_GENERATED"}
         self.target_labels = {iter_var.upper() for iter_var in labels}
 
+        self._ts_parser = TSParser()
         self._parser = Parser()
 
-    def get_valid_tree(self, code: str, lang: str, label: str) -> Node | None:
+    def get_valid_tree(self, code: str, lang: str, label: str) -> TSNode | None:
         """
         Validates the sample against both language, authorship, and parsed tree
         requirements. Language and label must be within the experimental scope,
@@ -62,17 +66,18 @@ class SampleAnalyzer:
         if norm_lang not in self.target_languages or norm_label not in self.target_labels:
             return None
 
-        tree, _ = self._parser.parse(code, norm_lang)
+        self._ts_parser.language = get_language(cast(SupportedLanguage, norm_lang.lower()))
+        tree = self._ts_parser.parse(bytes(code, "utf8")).root_node
         if not tree:
             return None
 
-        for node in tree.traverse():
-            if node.type == "ERROR":
+        for node in self._traverse(tree):
+            if node.type == "ERROR" or self._parser.should_discard(tree, code):
                 return None
 
         return tree
 
-    def calculate_metrics(self, code: str, language: str, label: str, tree: Node) -> dict:
+    def calculate_metrics(self, code: str, tree: TSNode) -> dict:
         """
         Calculates stylistic and structural metrics for a validated sample.
 
@@ -104,12 +109,12 @@ class SampleAnalyzer:
         comments = 0
         whitespace = 0
 
-        for node in tree.traverse():
+        for node in self._traverse(tree):
             if node.type == "for_statement":
                 for_loops += 1
             elif node.type == "identifier":
                 identifiers += 1
-            elif bool(node.semantic_label) and "comment" in node.semantic_label:
+            elif self._is_comment(node):
                 comments += node.end_point[0] - node.start_point[0] + 1
             elif node.type == "whitespace":
                 content = node.text if node.text else ""
@@ -143,3 +148,26 @@ class SampleAnalyzer:
             return ""
         # Perform at least 1 insertion: replace C++ specifically
         return str(lang).strip().lower().replace("c++", "cpp")
+
+    def _is_comment(self, node: TSNode):
+        """Check if current not is a comment node."""
+        return (node.type == "string"
+                and node.parent
+                and node.parent.type in {"module", "block"}
+                and any(
+                        child.type in {"string_start", "string_end"}
+                        and child.text in ('"""', "'''")
+                        for child in node.children
+                    )
+                ) or ("comment" in node.type)
+
+    def _traverse(self, node: TSNode) -> Iterator[TSNode]:
+        """
+        Yield all nodes in the tree using preorder traversal.
+
+        Yields:
+            Node: Each node in the tree in preorder sequence.
+        """
+        yield node
+        for child in node.children:
+            yield from self._traverse(child)

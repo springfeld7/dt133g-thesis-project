@@ -87,8 +87,8 @@ def run_step_01():
     # ----------------------------
     for entry in stream:
 
-        lang = entry.get("Language")
-        label = entry.get("Label")
+        lang = entry.get("Language", "")
+        label = entry.get("Label", "")
         code = entry.get("Code", "")
 
         valid_tree = analyzer.get_valid_tree(code, lang, label)
@@ -100,7 +100,7 @@ def run_step_01():
             continue
         seen_hashes.add(code_hash)
 
-        row_data = analyzer.calculate_metrics(code, lang, label, valid_tree)
+        row_data = analyzer.calculate_metrics(code, valid_tree)
 
         row_data["code"] = code
         row_data["code_hash"] = code_hash

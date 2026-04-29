@@ -38,6 +38,8 @@ transformations:
 
   control-structure-substitution:
     enabled: false
+    params:
+      level: 0                              # Default: 0
 
 # Verifier thresholds and strictness
 verifier:

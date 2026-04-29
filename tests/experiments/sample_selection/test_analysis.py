@@ -1,43 +1,59 @@
 """Unit tests for experiments/sample_selection/analysis.py
 
 Validates that SampleAnalyzer correctly computes stylistic and structural
-metrics from a manually constructed CST using Node objects.
+metrics from a manually constructed Tree-sitter-shaped node tree.
 """
 
 import pytest
 
 from src.experiments.sample_selection.analysis import SampleAnalyzer
-from src.transtructiver.node import Node
 
 
 # ===== Helpers =====
 
 
+class MockTSNode:
+    """Small Tree-sitter-shaped node used to unit test traversal logic."""
+
+    def __init__(self, node_type, start_point, end_point, text=None, children=None):
+        self.type = node_type
+        self.start_point = start_point
+        self.end_point = end_point
+        self.text = text
+        self.children = children or []
+        self.parent = None
+
+        for child in self.children:
+            child.parent = self
+
+
+def make_node(node_type, start_point, end_point, text=None, children=None):
+    """Create a mock Tree-sitter node with parent links for traversal tests."""
+    return MockTSNode(node_type, start_point, end_point, text=text, children=children)
+
+
 def make_simple_tree():
-    """Return a CST with known counts for loops, identifiers, comments, and whitespace."""
-    root = Node((0, 0), (0, 0), "program", children=[])
+    """Return a mock CST with known counts for loops, identifiers, comments, and whitespace."""
 
     # for loop node
-    for_node = Node((0, 0), (0, 10), "for_statement")
+    for_node = make_node("for_statement", (0, 0), (0, 10))
 
     # identifiers (2 total)
-    id1 = Node((1, 0), (1, 1), "identifier", text="x")
-    id2 = Node((2, 0), (2, 1), "identifier", text="y")
+    id1 = make_node("identifier", (1, 0), (1, 1), text="x")
+    id2 = make_node("identifier", (2, 0), (2, 1), text="y")
 
     # comment spanning 2 lines
-    comment = Node((3, 0), (4, 5), "comment", text="// comment")
-    comment.semantic_label = "line_comment"
+    comment = make_node("comment", (3, 0), (4, 5), text="// comment")
 
     # whitespace node (4 spaces + 1 tab = 8 total after weighting)
-    whitespace = Node((5, 0), (5, 5), "whitespace", text="    \t")
+    whitespace = make_node("whitespace", (5, 0), (5, 5), text="    \t")
 
-    root.children = [for_node, id1, id2, comment, whitespace]
-    return root
+    return make_node("program", (0, 0), (0, 0), children=[for_node, id1, id2, comment, whitespace])
 
 
 def make_empty_tree():
-    """Return an empty CST."""
-    return Node((0, 0), (0, 0), "program")
+    """Return an empty mock CST."""
+    return make_node("program", (0, 0), (0, 0))
 
 
 # ===== Fixtures =====
@@ -66,7 +82,7 @@ def sample_tree():
 
 def test_char_and_loc_counts(analyzer, sample_code, sample_tree):
     """Verify character count and LOC are calculated correctly."""
-    metrics = analyzer.calculate_metrics(sample_code, "java", "HUMAN_GENERATED", sample_tree)
+    metrics = analyzer.calculate_metrics(sample_code, sample_tree)
 
     assert metrics["char_count"] == len(sample_code)
     assert metrics["loc"] == len(sample_code.splitlines())
@@ -75,14 +91,14 @@ def test_char_and_loc_counts(analyzer, sample_code, sample_tree):
 def test_lloc_counts(analyzer, sample_tree):
     """Verify logical LOC excludes empty lines."""
     code = "a\n\nb\n"
-    metrics = analyzer.calculate_metrics(code, "java", "HUMAN_GENERATED", sample_tree)
+    metrics = analyzer.calculate_metrics(code, sample_tree)
 
     assert metrics["lloc"] == 2  # only 'a' and 'b'
 
 
 def test_for_loop_density(analyzer, sample_code, sample_tree):
     """Verify for loop density is computed correctly."""
-    metrics = analyzer.calculate_metrics(sample_code, "java", "HUMAN_GENERATED", sample_tree)
+    metrics = analyzer.calculate_metrics(sample_code, sample_tree)
 
     # 1 for loop / 4 logical lines
     assert metrics["for_loop_density"] == pytest.approx(1 / 4)
@@ -90,7 +106,7 @@ def test_for_loop_density(analyzer, sample_code, sample_tree):
 
 def test_identifier_density(analyzer, sample_code, sample_tree):
     """Verify identifier density is computed correctly."""
-    metrics = analyzer.calculate_metrics(sample_code, "java", "HUMAN_GENERATED", sample_tree)
+    metrics = analyzer.calculate_metrics(sample_code, sample_tree)
 
     # 2 identifiers / 4 logical lines
     assert metrics["identifier_density"] == pytest.approx(2 / 4)
@@ -98,7 +114,7 @@ def test_identifier_density(analyzer, sample_code, sample_tree):
 
 def test_comment_density(analyzer, sample_code, sample_tree):
     """Verify comment density uses line span correctly."""
-    metrics = analyzer.calculate_metrics(sample_code, "java", "HUMAN_GENERATED", sample_tree)
+    metrics = analyzer.calculate_metrics(sample_code, sample_tree)
 
     # comment spans 2 lines, total LOC = 4
     assert metrics["comment_density"] == pytest.approx(2 / 4)
@@ -106,7 +122,7 @@ def test_comment_density(analyzer, sample_code, sample_tree):
 
 def test_whitespace_ratio(analyzer, sample_code, sample_tree):
     """Verify whitespace ratio accounts for tab expansion."""
-    metrics = analyzer.calculate_metrics(sample_code, "java", "HUMAN_GENERATED", sample_tree)
+    metrics = analyzer.calculate_metrics(sample_code, sample_tree)
 
     # whitespace = 8 chars (4 spaces + tab=4 spaces), total length = len(code)
     expected = 8 / len(sample_code)
@@ -120,7 +136,7 @@ def test_zero_length_code(analyzer):
     """Verify zero-length code does not cause division errors."""
     tree = make_empty_tree()
 
-    metrics = analyzer.calculate_metrics("", "java", "HUMAN_GENERATED", tree)
+    metrics = analyzer.calculate_metrics("", tree)
 
     assert metrics["char_count"] == 0
     assert metrics["whitespace_ratio"] == 0.0
@@ -131,7 +147,7 @@ def test_empty_tree_metrics(analyzer):
     code = ""
     tree = make_empty_tree()
 
-    metrics = analyzer.calculate_metrics(code, "java", "HUMAN_GENERATED", tree)
+    metrics = analyzer.calculate_metrics(code, tree)
 
     assert metrics["for_loop_density"] == 0
     assert metrics["identifier_density"] == 0

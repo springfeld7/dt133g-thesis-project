@@ -151,15 +151,15 @@ class SampleAnalyzer:
 
     def _is_comment(self, node: TSNode):
         """Check if current not is a comment node."""
-        return (node.type == "string"
-                and node.parent
-                and node.parent.type in {"module", "block"}
-                and any(
-                        child.type in {"string_start", "string_end"}
-                        and child.text in ('"""', "'''")
-                        for child in node.children
-                    )
-                ) or ("comment" in node.type)
+        return (
+            node.type == "string"
+            and node.parent
+            and node.parent.type in {"module", "block"}
+            and any(
+                child.type in {"string_start", "string_end"} and child.text in ('"""', "'''")
+                for child in node.children
+            )
+        ) or ("comment" in node.type)
 
     def _traverse(self, node: TSNode) -> Iterator[TSNode]:
         """

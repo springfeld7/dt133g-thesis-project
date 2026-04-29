@@ -107,7 +107,6 @@ class SampleAnalyzer:
         for_loops = 0
         identifiers = 0
         comments = 0
-        whitespace = 0
 
         for node in self._traverse(tree):
             if node.type == "for_statement":
@@ -116,10 +115,9 @@ class SampleAnalyzer:
                 identifiers += 1
             elif self._is_comment(node):
                 comments += node.end_point[0] - node.start_point[0] + 1
-            elif node.type == "whitespace":
-                content = node.text if node.text else ""
-                weighted_content = content.replace("\t", "    ")
-                whitespace += len(weighted_content)
+
+        # Count whitespace in gaps between nodes
+        whitespace = self._count_whitespace_gaps(code, tree)
 
         # Helper to avoid DivisionByZero errors
         safe_lloc = lloc_count if lloc_count > 0 else 1
@@ -160,6 +158,78 @@ class SampleAnalyzer:
                 for child in node.children
             )
         ) or ("comment" in node.type)
+
+    def _count_whitespace_gaps(self, code: str, tree: TSNode) -> int:
+        """
+        Count whitespace in gaps between tree nodes.
+
+        Traverses the tree and tallies non-newline whitespace (with tab expansion)
+        in byte ranges not occupied by named nodes.
+
+        Args:
+            code (str): The source code string.
+            tree (TSNode): The parsed tree.
+
+        Returns:
+            int: Total weighted whitespace count (tabs = 4 spaces, excluding newlines).
+        """
+        code_bytes = code.encode("utf8")
+
+        # Collect all byte ranges occupied by named nodes
+        node_ranges = []
+        for node in self._traverse(tree):
+            # Skip the root node (it spans the entire file)
+            if node.parent is None:
+                continue
+            if node.is_named:
+                node_ranges.append((node.start_byte, node.end_byte))
+
+        # Sort and merge overlapping ranges
+        node_ranges.sort()
+        merged_ranges = []
+        for start, end in node_ranges:
+            if merged_ranges and start <= merged_ranges[-1][1]:
+                merged_ranges[-1] = (merged_ranges[-1][0], max(merged_ranges[-1][1], end))
+            else:
+                merged_ranges.append((start, end))
+
+        # Count whitespace in gaps
+        whitespace = 0
+        current_byte = 0
+        for start, end in merged_ranges:
+            if start > current_byte:
+                gap_bytes = code_bytes[current_byte:start]
+                gap_text = gap_bytes.decode("utf8")
+                whitespace += self._tally_whitespace(gap_text)
+            current_byte = end
+
+        # Count trailing gap
+        if current_byte < len(code_bytes):
+            gap_bytes = code_bytes[current_byte:]
+            gap_text = gap_bytes.decode("utf8")
+            whitespace += self._tally_whitespace(gap_text)
+
+        return whitespace
+
+    def _tally_whitespace(self, text: str) -> int:
+        """
+        Tally whitespace characters (spaces, tabs) only, with tab expansion, excluding newlines.
+
+        tabs are expanded to 4 spaces, spaces count as 1, all other chars are ignored.
+
+        Args:
+            text (str): Text to tally.
+
+        Returns:
+            int: Weighted whitespace count (only spaces and tabs).
+        """
+        count = 0
+        for char in text:
+            if char == " ":
+                count += 1
+            elif char == "\t":
+                count += 4
+        return count
 
     def _traverse(self, node: TSNode) -> Iterator[TSNode]:
         """

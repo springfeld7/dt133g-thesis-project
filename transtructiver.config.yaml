@@ -18,6 +18,8 @@ transformations:
 
   comment-deletion:
     enabled: false
+    params:
+      level: 0                              # Default: 0
 
   comment-normalization:
     enabled: false
@@ -36,6 +38,8 @@ transformations:
 
   control-structure-substitution:
     enabled: false
+    params:
+      level: 0                              # Default: 0
 
 # Verifier thresholds and strictness
 verifier:

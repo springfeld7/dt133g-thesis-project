@@ -6,7 +6,7 @@ stylistic attributes of source code samples from the DroidCollection.
 
 from typing import Iterator, cast
 
-from tree_sitter import Node as TSNode, Parser as TSParser
+from tree_sitter import Node as TSNode, Parser as TSParser, Point
 from tree_sitter_language_pack import SupportedLanguage, get_language
 from transtructiver.parsing.parser import Parser
 
@@ -25,7 +25,7 @@ class SampleAnalyzer:
         parser (Parser): An instance of TranStructIVer's Parser for future CST-based metrics.
     """
 
-    def __init__(self, target_languages: set = None, target_labels: set = None):
+    def __init__(self, target_languages: set | None = None, target_labels: set | None = None):
         """
         Initializes the analyzer. If no criteria are passed, it defaults
         to the standard thesis scope (Python/Java/Cpp + Human/Machine).
@@ -151,8 +151,6 @@ class SampleAnalyzer:
         """Check if current not is a comment node."""
         return (
             node.type == "string"
-            and node.parent
-            and node.parent.type in {"module", "block"}
             and any(
                 child.type in {"string_start", "string_end"} and child.text in ('"""', "'''")
                 for child in node.children
@@ -163,8 +161,10 @@ class SampleAnalyzer:
         """
         Count whitespace in gaps between tree nodes.
 
-        Traverses the tree and tallies non-newline whitespace (with tab expansion)
-        in byte ranges not occupied by named nodes.
+        Traverses the tree exactly like the converter does when creating gap
+        nodes: for each parent, measure the byte gaps before each child and the
+        trailing gap after the last child. Only whitespace characters are
+        counted; newline characters are ignored.
 
         Args:
             code (str): The source code string.
@@ -174,42 +174,8 @@ class SampleAnalyzer:
             int: Total weighted whitespace count (tabs = 4 spaces, excluding newlines).
         """
         code_bytes = code.encode("utf8")
-
-        # Collect all byte ranges occupied by named nodes
-        node_ranges = []
-        for node in self._traverse(tree):
-            # Skip the root node (it spans the entire file)
-            if node.parent is None:
-                continue
-            if node.is_named:
-                node_ranges.append((node.start_byte, node.end_byte))
-
-        # Sort and merge overlapping ranges
-        node_ranges.sort()
-        merged_ranges = []
-        for start, end in node_ranges:
-            if merged_ranges and start <= merged_ranges[-1][1]:
-                merged_ranges[-1] = (merged_ranges[-1][0], max(merged_ranges[-1][1], end))
-            else:
-                merged_ranges.append((start, end))
-
-        # Count whitespace in gaps
-        whitespace = 0
-        current_byte = 0
-        for start, end in merged_ranges:
-            if start > current_byte:
-                gap_bytes = code_bytes[current_byte:start]
-                gap_text = gap_bytes.decode("utf8")
-                whitespace += self._tally_whitespace(gap_text)
-            current_byte = end
-
-        # Count trailing gap
-        if current_byte < len(code_bytes):
-            gap_bytes = code_bytes[current_byte:]
-            gap_text = gap_bytes.decode("utf8")
-            whitespace += self._tally_whitespace(gap_text)
-
-        return whitespace
+        line_starts = self._line_start_bytes(code_bytes)
+        return self._count_whitespace_for_node(tree, code_bytes, line_starts, is_root=True)
 
     def _tally_whitespace(self, text: str) -> int:
         """
@@ -230,6 +196,57 @@ class SampleAnalyzer:
             elif char == "\t":
                 count += 4
         return count
+
+    def _line_start_bytes(self, source_bytes: bytes) -> list[int]:
+        """Build line start byte offsets for point-to-byte conversion."""
+        starts = [0]
+        for idx, byte in enumerate(source_bytes):
+            if byte == 10:
+                starts.append(idx + 1)
+        return starts
+
+    def _point_to_byte(self, point: Point, line_starts: list[int], code_len: int) -> int:
+        """Convert a (row, col) point to a byte offset."""
+        row = point.row
+        col = point.column
+
+        if row >= len(line_starts):
+            return code_len
+        return min(line_starts[row] + col, code_len)
+
+    def _count_whitespace_for_node(
+        self,
+        node: TSNode,
+        source_bytes: bytes,
+        line_starts: list[int],
+        *,
+        is_root: bool = False,
+    ) -> int:
+        """Count whitespace inside the gaps of a single node and its descendants."""
+        if not node.children:
+            return 0
+
+        code_len = len(source_bytes)
+        whitespace = 0
+        previous_end_point = Point(0, 0) if is_root else node.start_point
+
+        for child in node.children:
+            gap_start = self._point_to_byte(previous_end_point, line_starts, code_len)
+            gap_end = self._point_to_byte(child.start_point, line_starts, code_len)
+            if gap_end > gap_start:
+                gap_text = source_bytes[gap_start:gap_end].decode("utf8")
+                whitespace += self._tally_whitespace(gap_text)
+
+            whitespace += self._count_whitespace_for_node(child, source_bytes, line_starts)
+            previous_end_point = child.end_point
+
+        trailing_start = self._point_to_byte(previous_end_point, line_starts, code_len)
+        trailing_end = self._point_to_byte(node.end_point, line_starts, code_len)
+        if trailing_end > trailing_start:
+            gap_text = source_bytes[trailing_start:trailing_end].decode("utf8")
+            whitespace += self._tally_whitespace(gap_text)
+
+        return whitespace
 
     def _traverse(self, node: TSNode) -> Iterator[TSNode]:
         """

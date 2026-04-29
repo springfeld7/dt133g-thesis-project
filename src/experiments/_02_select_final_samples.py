@@ -69,7 +69,7 @@ def compute_percentile_bounds(df: pd.DataFrame) -> dict:
         lang_df = df[df["language"] == lang]
 
         bounds[lang] = {
-            "char_max": min(lang_df["char_count"].quantile(0.95), MAX_CHAR_ABSOLUTE),
+            "char_max": lang_df["char_count"].quantile(0.95),
             "lloc_max": lang_df["lloc"].quantile(0.95),
         }
 

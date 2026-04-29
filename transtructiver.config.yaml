@@ -1,7 +1,7 @@
 # External runtime configuration for TranStructIVer
 
 execution:
-  output_dir: output
+  output_dir: output/transformations
   batch_size: 1000
   checkpoint_every: 1000
   resume: false
@@ -37,7 +37,7 @@ transformations:
       indent_unit: null                     # Default: null
 
   control-structure-substitution:
-    enabled: true
+    enabled: false
 
 # Verifier thresholds and strictness
 verifier:

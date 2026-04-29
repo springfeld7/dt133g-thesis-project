@@ -18,6 +18,8 @@ transformations:
 
   comment-deletion:
     enabled: false
+    params:
+      level: 0                              # Default: 0
 
   comment-normalization:
     enabled: false

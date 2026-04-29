@@ -35,7 +35,9 @@ transformations:
       indent_unit: null                     # Default: null
 
   control-structure-substitution:
-    enabled: true
+    enabled: false
+    params:
+      level: 0                              # Default: 0
 
 # Verifier thresholds and strictness
 verifier:

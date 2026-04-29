@@ -51,8 +51,24 @@ EXPERIMENTS = [
     # comment deletion
     # -------------------------
     {
-        "name": "comment_deletion",
+        "name": "comment_deletion_l0",
         "rules": ["comment-deletion"],
+        "params": {"comment-deletion": {"level": 0}},
+    },
+    {
+        "name": "comment_deletion_l1",
+        "rules": ["comment-deletion"],
+        "params": {"comment-deletion": {"level": 1}},
+    },
+    {
+        "name": "comment_deletion_l2",
+        "rules": ["comment-deletion"],
+        "params": {"comment-deletion": {"level": 2}},
+    },
+    {
+        "name": "comment_deletion_l3",
+        "rules": ["comment-deletion"],
+        "params": {"comment-deletion": {"level": 3}},
     },
     # -------------------------
     # comment normalization
@@ -102,8 +118,24 @@ EXPERIMENTS = [
     # control structure substitution
     # -------------------------------
     {
-        "name": "control_structure_substitution",
+        "name": "control_structure_substitution_l0",
         "rules": ["control-structure-substitution"],
+        "params": {"control-structure-substitution": {"level": 0}},
+    },
+    {
+        "name": "control_structure_substitution_l1",
+        "rules": ["control-structure-substitution"],
+        "params": {"control-structure-substitution": {"level": 1}},
+    },
+    {
+        "name": "control_structure_substitution_l2",
+        "rules": ["control-structure-substitution"],
+        "params": {"control-structure-substitution": {"level": 2}},
+    },
+    {
+        "name": "control_structure_substitution_l3",
+        "rules": ["control-structure-substitution"],
+        "params": {"control-structure-substitution": {"level": 3}},
     },
 ]
 

@@ -7,8 +7,8 @@ Validates indentation detection logic from CST whitespace nodes.
 from typing import cast
 import unittest
 
-from src.transtructiver.mutation.rules.utils.indentation_util import IndentationUtils
-from .....src.transtructiver.node import Node
+from transtructiver.mutation.rules.utils.indentation_util import IndentationUtils
+from transtructiver.node import Node
 
 
 class FakeNode:

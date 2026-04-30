@@ -5,7 +5,8 @@ This module defines the fundamental Node class used throughout the project
 to represent hierarchical code structures.
 """
 
-from typing import Iterator, List, Optional
+import json
+from typing import Any, Iterator, List, Optional
 
 
 class Node:
@@ -114,6 +115,62 @@ class Node:
         new_node.children = [child.clone(new_node) for child in self.children]
 
         return new_node
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this node and its subtree to plain Python data.
+
+        Parent links are intentionally excluded because they are derived from
+        the child structure and would create cycles in a serialized format.
+        """
+
+        return {
+            "start_point": list(self.start_point),
+            "end_point": list(self.end_point),
+            "type": self.type,
+            "text": self.text,
+            "semantic_label": self.semantic_label,
+            "context_type": self.context_type,
+            "field": self.field,
+            "language": self.language,
+            "builtin": self.builtin,
+            "is_named": self.is_named,
+            "children": [child.to_dict() for child in self.children],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any], parent: Optional[Node] = None) -> Node:
+        """Rebuild a node tree from :meth:`to_dict` output."""
+        node = cls(
+            start_point=tuple(payload["start_point"]),
+            end_point=tuple(payload["end_point"]),
+            type=payload["type"],
+            text=payload.get("text"),
+            children=[],
+        )
+        node.semantic_label = payload.get("semantic_label")
+        node.context_type = payload.get("context_type")
+        node.field = payload.get("field")
+        node.language = payload.get("language")
+        node.builtin = bool(payload.get("builtin", False))
+        node.is_named = bool(payload.get("is_named", True))
+        node.parent = parent
+
+        for child_payload in payload.get("children", []):
+            child = cls.from_dict(child_payload, node)
+            node.children.append(child)
+
+        return node
+
+    def to_json(self) -> str:
+        """Serialize this node tree to a JSON string."""
+
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, payload: str) -> Node:
+        """Deserialize a JSON string produced by :meth:`to_json`."""
+
+        return cls.from_dict(json.loads(payload))
 
     def __repr__(self) -> str:
         """

@@ -119,7 +119,7 @@ _RULE_PARAM_PROPAGATIONS = {
 # PROTOTYPE-ONLY OUTPUT:
 # Keep developer-facing logs enabled in prototype runs.
 # For production hardening, set this to False (or remove related helpers/calls).
-PROTOTYPE_OUTPUT_ENABLED = True
+PROTOTYPE_OUTPUT_ENABLED = False
 
 
 @dataclass
@@ -297,15 +297,21 @@ def run_pipeline(
         max_rows_per_shard=pipeline_options.max_rows_per_shard,
         compress_output=pipeline_options.compress_output,
     ) as outputs:
-        for idx, code, language in loader.iter_snippets(
+        for idx, row in loader.iter_snippets(
             batch_size=pipeline_options.batch_size,
             start_index=start_index,
         ):
             snippet_id = f"row_{idx}"
+            code = row.get("code") or row.get("mutated_code")
+            language = row.get("language")
 
             _prototype_log(f"\n[{snippet_id}] Parsing...")
-            orig_cst, parse_err = parser.parse(code, language)
-            if orig_cst is None:
+            if not code or not language:
+                continue
+
+            start_cst, parse_err = parser.parse(code, language)
+
+            if start_cst is None:
                 stats.parse_skipped += 1
                 _prototype_log(f"  Skipped ({parse_err})")
                 processed_since_checkpoint += 1
@@ -318,21 +324,42 @@ def run_pipeline(
                 continue
 
             stats.parsed_ok += 1
-            _prototype_pretty("Original tree:", orig_cst)
+            _prototype_pretty("Original tree:", start_cst)
 
             # Clone before mutation so we keep the clean original for comparison
-            mut_cst = orig_cst.clone()
+            mut_cst = start_cst.clone()
             engine.apply_mutations(mut_cst)
 
             _prototype_pretty("\nMutated code:", mut_cst)
+
+            cached_original_cst = row.get("original_cst")
+            if cached_original_cst:
+                orig_cst = Node.from_json(cached_original_cst)
+            else:
+                orig_cst = start_cst
 
             # Write manifest for this snippet
             outputs.write_manifest(idx, snippet_id, engine.manifest.to_dict())
 
             # Write original/mutated code pair
-            original_code = orig_cst.to_code()
+            original_code = start_cst.to_code()
             mutated_code = mut_cst.to_code()
-            outputs.write_dataset_row(idx, snippet_id, original_code, mutated_code, language)
+
+            # Keep all other metadata fields from the original row, except code/language which we handle separately
+            metadata = dict(row)
+            metadata.pop("code", None)
+            metadata.pop("language", None)
+            is_mutated = engine.manifest.is_empty() is False
+            outputs.write_dataset_row(
+                idx,
+                snippet_id,
+                original_code,
+                mutated_code,
+                language,
+                has_mutation_applied=not engine.manifest.is_empty(),
+                metadata=metadata,
+                original_cst=orig_cst,
+            )
 
             # Verify semantic preservation and append to summary log
             verified = verifier.verify(orig_cst, mut_cst, engine.manifest)

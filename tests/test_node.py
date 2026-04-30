@@ -161,6 +161,33 @@ def test_clone_preserves_parent_relationships():
     assert cloned_grandchild.parent is not child
 
 
+def test_node_json_round_trip_preserves_tree_shape_and_metadata():
+    """Verify that Node JSON serialization can reconstruct the full tree."""
+    point = (0, 0)
+
+    root = Node(point, point, "root")
+    root.language = "python"
+    root.semantic_label = "module_root"
+
+    child = Node(point, point, "identifier", text="x")
+    child.field = "name"
+    child.context_type = "binding"
+    child.builtin = True
+    root.add_child(child)
+    child.parent = root
+
+    restored = Node.from_json(root.to_json())
+
+    assert restored.type == "root"
+    assert restored.language == "python"
+    assert restored.semantic_label == "module_root"
+    assert restored.children[0].text == "x"
+    assert restored.children[0].field == "name"
+    assert restored.children[0].context_type == "binding"
+    assert restored.children[0].builtin is True
+    assert restored.children[0].parent is restored
+
+
 def test_node_with_multiple_children_init():
     """Verify initializing a node with a pre-defined list of children."""
     point = (0, 0)

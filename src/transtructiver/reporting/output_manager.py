@@ -19,6 +19,8 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from ..node import Node
+
 
 @dataclass
 class RunStats:
@@ -175,6 +177,7 @@ class OutputManager:
                 ("snippet_id", pa.string()),
                 ("original_code", pa.string()),
                 ("mutated_code", pa.string()),
+                ("original_cst", pa.string()),
                 ("language", pa.string()),
                 ("has_mutation_applied", pa.bool_()),
             ]
@@ -217,6 +220,7 @@ class OutputManager:
         language: str,
         has_mutation_applied: bool = False,
         metadata: dict | None = None,
+        original_cst: Node | None = None,
     ) -> None:
         """Append one original/mutated code pair row to parquet output.
 
@@ -228,6 +232,7 @@ class OutputManager:
             language (str): Programming language of the snippet.
             has_mutation_applied (bool): Whether any mutation was applied.
             metadata (dict | None): Additional dataset metadata (e.g., char_count, lloc, label).
+            original_cst (Node | None): Original CST to cache for later tiers.
         """
 
         # Base row (core schema)
@@ -235,22 +240,17 @@ class OutputManager:
             "snippet_id": [snippet_id],
             "original_code": [original_code],
             "mutated_code": [mutated_code],
+            "original_cst": [original_cst.to_json() if original_cst else None],
             "language": [language],
             "has_mutation_applied": [has_mutation_applied],
         }
-
-        # Attach extra metadata columns (carefully, no overwrites of core fields)
-        if metadata:
-            for k, v in metadata.items():
-                if k not in row_dict:
-                    row_dict[k] = [v]
 
         self._ensure_shard(snippet_index, metadata)
 
         if self.dataset_parquet_writer is None:
             raise RuntimeError("Parquet dataset writer is not initialized.")
 
-        table = pa.table(row_dict)
+        table = pa.table(row_dict, schema=self.dataset_parquet_writer.schema)
 
         self.dataset_parquet_writer.write_table(table)
 

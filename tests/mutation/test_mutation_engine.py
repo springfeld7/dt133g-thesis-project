@@ -182,7 +182,7 @@ def test_conflicting_updates_to_same_node():
 def test_rule_name_used_even_if_action_none():
     """Test that rule_name is still recorded if action is None."""
     node = make_valid_node()
-    rec = make_sample_record(node_id=(1, 1), action=None) # type: ignore
+    rec = make_sample_record(node_id=(1, 1), action=None)  # type: ignore
     rule = make_mock_rule("RuleNone", [rec])
     engine = MutationEngine([rule])
     manifest = engine.apply_mutations(node)

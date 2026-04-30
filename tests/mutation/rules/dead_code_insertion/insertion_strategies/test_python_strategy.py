@@ -174,7 +174,7 @@ class TestPythonInsertionStrategy:
 
     def test_terminal_with_type_none(self, strategy):
         """Returns False if node type is None."""
-        node = make_node(None) # type: ignore
+        node = make_node(None)  # type: ignore
         assert strategy.is_terminal(node) is False
 
     # --- Integration: block_scope with mixed children ---

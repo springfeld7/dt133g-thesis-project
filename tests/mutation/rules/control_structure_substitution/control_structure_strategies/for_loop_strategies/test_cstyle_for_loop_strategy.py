@@ -115,7 +115,7 @@ class TestBaseForLoopStrategyInterface:
             # Missing _extract_for_loop_components and _clean_for_loop_header
 
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            IncompleteStrategy() # type: ignore
+            IncompleteStrategy()  # type: ignore
 
     def test_extract_components_contract(self, strategy):
         """Verifies that the implemented extract method follows the intended signature."""

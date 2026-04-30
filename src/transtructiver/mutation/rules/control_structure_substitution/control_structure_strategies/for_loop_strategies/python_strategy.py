@@ -72,7 +72,9 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
         for_node, item, in_node, iterable, body = self._extract_for_loop_components(node)
 
         # Ensure all components are present and that body is not empty
-        if not (for_node and item and in_node and iterable and body) or (body and len(body.children) == 0):
+        if not (for_node and item and in_node and iterable and body) or (
+            body and len(body.children) == 0
+        ):
             return []
 
         # Build source code strings for item and iterable

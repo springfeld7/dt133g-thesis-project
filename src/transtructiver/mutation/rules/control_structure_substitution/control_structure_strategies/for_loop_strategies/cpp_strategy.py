@@ -82,7 +82,7 @@ class CppForLoopStrategy(CstyleForLoopStrategy):
 
         if update_node is not None:
             records.extend(self._delete_nodes([update_node], rule))
-            
+
         records.extend(self._clean_for_loop_header(node, rule))
 
         if for_node is not None:

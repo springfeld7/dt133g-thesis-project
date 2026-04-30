@@ -17,11 +17,16 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.2",
     "seaborn>=0.13.2",
-    "torch>=2.11.0",
+    "torch>=2.6.0",
     "transformers>=5.5.4",
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=1.4.1",
     "tree-sitter-python>=0.25.0",
+    "scipy>=1.17.1",
+    "accelerate>=1.13.0",
+    "scikit-learn>=1.8.0",
+    "torchvision>=0.26.0",
+    "torchaudio>=2.11.0",
 ]
 
 [project.scripts]
@@ -37,6 +42,7 @@ parser = "transtructiver.parsing.parser:main"
 verify-login = "experiments.sample_selection.dataset_manager:main"
 step01 = "experiments._01_extract_valid_samples:run_step_01"
 step02 = "experiments._02_select_final_samples:run_step_02"
+step03 = "experiments._03_run_all_mutations:main"
 
 [tool.black]
 line-length = 100
@@ -51,6 +57,9 @@ exclude = '''
   | migrations
 )/
 '''
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu124"
 
 [build-system]
 requires = ["uv_build>=0.10.4,<0.11.0"]

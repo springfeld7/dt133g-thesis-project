@@ -148,14 +148,16 @@ class SampleAnalyzer:
         return str(lang).strip().lower().replace("c++", "cpp")
 
     def _is_comment(self, node: TSNode):
-        """Check if current not is a comment node."""
-        return (
+        """Check if current node is a comment node."""
+        return (node.type == "comment") or (
             node.type == "string"
+            and node.parent
+            and node.parent.type in {"module", "block"}
             and any(
-                child.type in {"string_start", "string_end"} and child.text in ('"""', "'''")
+                child.type in {"string_start", "string_end"} and child.text in (b'"""', b"'''")
                 for child in node.children
             )
-        ) or ("comment" in node.type)
+        )
 
     def _count_whitespace_gaps(self, code: str, tree: TSNode) -> int:
         """

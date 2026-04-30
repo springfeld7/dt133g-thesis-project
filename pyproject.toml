@@ -17,7 +17,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.2",
     "seaborn>=0.13.2",
-    "torch>=2.6.0",
+    "torch @ https://download-r2.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp314-cp314-win_amd64.whl",
     "transformers>=5.5.4",
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=1.4.1",
@@ -25,12 +25,12 @@ dependencies = [
     "scipy>=1.17.1",
     "accelerate>=1.13.0",
     "scikit-learn>=1.8.0",
-    "torchvision>=0.26.0",
-    "torchaudio>=2.11.0",
+    "torchvision @ https://download-r2.pytorch.org/whl/cu130/torchvision-0.25.0%2Bcu130-cp314-cp314-win_amd64.whl",
+    "torchaudio @ https://download-r2.pytorch.org/whl/cu130/torchaudio-2.10.0%2Bcu130-cp314-cp314-win_amd64.whl",
 ]
 
 [project.scripts]
-transtructiver = "transtructiver:main"
+transtructiver = "transtructiver:main" 
 proto-mutate = "transtructiver.prototype.mutation.mutate:main"
 proto-parse = "transtructiver.prototype.parsing.parse:main"
 proto-verify = "transtructiver.prototype.verification.verify:main"
@@ -57,9 +57,6 @@ exclude = '''
   | migrations
 )/
 '''
-
-[[tool.uv.index]]
-url = "https://download.pytorch.org/whl/cu124"
 
 [build-system]
 requires = ["uv_build>=0.10.4,<0.11.0"]

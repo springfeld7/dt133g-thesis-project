@@ -28,7 +28,7 @@ def test_run_pipeline_happy_path_writes_artifacts_and_summary(monkeypatch, tmp_p
             save_calls.append((next_index, stats.parsed_ok, stats.verified_ok, stats.verified_fail))
 
         def iter_snippets(self, batch_size, start_index):
-            return [(0, "print(1)", "python")]
+            return [(0, {"snippet_id": "row_0", "code": "print(1)", "language": "python"})]
 
     class DummyNode:
         def __init__(self, code):
@@ -47,6 +47,10 @@ def test_run_pipeline_happy_path_writes_artifacts_and_summary(monkeypatch, tmp_p
     class FakeManifest:
         def to_dict(self):
             return [{"node_id": [0, 0], "history": [], "metadata": {}}]
+
+        def is_empty(self):
+            # Return True when manifest has no entries
+            return len(self.to_dict()) == 0
 
     class FakeEngine:
         def __init__(self):
@@ -80,8 +84,41 @@ def test_run_pipeline_happy_path_writes_artifacts_and_summary(monkeypatch, tmp_p
         def write_manifest(self, idx, snippet_id, entries):
             self.manifest_calls.append((idx, snippet_id, entries))
 
-        def write_dataset_row(self, idx, snippet_id, original_code, mutated_code, language):
-            self.dataset_calls.append((idx, snippet_id, original_code, mutated_code, language))
+        def write_dataset_row(
+            self,
+            snippet_idx,
+            snippet_id,
+            original_code,
+            mutated_code,
+            language,
+            has_mutation_applied,
+            metadata,
+            original_cst=None,
+        ):
+            metadata = {
+                "char_count": 1,
+                "loc": 1,
+                "lloc": 1,
+                "for_loop_density": 0.1,
+                "identifier_density": 0.1,
+                "comment_density": 0.1,
+                "whitespace_ratio": 0.1,
+                "code_hash": "x",
+                "label": "y",
+            }
+
+            self.dataset_calls.append(
+                (
+                    snippet_idx,
+                    snippet_id,
+                    original_code,
+                    mutated_code,
+                    language,
+                    has_mutation_applied,
+                    metadata,
+                    original_cst,
+                )
+            )
 
         def output_paths_summary(self):
             return ("manifest.jsonl", "augmented_dataset.parquet", "summary_log.csv")
@@ -164,7 +201,7 @@ def test_run_pipeline_integration_writes_real_outputs(monkeypatch, tmp_path):
                 json.dump(payload, f)
 
         def iter_snippets(self, batch_size, start_index):
-            return [(0, snippet, "python")]
+            return [(0, {"snippet_id": "row_0", "code": snippet, "language": "python"})]
 
     snippet = "def add(a, b):\n    return a + b\n"
     monkeypatch.setattr(module, "_prototype_log", lambda *_args, **_kwargs: None)
@@ -178,6 +215,84 @@ def test_run_pipeline_integration_writes_real_outputs(monkeypatch, tmp_path):
     module.run_pipeline(
         filepath="ignored.parquet",
         rules=["rename-identifier"],
+        output_dir=str(output_dir),
+        pipeline_options=options,
+    )
+
+    manifest_file = output_dir / "manifest.jsonl"
+    dataset_file = output_dir / "augmented_dataset.parquet"
+    summary_file = output_dir / "summary_log.csv"
+
+    assert manifest_file.exists()
+    assert dataset_file.exists()
+    assert summary_file.exists()
+    assert checkpoint_path.exists()
+
+    manifest_row = json.loads(manifest_file.read_text(encoding="utf-8").splitlines()[0])
+    assert manifest_row["snippet_id"] == "row_0"
+
+    summary_rows = summary_file.read_text(encoding="utf-8").splitlines()
+    assert summary_rows[0].startswith("row_0,")
+    assert summary_rows[1].startswith("TOTAL,")
+
+
+def test_run_pipeline_use_cached_original_cst_on_mutated_code(monkeypatch, tmp_path):
+    module = importlib.import_module("transtructiver.cli")
+
+    class DummyLoader:
+        def __init__(self, *args, **kwargs):
+            self.checkpoint_path = str(checkpoint_path)
+
+        def load_checkpoint(self, resume):
+            return 0
+
+        def save_checkpoint(self, next_index, stats):
+            # Actually write a checkpoint file so the test can check for it
+            payload = {"next_index": next_index}
+            with open(self.checkpoint_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+
+        def iter_snippets(self, batch_size, start_index):
+            return [
+                (
+                    0,
+                    {
+                        "snippet_id": "row_0",
+                        "original_code": snippet,
+                        "mutated_code": mut_snippet,
+                        "language": "python",
+                        "original_cst": json_cst,
+                    },
+                )
+            ]
+
+    snippet = "def add(a, b):\n    return a + b\n"
+    mut_snippet = "def add_func(a_var, b_var):\n    return a_var + b_var\n"
+    orig_cst = {
+        "start_point": (0, 0),
+        "end_point": (0, len(snippet)),
+        "type": "module",
+        "text": snippet,
+        "semantic_label": "root",
+        "context_type": None,
+        "field": None,
+        "language": "python",
+        "builtin": False,
+        "is_named": True,
+        "children": [],
+    }
+    json_cst = json.dumps(orig_cst, ensure_ascii=False)
+    monkeypatch.setattr(module, "_prototype_log", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_prototype_pretty", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "DataLoader", lambda *args, **kwargs: DummyLoader())
+
+    output_dir = tmp_path / "out"
+    checkpoint_path = tmp_path / "checkpoint.json"
+    options = module.PipelineOptions(checkpoint_path=str(checkpoint_path), checkpoint_every=1000)
+
+    module.run_pipeline(
+        filepath="ignored.parquet",
+        rules=["whitespace-normalization"],
         output_dir=str(output_dir),
         pipeline_options=options,
     )

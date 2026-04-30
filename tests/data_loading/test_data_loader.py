@@ -52,14 +52,7 @@ def test_load_successful(sample_parquet):
     # Use iter_snippets to stream rows
     streamed = list(loader.iter_snippets(batch_size=10, start_index=0))
     # Convert streamed output to DataFrame for comparison
-    indices, codes, languages = zip(*streamed)
-    df_streamed = pd.DataFrame(
-        {
-            "index": indices,
-            "code": codes,
-            "language": languages,
-        }
-    )
+    df_streamed = pd.DataFrame([row for _, row in streamed])
     # Compare streamed DataFrame to original
     pd.testing.assert_frame_equal(
         df_streamed.reset_index(drop=True), original_df.reset_index(drop=True)

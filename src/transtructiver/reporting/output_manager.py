@@ -19,6 +19,8 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from ..node import Node
+
 
 @dataclass
 class RunStats:
@@ -146,7 +148,7 @@ class OutputManager:
             return os.path.join(self.output_dir, "augmented_dataset.parquet")
         return os.path.join(self.output_dir, f"augmented_dataset-{shard_id:06d}.parquet")
 
-    def _ensure_shard(self, snippet_index: int) -> None:
+    def _ensure_shard(self, snippet_index: int, metadata: dict | None = None) -> None:
         """Rotate output handles when shard boundary changes.
 
         Args:
@@ -175,9 +177,15 @@ class OutputManager:
                 ("snippet_id", pa.string()),
                 ("original_code", pa.string()),
                 ("mutated_code", pa.string()),
+                ("original_cst", pa.string()),
                 ("language", pa.string()),
+                ("has_mutation_applied", pa.bool_()),
             ]
         )
+
+        if metadata:
+            schema.with_metadata(metadata)
+
         compression = "gzip" if self.compress_output else "snappy"
         self.dataset_parquet_writer = pq.ParquetWriter(
             dataset_parquet_path,
@@ -210,6 +218,9 @@ class OutputManager:
         original_code: str,
         mutated_code: str,
         language: str,
+        has_mutation_applied: bool = False,
+        metadata: dict | None = None,
+        original_cst: Node | None = None,
     ) -> None:
         """Append one original/mutated code pair row to parquet output.
 
@@ -218,18 +229,29 @@ class OutputManager:
             snippet_id (str): Unique snippet identifier.
             original_code (str): Original code string.
             mutated_code (str): Mutated code string.
+            language (str): Programming language of the snippet.
+            has_mutation_applied (bool): Whether any mutation was applied.
+            metadata (dict | None): Additional dataset metadata (e.g., char_count, lloc, label).
+            original_cst (Node | None): Original CST to cache for later tiers.
         """
-        self._ensure_shard(snippet_index)
+
+        # Base row (core schema)
+        row_dict = {
+            "snippet_id": [snippet_id],
+            "original_code": [original_code],
+            "mutated_code": [mutated_code],
+            "original_cst": [original_cst.to_json() if original_cst else None],
+            "language": [language],
+            "has_mutation_applied": [has_mutation_applied],
+        }
+
+        self._ensure_shard(snippet_index, metadata)
+
         if self.dataset_parquet_writer is None:
             raise RuntimeError("Parquet dataset writer is not initialized.")
-        table = pa.table(
-            {
-                "snippet_id": [snippet_id],
-                "original_code": [original_code],
-                "mutated_code": [mutated_code],
-                "language": [language],
-            }
-        )
+
+        table = pa.table(row_dict, schema=self.dataset_parquet_writer.schema)
+
         self.dataset_parquet_writer.write_table(table)
 
     def output_paths_summary(self) -> tuple[str, str, str]:

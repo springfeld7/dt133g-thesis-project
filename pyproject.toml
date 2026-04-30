@@ -17,7 +17,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.2",
     "seaborn>=0.13.2",
-    "torch @ https://download-r2.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp314-cp314-win_amd64.whl",
+    "torch>=2.10.0",
     "transformers>=5.5.4",
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=1.4.1",
@@ -25,8 +25,8 @@ dependencies = [
     "scipy>=1.17.1",
     "accelerate>=1.13.0",
     "scikit-learn>=1.8.0",
-    "torchvision @ https://download-r2.pytorch.org/whl/cu130/torchvision-0.25.0%2Bcu130-cp314-cp314-win_amd64.whl",
-    "torchaudio @ https://download-r2.pytorch.org/whl/cu130/torchaudio-2.10.0%2Bcu130-cp314-cp314-win_amd64.whl",
+    "torchvision>=0.25.0",
+    "torchaudio>=2.10.0",
 ]
 
 [project.scripts]
@@ -57,6 +57,11 @@ exclude = '''
   | migrations
 )/
 '''
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu130"
+name = "pytorch"
+default = false
 
 [build-system]
 requires = ["uv_build>=0.10.4,<0.11.0"]

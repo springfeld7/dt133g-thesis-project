@@ -5,6 +5,7 @@ metrics from a manually constructed Tree-sitter-shaped node tree.
 """
 
 import pytest
+from tree_sitter import Point
 
 from src.experiments.sample_selection.analysis import SampleAnalyzer
 
@@ -33,8 +34,8 @@ class MockTSNode:
         self.children = children or []
         self.parent = None
         self.is_named = is_named
-        self.start_byte = start_byte if start_byte is not None else 0
-        self.end_byte = end_byte if end_byte is not None else 0
+        self.start_byte = start_byte if start_byte else None
+        self.end_byte = end_byte if end_byte else None
 
         for child in self.children:
             child.parent = self
@@ -67,9 +68,9 @@ def _point_to_byte_offset(point, code):
     """Convert (row, col) point to byte offset in code."""
     lines = code.split("\n")
     offset = 0
-    for i in range(point[0]):
+    for i in range(point.row):
         offset += len(lines[i]) + 1  # +1 for newline
-    offset += point[1]
+    offset += point.col
     return offset
 
 
@@ -84,8 +85,8 @@ def make_simple_tree():
     # for statement node: bytes 0-3
     for_node = make_node(
         "for_statement",
-        (0, 0),
-        (0, 3),
+        Point(0, 0),
+        Point(0, 3),
         text="for",
         is_named=True,
         start_byte=0,
@@ -97,8 +98,8 @@ def make_simple_tree():
     # Line 1: "x;\n" starts at byte 10, x is at column 0
     id1 = make_node(
         "identifier",
-        (1, 0),
-        (1, 1),
+        Point(1, 0),
+        Point(1, 1),
         text="x",
         is_named=True,
         start_byte=10,
@@ -110,8 +111,8 @@ def make_simple_tree():
     # Line 2: "y;\n" starts at byte 13, y is at column 0
     id2 = make_node(
         "identifier",
-        (2, 0),
-        (2, 1),
+        Point(2, 0),
+        Point(2, 1),
         text="y",
         is_named=True,
         start_byte=13,
@@ -122,8 +123,8 @@ def make_simple_tree():
     root_byte_end = len(code.encode("utf8"))
     return make_node(
         "program",
-        (0, 0),
-        (3, 1),
+        Point(0, 0),
+        Point(3, 1),
         children=[for_node, id1, id2],
         is_named=True,
         start_byte=0,

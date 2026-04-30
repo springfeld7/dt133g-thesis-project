@@ -212,7 +212,7 @@ class WhitespaceNormalizationRule(MutationRule):
         """
         records: List[MutationRecord] = []
 
-        original_text = node.text
+        original_text = node.text if node.text else ""
         new_text = original_text
 
         if self._is_indentation(node):
@@ -303,7 +303,8 @@ class WhitespaceNormalizationRule(MutationRule):
         records, to_delete = self._apply_collect(root, context)
 
         for node in to_delete:
-            records.append(self.record_delete(node.parent, node))
+            if node.parent:
+                records.append(self.record_delete(node.parent, node))
 
         return records
 

@@ -78,7 +78,7 @@ class CStyleInsertionStrategy(InsertionStrategy):
             return False
 
         # Must follow a newline, but don't jam code right before the '}'
-        if preceding.type == "whitespace":
+        if preceding and preceding.type == "whitespace":
             return True
 
         return False

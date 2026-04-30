@@ -6,6 +6,7 @@ leverages language-specific lexicons to ensure the injected code is syntacticall
 valid and uses a ScopeManager to prevent identifier collisions.
 """
 
+from operator import indexOf
 import random
 from typing import List
 
@@ -114,7 +115,7 @@ class DeadCodeInsertionRule(MutationRule):
     }
     _VALID_PARENT_TYPES = {"if_statement", "else_clause", "for_statement", "while_statement"}
 
-    def __init__(self, level: int = 0, seed: int = 42, indent_unit: str = None) -> None:
+    def __init__(self, level: int = 0, seed: int = 42, indent_unit: str | None = None) -> None:
         """
         Initializes the rule with configuration for intensity and determinism.
 
@@ -313,8 +314,9 @@ class DeadCodeInsertionRule(MutationRule):
         dc_node.parent = target.parent
 
         # Insert into the tree
-        idx = target.parent.children.index(target)
-        target.parent.children.insert(idx, dc_node)
+        if target.parent:
+            idx = indexOf(target.parent.children, target)
+            target.parent.children.insert(idx, dc_node)
 
         return self.record_insert(
             dc_node.start_point,

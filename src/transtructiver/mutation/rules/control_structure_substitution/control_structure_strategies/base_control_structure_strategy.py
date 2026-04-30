@@ -119,7 +119,7 @@ class BaseControlStructureStrategy(ABC):
 
     @abstractmethod
     def apply(
-        self, node: Node, context: MutationContext, indent_unit: str, level: int
+        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str, level: int
     ) -> List[MutationRecord]:
         """
         Transforms a valid control structure into an equivalent form.

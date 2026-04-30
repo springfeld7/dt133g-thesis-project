@@ -13,6 +13,7 @@ into an equivalent while-loop:
     }
 """
 
+from operator import indexOf
 from typing import List, Optional
 
 from ......node import Node
@@ -61,8 +62,8 @@ class CppForLoopStrategy(CstyleForLoopStrategy):
             node
         )
 
-        # If body is not block or contains no statements, skip transformation
-        if body is None or not self._has_effective_body(body):
+        # If no for_node or body or contains no statements, skip transformation
+        if for_node is None or body is None or not self._has_effective_body(body):
             return []
 
         opening_brace, closing_brace = self._get_block_braces(body)
@@ -78,11 +79,14 @@ class CppForLoopStrategy(CstyleForLoopStrategy):
         # Delete init and update nodes from the for loop header and clean up remaining formatting tokens
         if init_node is not None:
             records.extend(self._delete_nodes([init_node], rule))
+
         if update_node is not None:
             records.extend(self._delete_nodes([update_node], rule))
+            
         records.extend(self._clean_for_loop_header(node, rule))
 
-        records.append(self._substitute(for_node, "while", "while", rule))
+        if for_node is not None:
+            records.append(self._substitute(for_node, "while", "while", rule))
 
         # Insert a default "true" condition if the condition section is empty, to maintain loop semantics
         if not condition_node:
@@ -90,7 +94,7 @@ class CppForLoopStrategy(CstyleForLoopStrategy):
 
         # Get what will be needed for initializer insertions:
         siblings = node.children
-        for_node_idx = siblings.index(for_node)
+        for_node_idx = indexOf(siblings, for_node)
         init_indent = self._get_indent(node) + indent_unit
 
         # Insert initializer before the transformed while loop
@@ -108,7 +112,7 @@ class CppForLoopStrategy(CstyleForLoopStrategy):
 
         # Get what will be needed for update insertions:
         last_statement = self._find_last_statement(body)
-        body_insert_idx = body.children.index(last_statement) + 1
+        body_insert_idx = indexOf(body.children, last_statement) + 1
         node_at_idx = body.children[body_insert_idx]
         body_indent = init_indent + indent_unit
 

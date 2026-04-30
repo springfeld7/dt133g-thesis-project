@@ -81,10 +81,10 @@ class MutationEngine:
         """
 
         # Preserve original order as tie-breaker
-        original_order = {r.rule_name: i for i, r in enumerate(self.rules)}
+        original_order = {r.name: i for i, r in enumerate(self.rules)}
 
         # Map rule_name -> rule instance
-        rule_map = {r.rule_name: r for r in self.rules}
+        rule_map = {r.name: r for r in self.rules}
 
         in_degree = {name: 0 for name in rule_map}
         graph = defaultdict(list)

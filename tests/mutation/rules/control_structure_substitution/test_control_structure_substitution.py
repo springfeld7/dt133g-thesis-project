@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from typing import List
 
+from transtructiver.mutation.mutation_types import MutationAction
 from transtructiver.mutation.rules.control_structure_substitution.control_structure_substitution import (
     ControlStructureSubstitutionRule,
 )
@@ -26,7 +27,7 @@ def _wire_parents(node: Node, parent: Node | None = None) -> Node:
     return node
 
 
-def make_simple_python_tree(identifiers: List[str] = None, has_for: bool = False) -> Node:
+def make_simple_python_tree(identifiers: List[str] | None = None, has_for: bool = False) -> Node:
     """Create a basic tree structure for testing traversal and identifier collection."""
     children = []
     if identifiers:
@@ -115,7 +116,7 @@ class TestStrategyCoordination:
         # Setup Mock Strategy
         mock_strategy = MagicMock()
         mock_strategy.is_valid.side_effect = lambda n: n.type == "for_statement"
-        mock_strategy.apply.return_value = [MutationRecord((10, 0), "REPLACE", metadata={})]
+        mock_strategy.apply.return_value = [MutationRecord((10, 0), MagicMock(), metadata={})]
         mock_get_strategy.return_value = mock_strategy
 
         # Setup Tree

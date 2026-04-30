@@ -12,9 +12,10 @@ interface contract before integration into the MutationEngine.
 """
 
 import pytest
-from typing import List
+from typing import List, cast
 from src.transtructiver.mutation.rules.mutation_rule import MutationRule, MutationRecord
 from src.transtructiver.mutation.mutation_types import MutationAction
+from transtructiver.node import Node
 
 
 def test_cannot_instantiate_abc():
@@ -112,7 +113,7 @@ def test_record_substitute_creates_valid_record():
     node = DummyNode()
     rule = TestRule()
 
-    record = rule.record_substitute(node, old_type="old_type")
+    record = rule.record_substitute(cast(Node, node), old_type="old_type")
 
     assert record.node_id == (3, 7)
     assert record.action == MutationAction.SUBSTITUTE

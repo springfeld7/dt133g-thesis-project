@@ -42,7 +42,7 @@ class PythonInsertionStrategy(InsertionStrategy):
         """
         # print(f"Calculating indent prefix for node at column {node.start_point[1]}")  # Debug statement
         # print(f"tYPE OF NODE: {node.type}")  # Debug statement
-        siblings = node.parent.children
+        siblings = node.parent.children if node.parent else []
         idx = siblings.index(node)
         if idx == 0:
             return None  # no preceding sibling
@@ -82,7 +82,7 @@ class PythonInsertionStrategy(InsertionStrategy):
         if any(child.type == "pass_statement" for child in node.children):
             return False
 
-        if node.parent.start_point[0] == node.start_point[0]:
+        if node.parent and node.parent.start_point[0] == node.start_point[0]:
             return False
 
         return True

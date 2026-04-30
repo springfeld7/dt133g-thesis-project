@@ -72,7 +72,7 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
         for_node, item, in_node, iterable, body = self._extract_for_loop_components(node)
 
         # Ensure all components are present and that body is not empty
-        if not all([for_node, item, in_node, iterable, body]) or len(body.children) == 0:
+        if not (for_node and item and in_node and iterable and body) or (body and len(body.children) == 0):
             return []
 
         # Build source code strings for item and iterable
@@ -87,7 +87,7 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
 
         # Find indentation for the new nodes to be inserted
         indent = ""
-        target_node = node.parent.parent
+        target_node = node.parent.parent if node.parent else None
         if target_node:
             ws_node = None
             for child in reversed(target_node.children):
@@ -98,7 +98,7 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
                 return []  # Can't find indentation, abort transformation
 
             # Get what will be needed for iterator initialization
-            indent = ws_node.text
+            indent = ws_node.text if ws_node.text else ""
 
         for_node_idx = node.children.index(for_node)
         iter_var = self._get_unique_iter_name(context, level)
@@ -208,42 +208,6 @@ class PythonForLoopStrategy(BaseForLoopStrategy):
         to_delete = header_formatting[1:]
 
         return [rule.record_delete(node, n) for n in to_delete]
-
-    def _get_unique_iter_name(self, context: MutationContext, level: int) -> str:
-        """
-        Generates a unique iterator variable name to avoid collisions with existing identifiers.
-
-        This method checks the 'iter_var' base name against the set of identifiers already
-        present in the source code. If a collision is detected, it appends an incrementing
-        numeric suffix until a unique name is found. The resulting name is added to the
-        context's taken names to prevent collisions with subsequent transformations in the
-        same execution.
-
-        Args:
-            context (MutationContext): The current mutation context containing the set
-                of all identifiers ('taken_names') found during the initial CST traversal.
-            level (int): The transformation level, which can be used to influence naming conventions.
-
-        Returns:
-            str: A unique string identifier (e.g., 'iter_var', 'iter_var_1', 'iter_var_2')
-                guaranteed not to exist in the current scope.
-        """
-        base = "iter_var"
-
-        # Check if the base name is available
-        if base not in context.taken_names:
-            context.taken_names.add(base)  # Reserve it for this loop
-            return base
-
-        # Iterate with a counter until a unique name is found
-        counter = 1
-        while f"{base}_{counter}" in context.taken_names:
-            counter += 1
-
-        unique_name = f"{base}_{counter}"
-        context.taken_names.add(unique_name)  # Reserve it for the next loop in the file
-
-        return unique_name
 
     def _get_unique_iter_name(self, context: MutationContext, level: int) -> str:
         """

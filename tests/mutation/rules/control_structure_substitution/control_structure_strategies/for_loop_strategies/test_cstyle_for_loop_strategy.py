@@ -39,7 +39,7 @@ class ConcreteForLoopStrategy(BaseForLoopStrategy):
 # ===== Helpers =====
 
 
-def make_node(node_type: str = "test", parent: Node = None) -> Node:
+def make_node(node_type: str = "test", parent: Node | None = None) -> Node:
     """Creates a node and optionally links it to a parent."""
     n = Node(start_point=(0, 0), end_point=(0, 1), type=node_type)
     if parent:
@@ -115,7 +115,7 @@ class TestBaseForLoopStrategyInterface:
             # Missing _extract_for_loop_components and _clean_for_loop_header
 
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            IncompleteStrategy()
+            IncompleteStrategy() # type: ignore
 
     def test_extract_components_contract(self, strategy):
         """Verifies that the implemented extract method follows the intended signature."""

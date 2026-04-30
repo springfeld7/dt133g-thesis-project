@@ -18,7 +18,7 @@ _STRATEGY_MAP = {
 }
 
 
-def get_strategy(language: str) -> InsertionStrategy | None:
+def get_strategy(language: str) -> InsertionStrategy:
     """
     Retrieves the full structural strategy for a given language.
 

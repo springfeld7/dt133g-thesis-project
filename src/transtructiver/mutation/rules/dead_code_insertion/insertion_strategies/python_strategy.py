@@ -49,20 +49,20 @@ class PythonInsertionStrategy(InsertionStrategy):
 
         preceding = siblings[idx - 1]
         if preceding.type == "whitespace":
-            print(
-                f"Preceding type: {preceding.type}, text: '{preceding.start_point}' endpos: {preceding.end_point}"
-            )  # Debug statement
-            print(
-                f"Returning whitespace as indent prefix: '{repr(preceding.text)}'"
-            )  # Debug statement
+            # print(
+            #     f"Preceding type: {preceding.type}, text: '{preceding.start_point}' endpos: {preceding.end_point}"
+            # )  # Debug statement
+            # print(
+            #     f"Returning whitespace as indent prefix: '{repr(preceding.text)}'"
+            # )  # Debug statement
             return preceding.text
 
         # print(f"Preceding sibling: {siblings[idx - 1].start_point}, type: {siblings[idx - 1].type}")  # Debug statement
         # print(f"Preceding sibling text: '{siblings[idx - 1].text}', and representation: {repr(siblings[idx - 1].text)}")
         # print(f"Length of preceding sibling text: {len(siblings[idx - 1].text)}")  # Debug statement
-        print(
-            f"Calculated indent prefix: '{' ' * node.start_point[1]}' for node at column {node.start_point[1]}"
-        )  # Debug statement
+        # print(
+        #     f"Calculated indent prefix: '{' ' * node.start_point[1]}' for node at column {node.start_point[1]}"
+        # )  # Debug statement
         return ""  # No whitespace used
 
     def is_valid_container(self, node: Node) -> bool:

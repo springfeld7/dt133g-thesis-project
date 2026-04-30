@@ -23,6 +23,8 @@ transformations:
 
   comment-normalization:
     enabled: false
+    params:
+      level: 0                              # Default: 0
 
   whitespace-normalization:
     enabled: false

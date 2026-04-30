@@ -149,7 +149,7 @@ class SampleAnalyzer:
 
     def _is_comment(self, node: TSNode):
         """Check if current node is a comment node."""
-        return (node.type == "comment") or (
+        return ("comment" in node.type) or (
             node.type == "string"
             and node.parent
             and node.parent.type in {"module", "block"}

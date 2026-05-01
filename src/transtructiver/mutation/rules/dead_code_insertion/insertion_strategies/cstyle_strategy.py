@@ -25,7 +25,7 @@ class CStyleInsertionStrategy(InsertionStrategy):
     as a brace/semicolon.
     """
 
-    def get_indent_prefix(self, node: Node) -> str | None:
+    def get_indent_prefix(self, node: Node) -> str:
         """
         Iterates through children to find a newline node to guarantee there is
         vertical structure, then looks for the first 'whitespace' node
@@ -35,14 +35,14 @@ class CStyleInsertionStrategy(InsertionStrategy):
             node (Node): The 'block_scope' node being analyzed.
 
         Returns:
-            str | None: The whitespace string to be used as a prefix for inserted code,
-                        or None if no suitable prefix can be determined.
+            str: The whitespace string to be used as a prefix for inserted code,
+                 or empty string if no suitable prefix can be determined.
         """
         for child in node.children:
-            if child.type == "whitespace":
+            if child.text and child.type == "whitespace":
                 return child.text
 
-        return None
+        return ""
 
     def is_valid_container(self, node: Node) -> bool:
         """

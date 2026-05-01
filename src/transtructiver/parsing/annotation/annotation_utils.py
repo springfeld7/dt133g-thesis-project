@@ -57,10 +57,13 @@ def is_scope_node(node: Node, type_map: Mapping[str, str] | None = None) -> bool
     if not node.parent:
         return True
 
+    label = ""
+
     if node.semantic_label:
         label = node.semantic_label
     elif type_map:
         label = type_map.get(node.type)
+
     return node.field == "body" or (label.endswith("_scope") if label else False)
 
 

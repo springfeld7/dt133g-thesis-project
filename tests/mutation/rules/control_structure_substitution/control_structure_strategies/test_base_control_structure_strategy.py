@@ -6,6 +6,7 @@ substitution, and indentation detection in transformation strategies.
 
 import pytest
 from unittest.mock import MagicMock
+from transtructiver.mutation.rules.mutation_rule import MutationRule
 from transtructiver.node import Node
 from transtructiver.mutation.mutation_context import MutationContext
 from transtructiver.mutation.rules.control_structure_substitution.control_structure_strategies.base_control_structure_strategy import (
@@ -22,7 +23,9 @@ class ConcreteStrategy(BaseControlStructureStrategy):
     def is_valid(self, node: Node) -> bool:
         return True
 
-    def apply(self, node: Node, context: MutationContext, indent_unit: str):
+    def apply(
+        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str, level: int
+    ):
         return []
 
 
@@ -40,7 +43,7 @@ def make_test_node(node_type="test", text="text", start=(1, 0), end=(1, 4)):
 @pytest.fixture
 def strategy():
     """Returns a concrete instance of the base strategy."""
-    return ConcreteStrategy()
+    return ConcreteStrategy()  # type: ignore
 
 
 @pytest.fixture

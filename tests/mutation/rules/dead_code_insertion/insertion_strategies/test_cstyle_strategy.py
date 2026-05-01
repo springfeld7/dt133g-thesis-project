@@ -60,13 +60,13 @@ def test_no_whitespace_returns_none(strategy):
     """If no whitespace child exists, returns None."""
     children = [DummyChild("code", "x=1;"), DummyChild("code", "y=2;")]
     node = DummyNode(children=children)
-    assert strategy.get_indent_prefix(node) is None
+    assert strategy.get_indent_prefix(node) == ""
 
 
 def test_empty_children_returns_none(strategy):
     """Node with no children returns None."""
     node = DummyNode(children=[])
-    assert strategy.get_indent_prefix(node) is None
+    assert strategy.get_indent_prefix(node) == ""
 
 
 def test_missing_children_attribute_raises(strategy):

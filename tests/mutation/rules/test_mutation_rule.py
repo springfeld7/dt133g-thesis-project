@@ -13,8 +13,9 @@ interface contract before integration into the MutationEngine.
 
 import pytest
 from typing import List, cast
-from src.transtructiver.mutation.rules.mutation_rule import MutationRule, MutationRecord
-from src.transtructiver.mutation.mutation_types import MutationAction
+from transtructiver.mutation.rules.mutation_rule import MutationRule, MutationRecord
+from transtructiver.mutation.mutation_types import MutationAction
+from transtructiver.mutation.mutation_context import MutationContext
 from transtructiver.node import Node
 
 
@@ -28,7 +29,7 @@ def test_concrete_rule_implementation():
     """Test a minimal valid implementation of a MutationRule."""
 
     class RenameVariableRule(MutationRule):
-        def apply(self, root) -> List[MutationRecord]:
+        def apply(self, root, context) -> List[MutationRecord]:
             # Now returning an actual object, not a dict
             return [
                 MutationRecord(
@@ -43,7 +44,8 @@ def test_concrete_rule_implementation():
     rule = RenameVariableRule()
     assert rule.name == "RenameVariableRule"
 
-    results = rule.apply(None)  # type: ignore[abstract]
+    node = Node((0, 0), (0, 0), "")
+    results = rule.apply(node, MutationContext())
     assert isinstance(results[0], MutationRecord)
     assert results[0].node_id == (10, 5)
     assert results[0].action == MutationAction.RENAME
@@ -53,7 +55,7 @@ def test_synthetic_node_record():
     """Verify synthetic nodes can use negative coordinates"""
 
     class InsertDeadCodeRule(MutationRule):
-        def apply(self, root) -> List[MutationRecord]:
+        def apply(self, root, context) -> List[MutationRecord]:
             return [
                 MutationRecord(
                     node_id=(-1, -1),
@@ -67,7 +69,8 @@ def test_synthetic_node_record():
             ]
 
     rule = InsertDeadCodeRule()
-    results = rule.apply(None)  # type: ignore[abstract]
+    node = Node((0, 0), (0, 0), "")
+    results = rule.apply(node, MutationContext())
 
     # Check synthetic coordinates
     assert results[0].node_id[0] < 0
@@ -90,7 +93,7 @@ def test_repr_output():
     """Verify the string representation for debugging."""
 
     class TestRule(MutationRule):
-        def apply(self, root):
+        def apply(self, root, context):
             return []
 
     rule = TestRule()
@@ -107,7 +110,7 @@ def test_record_substitute_creates_valid_record():
             self.text = "new_text"
 
     class TestRule(MutationRule):
-        def apply(self, root):
+        def apply(self, root, context):
             return []
 
     node = DummyNode()

@@ -3,10 +3,8 @@
 This module maps language identifiers to their respective insertion strategies.
 """
 
-from transtructiver.mutation.rules.dead_code_insertion.insertion_strategies.insertion_strategy import (
-    InsertionStrategy,
-)
-from transtructiver.exceptions import UnsupportedLanguageError
+from .....exceptions import UnsupportedLanguageError
+from .insertion_strategy import InsertionStrategy
 from .python_strategy import PythonInsertionStrategy
 from .cstyle_strategy import CStyleInsertionStrategy
 

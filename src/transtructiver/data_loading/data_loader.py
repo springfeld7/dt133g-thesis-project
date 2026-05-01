@@ -63,7 +63,7 @@ class AbstractDataLoader(ABC):
         self.checkpoint_path = checkpoint_path or "output/checkpoint.json"
 
     @abstractmethod
-    def iter_snippets(self, batch_size: int, start_index: int) -> Iterator[tuple[int, str, str]]:
+    def iter_snippets(self, batch_size: int, start_index: int) -> Iterator[tuple]:
         """Yield (global_index, code, language) for each snippet."""
         pass
 

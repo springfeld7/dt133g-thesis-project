@@ -1,12 +1,14 @@
 """C++ semantic annotator."""
 
+from typing import Mapping
+
 from ....node import Node
 from .base_annotator import BaseAnnotator
 
 
 class CppAnnotator(BaseAnnotator):
     language = "cpp"
-    direct_type_labels: dict[str, str] = {
+    direct_type_labels: Mapping[str, str] = {
         "preproc_include": "import_scope",
         "namespace_definition": "namespace_scope",
         "class_specifier": "class_scope",
@@ -26,7 +28,7 @@ class CppAnnotator(BaseAnnotator):
         "binary_expression": "operation_scope",
         "return_statement": "return_scope",
     }
-    parent_type_labels: dict[str, str] = {
+    parent_type_labels: Mapping[str, str] = {
         "class_specifier": "class_name",
         "struct_specifier": "class_name",
         "enum_specifier": "class_name",

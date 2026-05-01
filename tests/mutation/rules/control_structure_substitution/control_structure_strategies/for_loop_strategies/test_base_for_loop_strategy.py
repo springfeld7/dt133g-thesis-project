@@ -24,7 +24,9 @@ class ConcreteStrategy(BaseControlStructureStrategy):
     def is_valid(self, node: Node) -> bool:
         return True
 
-    def apply(self, node: Node, context: MutationContext, indent_unit: str) -> List[MutationRecord]:
+    def apply(
+        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str, level: int
+    ) -> List[MutationRecord]:
         return []
 
 

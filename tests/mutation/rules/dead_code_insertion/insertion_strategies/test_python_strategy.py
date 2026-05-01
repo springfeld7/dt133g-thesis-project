@@ -8,14 +8,11 @@ Covers:
 - Integration of mixed child block scopes
 """
 
-from platform import node
-
-from numpy import block
 import pytest
-from src.transtructiver.mutation.rules.dead_code_insertion.insertion_strategies.python_strategy import (
+from transtructiver.mutation.rules.dead_code_insertion.insertion_strategies.python_strategy import (
     PythonInsertionStrategy,
 )
-from src.transtructiver.node import Node
+from transtructiver.node import Node
 
 
 @pytest.fixture
@@ -54,7 +51,7 @@ class TestPythonInsertionStrategy:
         parent = make_node("block_scope")
         node = make_node("code", column=4, parent=parent)
         parent.children.append(node)
-        assert strategy.get_indent_prefix(node) is None
+        assert strategy.get_indent_prefix(node) == ""
 
     def test_preceding_non_whitespace_uses_column(self, strategy):
         """Falls back to node column if preceding sibling is not whitespace."""

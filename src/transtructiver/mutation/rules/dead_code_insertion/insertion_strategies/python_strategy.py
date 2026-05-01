@@ -13,8 +13,6 @@ This strategy:
 
 from typing import Optional
 
-from transtructiver.prototype import node
-
 from .insertion_strategy import InsertionStrategy
 from .....node import Node
 
@@ -29,7 +27,7 @@ class PythonInsertionStrategy(InsertionStrategy):
     placeholder methods.
     """
 
-    def get_indent_prefix(self, node: Node) -> str | None:
+    def get_indent_prefix(self, node: Node) -> str:
         """
         Calculates the indentation prefix.
 
@@ -37,18 +35,18 @@ class PythonInsertionStrategy(InsertionStrategy):
             node (Node): The 'block_scope' node being analyzed.
 
         Returns:
-            str | None: The whitespace string to be used as a prefix for inserted code,
-                        or None if the column information is unavailable.
+            str: The whitespace string to be used as a prefix for inserted code,
+                 or empty string if the column information is unavailable.
         """
         # print(f"Calculating indent prefix for node at column {node.start_point[1]}")  # Debug statement
         # print(f"tYPE OF NODE: {node.type}")  # Debug statement
         siblings = node.parent.children if node.parent else []
         idx = siblings.index(node)
         if idx == 0:
-            return None  # no preceding sibling
+            return ""  # no preceding sibling
 
         preceding = siblings[idx - 1]
-        if preceding.type == "whitespace":
+        if preceding.text and preceding.type == "whitespace":
             # print(
             #     f"Preceding type: {preceding.type}, text: '{preceding.start_point}' endpos: {preceding.end_point}"
             # )  # Debug statement

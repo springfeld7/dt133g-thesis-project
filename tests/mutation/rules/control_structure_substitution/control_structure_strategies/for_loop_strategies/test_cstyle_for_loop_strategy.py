@@ -24,7 +24,9 @@ class ConcreteForLoopStrategy(BaseForLoopStrategy):
     def is_valid(self, node: Node) -> bool:
         return True
 
-    def apply(self, node: Node, context: MutationContext, indent_unit: str) -> List[MutationRecord]:
+    def apply(
+        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str, level: int
+    ) -> List[MutationRecord]:
         return []
 
     def _extract_for_loop_components(self, node: Node):
@@ -109,7 +111,7 @@ class TestBaseForLoopStrategyInterface:
             def is_valid(self, node):
                 return True
 
-            def apply(self, node, ctx, indent):
+            def apply(self, node, rule, context, indent_unit, level):
                 return []
 
             # Missing _extract_for_loop_components and _clean_for_loop_header

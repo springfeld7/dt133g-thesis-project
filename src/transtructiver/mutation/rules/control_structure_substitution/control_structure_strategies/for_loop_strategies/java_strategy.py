@@ -23,13 +23,13 @@ If init contains variable declarations, extra braces are added around the body t
     }
 """
 
+from operator import indexOf
 from typing import List, Optional
 
 from .cstyle_for_loop_strategy import CstyleForLoopStrategy
 from ......node import Node
 from .....mutation_context import MutationContext
 from ....mutation_rule import MutationRule, MutationRecord
-from .base_for_loop_strategy import BaseForLoopStrategy
 
 
 class JavaForLoopStrategy(CstyleForLoopStrategy):
@@ -72,8 +72,8 @@ class JavaForLoopStrategy(CstyleForLoopStrategy):
             self._extract_for_loop_components(node)
         )
 
-        # If body is not block or contains no statements, skip transformation
-        if body is None or not self._has_effective_body(body):
+        # If no for_node or body or contains no statements, skip transformation
+        if for_node is None or body is None or not self._has_effective_body(body):
             return []
 
         opening_brace, closing_brace = self._get_block_braces(body)
@@ -102,7 +102,7 @@ class JavaForLoopStrategy(CstyleForLoopStrategy):
 
         # Get what will be needed for initializer insertions:
         siblings = node.children
-        for_node_idx = siblings.index(for_node)
+        for_node_idx = indexOf(siblings, for_node)
         init_indent = self._get_indent(node)
         init_indent = init_indent + indent_unit if needs_scope_block else init_indent
 
@@ -121,7 +121,7 @@ class JavaForLoopStrategy(CstyleForLoopStrategy):
 
         # Get what will be needed for update insertions:
         last_statement = self._find_last_statement(body)
-        body_insert_idx = body.children.index(last_statement) + 1
+        body_insert_idx = indexOf(body.children, last_statement) + 1
         node_at_idx = body.children[body_insert_idx]
         body_indent = init_indent + indent_unit
 

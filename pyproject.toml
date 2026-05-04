@@ -48,4 +48,5 @@ build-backend = "uv_build"
 dev = [
     "black==24.1.0",
     "pytest>=9.0.2",
+    "requests>=2.33.1",
 ]

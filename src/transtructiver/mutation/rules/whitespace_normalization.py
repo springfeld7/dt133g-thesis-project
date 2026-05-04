@@ -212,7 +212,7 @@ class WhitespaceNormalizationRule(MutationRule):
         """
         records: List[MutationRecord] = []
 
-        original_text = node.text
+        original_text = node.text if node.text else ""
         new_text = original_text
 
         if self._is_indentation(node):
@@ -251,9 +251,9 @@ class WhitespaceNormalizationRule(MutationRule):
 
         if not self._is_empty_line(node, siblings, idx):
             return []
-        print(
-            f"SHOULD DELETE THIS ONE! node type: {node.type}, text: '{node.text}', start_point: {node.start_point}, end_point: {node.end_point}'"
-        )
+        # print(
+        #     f"SHOULD DELETE THIS ONE! node type: {node.type}, text: '{node.text}', start_point: {node.start_point}, end_point: {node.end_point}'"
+        # )
         to_delete.append(node)
 
         # Skip whitespace after newline
@@ -303,7 +303,8 @@ class WhitespaceNormalizationRule(MutationRule):
         records, to_delete = self._apply_collect(root, context)
 
         for node in to_delete:
-            records.append(self.record_delete(node.parent, node))
+            if node.parent:
+                records.append(self.record_delete(node.parent, node))
 
         return records
 

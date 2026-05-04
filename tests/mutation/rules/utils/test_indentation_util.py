@@ -4,9 +4,11 @@ Tests for IndentationUtils.
 Validates indentation detection logic from CST whitespace nodes.
 """
 
+from typing import cast
 import unittest
 
-from src.transtructiver.mutation.rules.utils.indentation_util import IndentationUtils
+from transtructiver.mutation.rules.utils.indentation_util import IndentationUtils
+from transtructiver.node import Node
 
 
 class FakeNode:
@@ -41,7 +43,7 @@ class IndentationUtilsTest(unittest.TestCase):
     def _run(self, *nodes):
         """Build root node and run detection."""
         root = FakeNode("root", children=list(nodes))
-        return self.utils.detect_indent_unit(root)
+        return self.utils.detect_indent_unit(cast(Node, root))
 
     def test_detects_spaces(self):
         """Detect space indentation."""

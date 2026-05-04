@@ -1,12 +1,14 @@
 """Java semantic annotator."""
 
+from typing import Mapping
+
 from ....node import Node
 from .base_annotator import BaseAnnotator
 
 
 class JavaAnnotator(BaseAnnotator):
     language = "java"
-    direct_type_labels: dict[str, str] = {
+    direct_type_labels: Mapping[str, str] = {
         "import_declaration": "import_scope",
         "class_declaration": "class_scope",
         "interface_declaration": "class_scope",
@@ -28,7 +30,7 @@ class JavaAnnotator(BaseAnnotator):
         "line_comment": "line_comment",
         "block_comment": "block_comment",
     }
-    parent_type_labels: dict[str, str] = {
+    parent_type_labels: Mapping[str, str] = {
         "class_declaration": "class_name",
         "constructor_declaration": "class_name",
         "compact_constructor_declaration": "class_name",

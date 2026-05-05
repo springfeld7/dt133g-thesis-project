@@ -29,7 +29,7 @@ class DummyStrategy(VerificationStrategy):
 def test_cannot_instantiate_abc():
     """Direct instantiation of VerificationStrategy should raise TypeError."""
     with pytest.raises(TypeError):
-        VerificationStrategy()
+        VerificationStrategy()  # type: ignore
 
 
 def test_dummy_strategy_returns_list():

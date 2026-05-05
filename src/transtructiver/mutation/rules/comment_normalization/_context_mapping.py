@@ -266,7 +266,9 @@ def _get_loop_or_condition_context(node: Node, words: int) -> str:
 
             return f'{prefix} ({" ".join(_get_values_for_context(child))})'
 
-    return f'{"".join(_get_values_for_context(child)[0])}'
+        return f'{"".join(_get_values_for_context(child)[0])}'
+
+    return ""
 
 
 def _get_class_or_function_context(node: Node, words: int) -> str:
@@ -295,7 +297,7 @@ def _get_class_or_function_context(node: Node, words: int) -> str:
                 suffix: str = "s: " if value_count > 2 else " "
                 w = "parameter" if _label_contains(node, "name") else "argument"
                 args = f' function call, using the {w}{suffix}{", ".join(context_values[1:])}'
-            return f"{context_values[0]}{args if words > 8 else ''}"
+                return f"{context_values[0]}{args if words > 8 else ''}"
 
     return f'{"".join(context_values[0])}'
 

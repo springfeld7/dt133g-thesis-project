@@ -28,7 +28,6 @@ from .parsing.parser import Parser
 from .config import load_config, resolve_enabled_rules, get_rule_params
 from .mutation.mutation_engine import MutationEngine
 from .mutation.rules.mutation_rule import MutationRule
-from .mutation.rules.whitespace_normalization import DEFAULT_BASE_UNIT
 from .node import Node
 from .reporting import summary_logger
 from .reporting.output_manager import OutputManager, RunStats
@@ -297,10 +296,13 @@ def run_pipeline(
         max_rows_per_shard=pipeline_options.max_rows_per_shard,
         compress_output=pipeline_options.compress_output,
     ) as outputs:
+        index = 0
+
         for idx, row in loader.iter_snippets(
             batch_size=pipeline_options.batch_size,
             start_index=start_index,
         ):
+            index = idx
             snippet_id = f"row_{idx}"
             code = row.get("code") or row.get("mutated_code")
             language = row.get("language")
@@ -386,7 +388,7 @@ def run_pipeline(
                 processed_since_checkpoint = 0
 
         if processed_since_checkpoint > 0:
-            loader.save_checkpoint(idx + 1, stats)
+            loader.save_checkpoint(index + 1, stats)
 
         summary_logger.write_summary_totals(
             parsed_ok=stats.parsed_ok,

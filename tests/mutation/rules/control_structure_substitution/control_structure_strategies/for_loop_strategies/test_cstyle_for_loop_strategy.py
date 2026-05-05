@@ -24,7 +24,9 @@ class ConcreteForLoopStrategy(BaseForLoopStrategy):
     def is_valid(self, node: Node) -> bool:
         return True
 
-    def apply(self, node: Node, context: MutationContext, indent_unit: str) -> List[MutationRecord]:
+    def apply(
+        self, node: Node, rule: MutationRule, context: MutationContext, indent_unit: str, level: int
+    ) -> List[MutationRecord]:
         return []
 
     def _extract_for_loop_components(self, node: Node):
@@ -39,7 +41,7 @@ class ConcreteForLoopStrategy(BaseForLoopStrategy):
 # ===== Helpers =====
 
 
-def make_node(node_type: str = "test", parent: Node = None) -> Node:
+def make_node(node_type: str = "test", parent: Node | None = None) -> Node:
     """Creates a node and optionally links it to a parent."""
     n = Node(start_point=(0, 0), end_point=(0, 1), type=node_type)
     if parent:
@@ -109,13 +111,13 @@ class TestBaseForLoopStrategyInterface:
             def is_valid(self, node):
                 return True
 
-            def apply(self, node, ctx, indent):
+            def apply(self, node, rule, context, indent_unit, level):
                 return []
 
             # Missing _extract_for_loop_components and _clean_for_loop_header
 
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            IncompleteStrategy()
+            IncompleteStrategy()  # type: ignore
 
     def test_extract_components_contract(self, strategy):
         """Verifies that the implemented extract method follows the intended signature."""

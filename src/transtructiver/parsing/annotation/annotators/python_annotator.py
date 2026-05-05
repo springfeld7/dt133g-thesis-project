@@ -1,12 +1,14 @@
 """Python semantic annotator."""
 
+from typing import Mapping
+
 from ....node import Node
 from .base_annotator import BaseAnnotator
 
 
 class PythonAnnotator(BaseAnnotator):
     language = "python"
-    direct_type_labels: dict[str, str] = {
+    direct_type_labels: Mapping[str, str] = {
         "import_statement": "import_scope",
         "import_from_statement": "import_scope",
         "class_definition": "class_scope",
@@ -25,7 +27,7 @@ class PythonAnnotator(BaseAnnotator):
         "return_statement": "return_scope",
         "comment": "line_comment",
     }
-    parent_type_labels: dict[str, str] = {
+    parent_type_labels: Mapping[str, str] = {
         "class_definition": "class_name",
         "function_definition": "function_name",
         "parameters": "parameter_name",

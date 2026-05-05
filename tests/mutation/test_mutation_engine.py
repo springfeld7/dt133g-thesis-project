@@ -92,6 +92,7 @@ def test_multiple_rules_applied_sequentially():
     manifest = engine.apply_mutations(node)
 
     entry = manifest.get_entry((1, 1))
+    assert entry
     assert entry.metadata["a"] == 1
     assert entry.metadata["b"] == 2
     assert entry.history[0]["rule"] == "RuleA"
@@ -113,6 +114,7 @@ def test_metadata_overwrites_on_conflict():
     manifest = engine.apply_mutations(node)
 
     entry = manifest.get_entry((0, 1))
+    assert entry
     assert entry.metadata["status"] == "new"
     assert len(entry.history) == 2
 
@@ -131,6 +133,8 @@ def test_multiple_nodes_handled_correctly():
 
     entry1 = manifest.get_entry((1, 1))
     entry2 = manifest.get_entry((2, 2))
+    assert entry1
+    assert entry2
     assert entry1.metadata["x"] == 1
     assert entry2.metadata["y"] == 2
     assert entry1.original_id != entry2.original_id
@@ -169,6 +173,7 @@ def test_conflicting_updates_to_same_node():
     engine = MutationEngine([rule1, rule2])
     manifest = engine.apply_mutations(node)
     entry = manifest.get_entry((1, 1))
+    assert entry
     assert entry.metadata["v"] == 2
     assert entry.history[0]["rule"] == "R1"
     assert entry.history[1]["rule"] == "R2"
@@ -177,11 +182,12 @@ def test_conflicting_updates_to_same_node():
 def test_rule_name_used_even_if_action_none():
     """Test that rule_name is still recorded if action is None."""
     node = make_valid_node()
-    rec = make_sample_record(node_id=(1, 1), action=None)
+    rec = make_sample_record(node_id=(1, 1), action=None)  # type: ignore
     rule = make_mock_rule("RuleNone", [rec])
     engine = MutationEngine([rule])
     manifest = engine.apply_mutations(node)
     entry = manifest.get_entry((1, 1))
+    assert entry
     assert entry.history[0]["rule"] == "RuleNone"
     assert entry.history[0]["action"] is None
 
@@ -194,7 +200,7 @@ def test_whitespace_before_dead_code_insertion():
 
     engine = MutationEngine([dci, ws])
 
-    ordered = [r.rule_name for r in engine._order_rules()]
+    ordered = [r.name for r in engine._order_rules()]
 
     assert ordered.index("whitespace-normalization") < ordered.index("dead-code-insertion")
 
@@ -207,7 +213,7 @@ def test_whitespace_before_control_structure_substitution():
 
     engine = MutationEngine([css, ws])
 
-    ordered = [r.rule_name for r in engine._order_rules()]
+    ordered = [r.name for r in engine._order_rules()]
 
     assert ordered.index("whitespace-normalization") < ordered.index(
         "control-structure-substitution"
@@ -223,7 +229,7 @@ def test_transforms_before_rename():
 
     engine = MutationEngine([rename, css, dci])
 
-    ordered = [r.rule_name for r in engine._order_rules()]
+    ordered = [r.name for r in engine._order_rules()]
 
     assert ordered.index("dead-code-insertion") < ordered.index("rename-identifier")
     assert ordered.index("control-structure-substitution") < ordered.index("rename-identifier")

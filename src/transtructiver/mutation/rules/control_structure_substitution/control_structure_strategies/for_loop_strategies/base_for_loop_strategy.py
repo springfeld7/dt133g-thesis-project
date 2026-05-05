@@ -39,7 +39,7 @@ class BaseForLoopStrategy(BaseControlStructureStrategy):
         return records
 
     @abstractmethod
-    def _extract_for_loop_components(self, node: Node):
+    def _extract_for_loop_components(self, node: Node) -> tuple:
         """
         Extracts the structural components of a 'for' loop node from a CST.
 

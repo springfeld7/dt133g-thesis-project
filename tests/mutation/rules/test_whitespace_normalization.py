@@ -120,7 +120,7 @@ def make_negative_number_tree():
 
 def collect_texts(root: Node):
     """Collect all node texts from a tree."""
-    return [n.text for n in root.traverse() if hasattr(n, "text")]
+    return [n.text for n in root.traverse() if n.text]
 
 
 # ===== Fixtures =====

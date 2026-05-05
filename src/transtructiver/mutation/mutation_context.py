@@ -1,10 +1,11 @@
 """Mutation Context Module
 
-Provides the MutationContext class to manage shared state, such as 
-synthetic coordinate generation, across multiple mutation rules.
+Provides the MutationContext class to manage shared state, such as
+synthetic coordinate generation and reserved identifier tracking,
+across multiple mutation rules.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -12,6 +13,7 @@ class MutationContext:
     """Shared state for a single mutation lifecycle."""
 
     synthetic_row_counter: int = -1
+    taken_names: set[str] = field(default_factory=set)
 
     def next_id(self) -> int:
         """

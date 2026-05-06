@@ -20,7 +20,7 @@ from evaluation.varclr.models.encoders import BERT
 # CONFIG
 # ----------------------------
 
-INPUT_DIR = Path("data/_00_test_datasets")
+INPUT_DIR = Path("data/_00_normalized_datasets")
 OUTPUT_DIR = Path("data/_01_varclr_cleaned")
 REPORT_DIR = Path("output/_01_varclr_reports")
 
@@ -40,7 +40,6 @@ SIM_THRESHOLD = 0.90
 # ----------------------------
 # UNION FIND
 # ----------------------------
-
 
 class DSU:
     """
@@ -88,7 +87,6 @@ class DSU:
 # GLOBAL EXACT DEDUP
 # ----------------------------
 
-
 def global_dedup(files: list[Path]) -> list[dict]:
     """
     Deduplicates across datasets using MD5 hash.
@@ -121,7 +119,6 @@ def global_dedup(files: list[Path]) -> list[dict]:
 # EMBEDDING
 # ----------------------------
 
-
 def embed_batch(model: torch.nn.Module, texts: list[str], device: torch.device) -> np.ndarray:
     """
     GPU-safe batched encoding for semantic representation.
@@ -136,14 +133,12 @@ def embed_batch(model: torch.nn.Module, texts: list[str], device: torch.device) 
     """
     model.eval()
     with torch.no_grad():
-        emb = model.encode(texts)  # <-- THIS is the correct path
+        emb = model.encode(texts)   # <-- THIS is the correct path
         return emb.detach().cpu().numpy().astype("float32")
-
 
 # ----------------------------
 # MAIN PIPELINE
 # ----------------------------
-
 
 def run_step_01():
     """
@@ -204,7 +199,10 @@ def run_step_01():
     dataset_counts = Counter(r["source_dataset"] for r in rows)
 
     # This will be dynamically updated during cluster selection
-    dataset_quota = {ds: count for ds, count in dataset_counts.items()}
+    dataset_quota = {
+        ds: count
+        for ds, count in dataset_counts.items()
+    }
 
     texts = [r["code"] for r in rows]
 
@@ -224,7 +222,7 @@ def run_step_01():
     # ----------------------------
     for i in tqdm(range(0, len(texts), BATCH_SIZE), desc="Encoding+Indexing"):
 
-        batch = texts[i : i + BATCH_SIZE]
+        batch = texts[i:i + BATCH_SIZE]
 
         # GPU forward pass → embeddings
         emb = embed_batch(model, batch, device)
@@ -290,10 +288,10 @@ def run_step_01():
         # ----------------------------
         def score(c):
             ds = c["source_dataset"]
-
+            
             # how "damaged" this dataset already is
             used = dataset_counts[ds] - dataset_quota[ds]
-
+            
             # penalty grows as dataset loses samples
             penalty = used / (dataset_counts[ds] + 1e-9)
 
@@ -311,7 +309,8 @@ def run_step_01():
     final_counts = Counter(r["source_dataset"] for r in final_rows)
 
     removed_counts = {
-        ds: initial_counts.get(ds, 0) - final_counts.get(ds, 0) for ds in initial_counts
+        ds: initial_counts.get(ds, 0) - final_counts.get(ds, 0)
+        for ds in initial_counts
     }
 
     # ----------------------------
@@ -319,6 +318,7 @@ def run_step_01():
     # ----------------------------
     out_path = OUTPUT_DIR / "varclr_cleaned.parquet"
     pd.DataFrame(final_rows).to_parquet(out_path, index=False)
+
 
     # ----------------------------
     # SAVE DEDUPLICATION REPORT

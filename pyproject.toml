@@ -43,6 +43,7 @@ verify-login = "experiments.sample_selection.dataset_manager:main"
 step01 = "experiments._01_extract_valid_samples:run_step_01"
 step02 = "experiments._02_select_final_samples:run_step_02"
 step03 = "experiments._03_run_all_mutations:main"
+step04 = "experiments._04_map_gradient:main"
 
 [tool.black]
 line-length = 100

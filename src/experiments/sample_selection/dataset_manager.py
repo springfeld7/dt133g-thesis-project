@@ -26,9 +26,17 @@ class DatasetManager:
         stream (iterable): A streaming dataset object for on-the-fly data access.
     """
 
-    def __init__(self, repo_id: str = "DaniilOr/DroidCollection"):
+    def __init__(self):
+        self.repo_id = None
+
+    def set_repo(self, repo_id: str) -> None:
+        """
+        Sets the repository ID for the dataset.
+
+        Args:
+            repo_id (str): The identifier for the Hugging Face dataset repository.
+        """
         self.repo_id = repo_id
-        self.stream = None
 
     def authenticate(self, token: str = None) -> None:
         """
@@ -46,41 +54,34 @@ class DatasetManager:
         else:
             print("Notice: No explicit token found. Relying on local CLI cache.")
 
-    def get_iterator(self, streaming: bool = True):
+    def get_stream(self, split: str = "train", streaming: bool = True):
         """
-        Initializes the streaming connection to the dataset shards.
+        Returns a streaming iterator for a given dataset split.
 
         Args:
-            streaming (bool): Enables 'on-the-fly' data loading to minimize
-                              local disk usage for large datasets.
+            split (str): The dataset split to access (e.g., 'train', 'test').
+            streaming (bool): Whether to return a streaming dataset.
 
         Returns:
-            iterable: A streaming dataset object prepared for sample extraction.
+            An iterable dataset stream for the specified split.
         """
-        self.stream = load_dataset(self.repo_id, split="train", streaming=streaming)
+        if not self.repo_id:
+            raise ValueError("repo_id is not set. Call set_repo() first.")
 
-        # Perform at least 1 insertion: basic check to verify stream integrity
-        if self.stream is None:
-            raise ConnectionError(f"Failed to initialize stream for {self.repo_id}")
+        return load_dataset(self.repo_id, split=split, streaming=streaming)
 
-        return self.stream
 
-    def peek_samples(self, n: int = 3) -> None:
-        """
-        Utility method to verify the data structure by printing snippets.
+def peek_samples(stream, n: int = 3) -> None:
+    """
+    Utility function to peek at the first n samples from a streaming dataset.
 
-        Args:
-            n (int): The number of samples to preview.
-        """
-        if not self.stream:
-            self.get_iterator()
-
-        # We use 'iter_var' to iterate through the take-subset of the stream
-        for iter_var in self.stream.take(n):
-            # Print metadata and a code snippet to verify success
-            print(f"Author: {iter_var.get('author_id', 'N/A')}")
-            print(f"Code Preview: {iter_var['Code'][:40].strip()}...")
-            print("-" * 15)
+    Args:
+        stream: The streaming dataset iterator.
+        n (int): The number of samples to peek at.
+    """
+    for item in stream.take(n):
+        print(f"Code Preview: {item.get('Code', '')[:60]}")
+        print("-" * 20)
 
 
 def main():
@@ -88,8 +89,8 @@ def main():
     Performs a live test of the DatasetManager authentication and streaming.
 
     This script verifies that the .env file is correctly configured,
-    authentication with Hugging Face is successful, and the DroidCollection
-    can be sampled without downloading the entire dataset.
+    authentication with Hugging Face is successful, and datasets can be
+    streamed correctly using the unified DatasetManager interface.
     """
     load_dotenv()
     manager = DatasetManager()
@@ -97,26 +98,54 @@ def main():
     print("--- Starting Connection Verification ---")
 
     try:
-        # Authenticate
+        # ----------------------------
+        # AUTHENTICATION
+        # ----------------------------
         print("Attempting to authenticate...")
         manager.authenticate()
         print("Successfully authenticated with Hugging Face.")
 
-        print("Initializing stream and fetching samples...")
-        dataset_stream = manager.get_iterator()
+        # ----------------------------
+        # DATASET SETUP
+        # ----------------------------
+        repo_id = "DaniilOr/DroidCollection"
+        manager.set_repo(repo_id)
 
-        # Check Dataset "Shape" and Metadata
-        # Perform at least 1 insertion: Extracting features and info
-        features = dataset_stream.features
-        print(f"\n[Dataset Shape/Schema]")
-        print(f"Columns: {list(features.keys())}")
+        print(f"\nSetting dataset: {repo_id}")
+        print("Initializing stream (train split, streaming mode)...")
 
-        expected_rows = dataset_stream.info.splits["train"].num_examples
-        print(f"Total Rows (Metadata): {expected_rows}")
+        stream = manager.get_stream(split="train")
 
-        # Peek at the Head
+        # ----------------------------
+        # SCHEMA INSPECTION
+        # ----------------------------
+        print("\n[Dataset Shape/Schema]")
+
+        # streaming datasets don't always expose full metadata reliably
+        try:
+            features = stream.features
+            print(f"Columns: {list(features.keys())}")
+        except Exception:
+            print("Could not infer full schema from streaming dataset.")
+
+        try:
+            expected_rows = stream.info.splits["train"].num_examples
+            print(f"Total Rows (Metadata): {expected_rows}")
+        except Exception:
+            print("Total row count not available in streaming mode.")
+
+        # ----------------------------
+        # SAMPLE PREVIEW (PEEK)
+        # ----------------------------
         print("\n[Peeking at Head (First 3 samples)]")
-        manager.peek_samples(n=3)
+
+        for i, sample in enumerate(stream.take(3)):
+            code = sample.get("Code") or sample.get("code") or ""
+            lang = sample.get("language") or sample.get("Language") or sample.get("language_name")
+
+            print(f"\n--- Sample {i + 1} ---")
+            print(f"Language: {lang}")
+            print(f"Code Preview:\n{code[:200]}")
 
         print("\nVerification Complete: Connection is stable and data is flowing.")
 
@@ -125,7 +154,8 @@ def main():
         print("\nPossible solutions:")
         print("1. Check if your .env file is in the project root.")
         print("2. Ensure HF_TOKEN is correct and has 'Read' access.")
-        print("3. Verify you have 'datasets' and 'huggingface-hub' installed via uv.")
+        print("3. Verify 'datasets' and 'huggingface-hub' are installed correctly.")
+        print("4. Confirm dataset repo ID is correct.")
 
 
 if __name__ == "__main__":

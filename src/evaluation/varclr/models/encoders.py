@@ -73,6 +73,9 @@ class Encoder(nn.Module):
         def tokenize_and_forward(self, inputs: Union[str, List[str]]) -> torch.Tensor:
             inputs = processor(inputs)
             return_dict = tokenizer(inputs, return_tensors="pt", padding=True)
+            device = next(self.parameters()).device
+            return_dict = {k: v.to(device) for k, v in return_dict.items()}
+
             return model_forward(self, return_dict["input_ids"], return_dict["attention_mask"])[
                 0
             ].detach()

@@ -299,11 +299,14 @@ def run_pipeline(
         compress_output=pipeline_options.compress_output,
     ) as outputs:
         index = 0
-        
-        for idx, row in tqdm(loader.iter_snippets(
-            batch_size=pipeline_options.batch_size,
-            start_index=start_index,
-        ), total=loader.num_rows):
+
+        for idx, row in tqdm(
+            loader.iter_snippets(
+                batch_size=pipeline_options.batch_size,
+                start_index=start_index,
+            ),
+            total=loader.num_rows,
+        ):
             index = idx
             snippet_id = f"row_{idx}"
             code = row.get("code") or row.get("mutated_code")

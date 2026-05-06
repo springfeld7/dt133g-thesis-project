@@ -19,6 +19,7 @@ def test_run_pipeline_happy_path_writes_artifacts_and_summary(monkeypatch, tmp_p
 
     class DummyLoader:
         def __init__(self, *args, **kwargs):
+            self.num_rows = 0
             pass
 
         def load_checkpoint(self, resume):
@@ -190,6 +191,7 @@ def test_run_pipeline_integration_writes_real_outputs(monkeypatch, tmp_path):
     class DummyLoader:
         def __init__(self, *args, **kwargs):
             self.checkpoint_path = str(checkpoint_path)
+            self.num_rows = 0
 
         def load_checkpoint(self, resume):
             return 0
@@ -242,6 +244,7 @@ def test_run_pipeline_use_cached_original_cst_on_mutated_code(monkeypatch, tmp_p
     class DummyLoader:
         def __init__(self, *args, **kwargs):
             self.checkpoint_path = str(checkpoint_path)
+            self.num_rows = 0
 
         def load_checkpoint(self, resume):
             return 0

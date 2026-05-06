@@ -12,6 +12,7 @@ The script also produces dataset-level statistics and writes a global normalizat
 to support reproducibility and dataset quality analysis.
 """
 
+import hashlib
 from pathlib import Path
 from collections import defaultdict
 import pandas as pd
@@ -31,8 +32,8 @@ DATASETS = {
     "ai_detector": "mhb-maaz/ai-detector-dataset",
 }
 
-OUTPUT_DIR = Path("data/normalized_datasets")
-REPORT_PATH = Path("output/dataset_normalization_report.txt")
+OUTPUT_DIR = Path("data/_00_normalized_datasets")
+REPORT_PATH = Path("output/_00_dataset_normalization_report.txt")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -65,9 +66,9 @@ def _normalize_language(lang: str) -> str | None:
 
     lang = lang.strip().lower()
 
-    if lang == "python":
+    if lang in ["python"]:
         return "python"
-    if lang == "java":
+    if lang in ["java"]:
         return "java"
     if lang in ["c++", "cpp"]:
         return "cpp"
@@ -197,10 +198,13 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
         "kept": 0,
         "dropped_lang": 0,
         "dropped_label": 0,
+        "duplicates": 0,
     }
 
     lang_counter = defaultdict(int)
     label_counter = defaultdict(int)
+
+    seen_hashes = set()
 
     for entry in stream:
         stats["total"] += 1
@@ -211,6 +215,12 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
 
         if not isinstance(code, str):
             continue
+
+        code_hash = hashlib.md5(code.encode("utf-8")).hexdigest()
+        if code_hash in seen_hashes:
+            stats["duplicates"] += 1
+            continue
+        seen_hashes.add(code_hash)
 
         norm_lang = _normalize_language(lang)
         if norm_lang is None:
@@ -227,6 +237,7 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
                 "code": code,
                 "language": norm_lang,
                 "label": norm_label,
+                "code_hash": code_hash,
             }
         )
 
@@ -278,18 +289,20 @@ def write_report(results: list[dict]):
 
         global_total = 0
         global_kept = 0
-
+        global_duplicates = 0
         for r in results:
             s = r["stats"]
 
             global_total += s["total"]
             global_kept += s["kept"]
+            global_duplicates += s["duplicates"]
 
             f.write(f"--- {r['name']} ---\n")
             f.write(f"Total samples: {s['total']}\n")
             f.write(f"Kept samples: {s['kept']}\n")
             f.write(f"Dropped (language): {s['dropped_lang']}\n")
-            f.write(f"Dropped (label): {s['dropped_label']}\n\n")
+            f.write(f"Dropped (label): {s['dropped_label']}\n")
+            f.write(f"Duplicates: {s['duplicates']}\n\n")
 
             f.write("Language distribution:\n")
             for k, v in r["lang"].items():
@@ -304,6 +317,7 @@ def write_report(results: list[dict]):
         f.write("=== GLOBAL SUMMARY ===\n")
         f.write(f"Total processed: {global_total}\n")
         f.write(f"Total kept: {global_kept}\n")
+        f.write(f"Total duplicates: {global_duplicates}\n")
 
     print(f"\nReport written to: {REPORT_PATH}")
 

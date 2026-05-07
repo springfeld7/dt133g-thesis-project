@@ -1,6 +1,6 @@
-"""_04_map_gradient.py
+"""_06_map_gradient.py
 
-Step three of experiments: Cumulatively apply transformation tiers.
+Step 06 of experiments: Cumulatively apply transformation tiers.
 
 """
 
@@ -137,7 +137,7 @@ def run_experiment(exp: dict):
 def main():
     BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("\n=== STEP 04: MAPPING GRADIENT ===\n")
+    print("\n=== STEP 06: MAPPING GRADIENT ===\n")
     print(f"Input dataset: {INPUT_FILE}")
     print(f"Output base:   {BASE_OUTPUT_DIR}")
     print(f"Total runs:    {len(EXPERIMENTS)}\n")

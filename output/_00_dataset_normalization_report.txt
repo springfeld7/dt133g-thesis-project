@@ -1,0 +1,78 @@
+=== DATASET NORMALIZATION REPORT ===
+
+--- droidcollection ---
+Total samples: 1058248
+Kept samples: 514114
+Dropped (language): 354453
+Dropped (label): 188584
+Duplicates: 1097
+
+Language distribution:
+  cpp: 82999
+  python: 245931
+  java: 185184
+
+Label distribution:
+  1: 191058
+  0: 323056
+
+----------------------------
+
+--- hairosetta ---
+Total samples: 121247
+Kept samples: 21873
+Dropped (language): 46829
+Dropped (label): 0
+Duplicates: 52503
+
+Language distribution:
+  java: 7110
+  cpp: 6915
+  python: 7848
+
+Label distribution:
+  1: 18883
+  0: 2990
+
+----------------------------
+
+--- codet_m4 ---
+Total samples: 500552
+Kept samples: 489466
+Dropped (language): 0
+Dropped (label): 0
+Duplicates: 11040
+
+Language distribution:
+  python: 178267
+  java: 171874
+  cpp: 139325
+
+Label distribution:
+  0: 242955
+  1: 246511
+
+----------------------------
+
+--- ai_detector ---
+Total samples: 500000
+Kept samples: 499999
+Dropped (language): 0
+Dropped (label): 0
+Duplicates: 0
+
+Language distribution:
+  python: 457306
+  java: 19301
+  cpp: 23392
+
+Label distribution:
+  0: 238474
+  1: 261525
+
+----------------------------
+
+=== GLOBAL SUMMARY ===
+Total processed: 2180047
+Total kept: 1525452
+Total duplicates: 64640

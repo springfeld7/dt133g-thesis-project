@@ -1,5 +1,4 @@
-"""
-_00_normalize_datasets.py
+"""_00_normalize_datasets.py
 
 Step 0: Dataset normalization for multi-source code classification experiments.
 
@@ -16,7 +15,8 @@ import hashlib
 from pathlib import Path
 from collections import defaultdict
 import pandas as pd
-from datasets import load_dataset
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from .sample_selection.dataset_manager import DatasetManager
 
@@ -32,8 +32,8 @@ DATASETS = {
     "ai_detector": "mhb-maaz/ai-detector-dataset",
 }
 
-OUTPUT_DIR = Path("data/_00_normalized_datasets")
-REPORT_PATH = Path("output/_00_dataset_normalization_report.txt")
+OUTPUT_DIR = Path("data/_00_extract_datasets")
+REPORT_PATH = Path("output/_00_extract_datasets_report.txt")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -192,6 +192,7 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
     output_path = OUTPUT_DIR / f"{name}.parquet"
 
     batch = []
+    writer = None
 
     stats = {
         "total": 0,
@@ -213,7 +214,8 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
         lang = _extract_language(entry)
         label = _extract_label(entry)
 
-        if not isinstance(code, str):
+        # Filter out entries with missing/invalid code early
+        if not isinstance(code, str) or str(code).strip() == "":
             continue
 
         code_hash = hashlib.md5(code.encode("utf-8")).hexdigest()
@@ -246,13 +248,25 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
         label_counter[norm_label] += 1
 
         if len(batch) >= BATCH_SIZE:
-            pd.DataFrame(batch).to_parquet(output_path, index=False, engine="pyarrow")
-            print(f"Wrote {len(batch)} rows...")
+            table = pa.Table.from_pandas(pd.DataFrame(batch))
+
+            if writer is None:
+                # Initialize the writer with the schema of the first batch
+                writer = pq.ParquetWriter(output_path, table.schema)
+
+            writer.write_table(table)
+            print(f"Appended {len(batch)} rows to {output_path}...")
             batch.clear()
 
     # flush remaining batch
     if batch:
-        pd.DataFrame(batch).to_parquet(output_path, index=False, engine="pyarrow")
+        table = pa.Table.from_pandas(pd.DataFrame(batch))
+        if writer is None:
+            writer = pq.ParquetWriter(output_path, table.schema)
+        writer.write_table(table)
+
+    if writer:
+        writer.close()
 
     print(f"Finished {name}")
 

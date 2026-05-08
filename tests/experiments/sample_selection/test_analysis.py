@@ -63,6 +63,7 @@ def make_node(
         end_byte=end_byte,
     )
 
+
 def make_simple_tree():
     """Return a mock CST with known counts for loops, identifiers, and gaps containing whitespace.
 

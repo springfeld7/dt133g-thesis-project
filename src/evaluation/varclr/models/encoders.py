@@ -72,7 +72,9 @@ class Encoder(nn.Module):
 
         def tokenize_and_forward(self, inputs: Union[str, List[str]]) -> torch.Tensor:
             inputs = processor(inputs)
-            return_dict = tokenizer(inputs, return_tensors="pt", padding=True)
+            return_dict = tokenizer(
+                inputs, return_tensors="pt", padding=True, truncation=True, max_length=512
+            )
             device = next(self.parameters()).device
             return_dict = {k: v.to(device) for k, v in return_dict.items()}
 

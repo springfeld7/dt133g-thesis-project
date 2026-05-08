@@ -9,6 +9,7 @@ import random
 
 import numpy as np
 import pandas as pd
+import re
 import torch
 import faiss
 from tqdm import tqdm
@@ -16,7 +17,7 @@ from transformers import AutoTokenizer
 
 from evaluation.varclr.models.encoders import BERT
 from evaluation.varclr.models import urls_pretrained_model
-from .sample_selection import calculate_balance_score
+from .sample_selection.calculate_balance_score import calculate_balance_score
 
 
 # ----------------------------
@@ -34,11 +35,15 @@ random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 
-BATCH_SIZE = 2048
+BATCH_SIZE = 4096
 KNN = 10
 SIM_THRESHOLD = 0.85
-MAX_TOKENS = 512
+MAX_TOKENS = 510  # We reserve 2 tokens for special tokens of the model.
 STRIDE = 256
+
+HNSW_M = 32
+HNSW_EF_CONSTRUCTION = 200
+HNSW_EF_SEARCH = 128
 
 
 class DSU:
@@ -83,7 +88,7 @@ class DSU:
             self.parent[rb] = ra
 
 
-def chunk_text(text: str, tokenizer, max_tokens: int = 512, stride: int = 256) -> list[str]:
+def chunk_text(text: str, tokenizer, max_tokens: int = 510, stride: int = 256) -> list[str]:
     """
     Splits long code into overlapping token chunks.
 
@@ -96,6 +101,9 @@ def chunk_text(text: str, tokenizer, max_tokens: int = 512, stride: int = 256) -
     Returns:
         list[str]: List of decoded text chunks.
     """
+    # Manually apply the model's internal preprocessing first
+    text = text.replace("@", "")
+    text = re.sub("([a-z]|^)([A-Z]{1})", r"\1_\2", text).lower().replace("_", " ").strip()
 
     tokens = tokenizer.encode(text, add_special_tokens=False)
 
@@ -105,8 +113,10 @@ def chunk_text(text: str, tokenizer, max_tokens: int = 512, stride: int = 256) -
     while start < len(tokens):
         end = start + max_tokens
         chunk = tokens[start:end]
-
         chunks.append(tokenizer.decode(chunk, skip_special_tokens=True))
+
+        if end >= len(tokens):
+            break
 
         start += max_tokens - stride
 
@@ -115,12 +125,7 @@ def chunk_text(text: str, tokenizer, max_tokens: int = 512, stride: int = 256) -
 
 def embed_batch(model: torch.nn.Module, texts: list[str], tokenizer: AutoTokenizer) -> np.ndarray:
     """
-    Converts a batch of source code strings into fixed-size embeddings.
-
-    Each input is:
-    1. split into overlapping token chunks (to handle >512 tokens),
-    2. encoded chunk-by-chunk using the model,
-    3. pooled (mean) into one embedding per original sample.
+    Flattens all chunks from the text batch into a single GPU pass.
 
     Args:
         model: VarCLR encoder with `.encode()`.
@@ -131,19 +136,41 @@ def embed_batch(model: torch.nn.Module, texts: list[str], tokenizer: AutoTokeniz
     Returns:
         np.ndarray: Shape (batch_size, embedding_dim), float32 embeddings.
     """
+    all_chunks = []
+    chunk_counts = []  # To track how many chunks belong to each original text
 
-    batch_embeddings = []
+    # Prepare all chunks
+    for text in texts:
+        chunks = chunk_text(text, tokenizer, max_tokens=MAX_TOKENS, stride=STRIDE)
+        all_chunks.extend(chunks)
+        chunk_counts.append(len(chunks))
+
+    # Process all chunks in one go to leverage GPU parallelism
+    if not all_chunks:
+        return np.array([])
+
+    # We use a sub-batch size here to avoid OOM if a file batch has
+    # an insane amount of chunks. 128-256 is usually safe for 8GB.
+    gpu_sub_batch = 128
+    all_embeddings = []
 
     with torch.no_grad():
-        for text in texts:
-            chunks = chunk_text(text, tokenizer, max_tokens=MAX_TOKENS, stride=STRIDE)
-            chunk_embs = model.encode(chunks)
+        for i in range(0, len(all_chunks), gpu_sub_batch):
+            batch_slice = all_chunks[i : i + gpu_sub_batch]
+            embs = model.encode(batch_slice)
+            all_embeddings.append(embs)
 
-            # Aggregate chunk embeddings into single vector (mean pooling)
-            final_emb = chunk_embs.mean(dim=0)
-            batch_embeddings.append(final_emb)
+    flattened_embs = torch.cat(all_embeddings)
 
-    return torch.stack(batch_embeddings).cpu().numpy().astype("float32")
+    # --- Mean Pooling Phase: Re-aggregate chunks back to original files ---
+    final_embeddings = []
+    cursor = 0
+    for count in chunk_counts:
+        file_chunks = flattened_embs[cursor : cursor + count]
+        final_embeddings.append(file_chunks.mean(dim=0))
+        cursor += count
+
+    return torch.stack(final_embeddings).cpu().numpy().astype("float32")
 
 
 # ----------------------------
@@ -160,8 +187,7 @@ def run_step_03():
     2. HNSW indexing for Approximate Nearest Neighbor (ANN) search.
     3. Disjoint Set Union (DSU) clustering of near-duplicates.
     4. Proportional fair selection to protect smaller datasets.
-    5. Removes marked duplicates and columns: 'code_normalized', 'normalized_hash'.
-    6. Saves cleaned datasets and a fairness report.
+    5.
     """
 
     # ----------------------------
@@ -189,6 +215,8 @@ def run_step_03():
 
     print("Loading datasets...")
     dfs = {f.stem: pd.read_parquet(f) for f in files}
+
+    print("Loading datasets (testing with first 500 rows)...")
 
     initial_counts = Counter({k: len(v) for k, v in dfs.items()})
 
@@ -231,9 +259,9 @@ def run_step_03():
         # Initialize FAISS index once we know embedding dimension
         if index is None:
             dim = emb.shape[1]
-            index = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_INNER_PRODUCT)
-            index.hnsw.efConstruction = 200
-            index.hnsw.efSearch = 128
+            index = faiss.IndexHNSWFlat(dim, HNSW_M, faiss.METRIC_INNER_PRODUCT)
+            index.hnsw.efConstruction = HNSW_EF_CONSTRUCTION
+            index.hnsw.efSearch = HNSW_EF_SEARCH
 
         index.add(emb)
 

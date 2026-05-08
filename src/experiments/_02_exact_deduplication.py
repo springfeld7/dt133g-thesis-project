@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 from collections import defaultdict, Counter
 
-from sample_selection import calculate_balance_score
+from .sample_selection.calculate_balance_score import calculate_balance_score
 
 # ----------------------------
 # CONFIG
@@ -18,7 +18,7 @@ from sample_selection import calculate_balance_score
 
 INPUT_DIR = Path("data/_01_normalized_datasets")
 OUTPUT_DIR = Path("data/_02_exact_deduplication")
-REPORT_DIR = Path("output/_02_exact_deduplication_report")
+REPORT_DIR = Path("output/")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ def run_step_02():
 
 
 def write_summary_report(initial, final, collisions):
-    report_path = REPORT_DIR / "exact_dedup_summary.txt"
+    report_path = REPORT_DIR / "_02_exact_deduplication_report.txt"
 
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("=== GLOBAL EXACT DEDUPLICATION REPORT ===\n\n")

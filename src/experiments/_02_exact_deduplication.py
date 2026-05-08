@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 from collections import defaultdict, Counter
 
-from sample_selection import calculate_balance_score
+from .sample_selection import calculate_balance_score
 
 # ----------------------------
 # CONFIG

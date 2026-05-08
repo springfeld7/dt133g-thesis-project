@@ -1,6 +1,6 @@
-"""_06_map_gradient.py
+"""_07_map_gradient.py
 
-Step 06 of experiments: Cumulatively apply transformation tiers.
+Step 07 of experiments: Cumulatively apply transformation tiers.
 
 """
 

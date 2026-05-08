@@ -23,7 +23,7 @@ from .sample_selection import calculate_balance_score
 # CONFIG
 # ----------------------------
 
-INPUT_DIR = Path("data/_00_test_datasets")
+INPUT_DIR = Path("data/_02_exact_deduplication")
 OUTPUT_DIR = Path("data/_03_near_deduplication")
 REPORT_DIR = Path("output/")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,7 +34,7 @@ random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 
-BATCH_SIZE = 256
+BATCH_SIZE = 2048
 KNN = 10
 SIM_THRESHOLD = 0.85
 MAX_TOKENS = 512
@@ -160,6 +160,8 @@ def run_step_03():
     2. HNSW indexing for Approximate Nearest Neighbor (ANN) search.
     3. Disjoint Set Union (DSU) clustering of near-duplicates.
     4. Proportional fair selection to protect smaller datasets.
+    5. Removes marked duplicates and columns: 'code_normalized', 'normalized_hash'.
+    6. Saves cleaned datasets and a fairness report.
     """
 
     # ----------------------------
@@ -201,7 +203,7 @@ def run_step_03():
 
     print(f"Input to semantic stage: {len(rows)}")
 
-    texts = [r["code"] for r in rows]
+    texts = [r["code_normalized"] for r in rows]
 
     # ----------------------------
     # FAISS INDEX INITIALIZATION (lazy init)
@@ -316,6 +318,9 @@ def run_step_03():
     for ds_name, df in dfs.items():
         indices_to_drop = drop_indices[ds_name]
         cleaned_df = df.drop(index=list(indices_to_drop)).reset_index(drop=True)
+        cleaned_df = cleaned_df.drop(
+            columns=["code_normalized", "normalized_hash"], errors="ignore"
+        )
 
         out_path = OUTPUT_DIR / f"{ds_name}.parquet"
         cleaned_df.to_parquet(out_path, index=False)

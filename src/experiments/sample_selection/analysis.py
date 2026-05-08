@@ -53,7 +53,7 @@ class SampleAnalyzer:
         Args:
             code (str): The source code content to be analyzed.
             lang (str): The programming language identifier from the dataset.
-            label (str): The authorship label (e.g., 'HUMAN_GENERATED').
+            label (str): The authorship label.
 
         Returns:
             Node | None: The parsed tree if the sample is valid, otherwise None.
@@ -61,19 +61,10 @@ class SampleAnalyzer:
         if not lang or not label or not (code and code.strip()):
             return None
 
-        norm_lang = self._normalize_lang(lang)
-        norm_label = str(label).strip().upper()
-        if norm_lang not in self.target_languages or norm_label not in self.target_labels:
-            return None
-
-        self._ts_parser.language = get_language(cast(SupportedLanguage, norm_lang.lower()))
+        self._ts_parser.language = get_language(cast(SupportedLanguage, lang.lower()))
         tree = self._ts_parser.parse(bytes(code, "utf8")).root_node
         if not tree:
             return None
-
-        for node in self._traverse(tree):
-            if node.type == "ERROR" or self._parser.should_discard(tree, code):
-                return None
 
         return tree
 
@@ -104,9 +95,22 @@ class SampleAnalyzer:
         lloc_count = len(logical_lines)
         total_loc = len(lines)
 
+        if tree is None:
+            return {
+                "char_count": length,
+                "loc": total_loc,
+                "lloc": lloc_count,
+                "for_loop_density": 0.0,
+                "identifier_density": 0.0,
+                "comment_density": 0.0,
+                "whitespace_ratio": 0.0,
+                "ERROR": 1,
+            }
+
         for_loops = 0
         identifiers = 0
         comments = 0
+        error_found = False
 
         for node in self._traverse(tree):
             if node.type == "for_statement":
@@ -115,6 +119,8 @@ class SampleAnalyzer:
                 identifiers += 1
             elif self._is_comment(node):
                 comments += node.end_point[0] - node.start_point[0] + 1
+            elif node.type == "ERROR":
+                error_found = True
 
         # Count whitespace in gaps between nodes
         whitespace = self._count_whitespace_gaps(code, tree)
@@ -123,6 +129,8 @@ class SampleAnalyzer:
         safe_lloc = lloc_count if lloc_count > 0 else 1
         safe_length = length if length > 0 else 1
         safe_loc = total_loc if total_loc > 0 else 1
+
+        ERROR = 1 if error_found else 0
 
         # Calculate Densities and Ratios
         metrics = {
@@ -133,19 +141,9 @@ class SampleAnalyzer:
             "identifier_density": identifiers / safe_lloc,
             "comment_density": comments / safe_loc,
             "whitespace_ratio": whitespace / safe_length,
+            "ERROR": ERROR,
         }
         return metrics
-
-    def _normalize_lang(self, lang: str) -> str:
-        """
-        Maps DroidCollection language strings to TranStructIVer standards.
-
-        Example: 'C++' -> 'cpp', 'Java' -> 'java'
-        """
-        if not lang:
-            return ""
-        # Perform at least 1 insertion: replace C++ specifically
-        return str(lang).strip().lower().replace("c++", "cpp")
 
     def _is_comment(self, node: TSNode):
         """Check if current node is a comment node."""

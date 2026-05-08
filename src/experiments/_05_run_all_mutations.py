@@ -1,6 +1,6 @@
-"""_03_run_all_mutations.py
+"""_05_run_all_mutations.py
 
-Step three of experiments: Run all mutation transformations on the final samples.
+Step 05 of experiments: Run all mutation transformations on the final samples.
 
 Each transformation is executed independently across predefined parameter
 levels to measure sensitivity of downstream models.
@@ -14,7 +14,7 @@ import subprocess
 # -----------------------------
 
 INPUT_FILE = Path("data/final_samples/final_samples.parquet")
-BASE_OUTPUT_DIR = Path("output/step03_mutations")
+BASE_OUTPUT_DIR = Path("output/step05_mutations")
 
 PYTHON_CMD = "python"
 

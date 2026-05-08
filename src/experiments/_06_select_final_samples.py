@@ -1,6 +1,6 @@
-"""_02_select_final_samples.py
+"""_06_select_final_samples.py
 
-Step two of experiments: Select final evaluation samples from validated dataset.
+Step 06 of experiments: Select final evaluation samples from validated dataset.
 
 This script constructs a 10,200-sample evaluation dataset using:
 - hard validity constraints (structural feasibility)

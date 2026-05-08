@@ -64,16 +64,6 @@ def make_node(
     )
 
 
-def _point_to_byte_offset(point, code):
-    """Convert (row, col) point to byte offset in code."""
-    lines = code.split("\n")
-    offset = 0
-    for i in range(point.row):
-        offset += len(lines[i]) + 1  # +1 for newline
-    offset += point.col
-    return offset
-
-
 def make_simple_tree():
     """Return a mock CST with known counts for loops, identifiers, and gaps containing whitespace.
 
@@ -234,9 +224,3 @@ def test_empty_tree_metrics(analyzer):
     assert metrics["for_loop_density"] == 0
     assert metrics["identifier_density"] == 0
     assert metrics["comment_density"] == 0
-
-
-def test_normalize_lang(analyzer):
-    """Verify language normalization handles C++ and casing."""
-    assert analyzer._normalize_lang("C++") == "cpp"
-    assert analyzer._normalize_lang("Java") == "java"

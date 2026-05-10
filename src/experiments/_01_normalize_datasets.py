@@ -11,6 +11,7 @@ Since the TranStructIVER parser is used, samples that are considered unmeaningfu
 """
 
 from concurrent.futures import ProcessPoolExecutor
+import os
 from pathlib import Path
 import hashlib
 import pandas as pd
@@ -35,7 +36,6 @@ MAX_WORKERS = min(16, len(os.sched_getaffinity(0)) - 2)
 # WORKER INITIALIZATION
 # ----------------------------
 
-
 def init_worker():
     """
     Initializes heavy objects inside each process worker.
@@ -49,11 +49,9 @@ def init_worker():
     comment_rule = CommentDeletionRule(level=3)
     context = MutationContext()
 
-
 # ----------------------------
 # HELPERS
 # ----------------------------
-
 
 def normalize_sample(code: str, lang: str) -> str | None:
     """
@@ -75,7 +73,6 @@ def normalize_sample(code: str, lang: str) -> str | None:
 
     return tree.to_code()
 
-
 def chunk_list(data, batch_size: int):
     """
     Splits a list into smaller batches.
@@ -88,8 +85,7 @@ def chunk_list(data, batch_size: int):
         list: Chunked batch of data.
     """
     for i in range(0, len(data), batch_size):
-        yield data[i : i + batch_size]
-
+        yield data[i:i + batch_size]
 
 def process_batch(batch):
     """
@@ -115,21 +111,19 @@ def process_batch(batch):
         if norm_code is None or not str(norm_code).strip():
             continue
 
-        results.append(
-            {
-                **row._asdict(),
-                "code_normalized": norm_code,
-                "normalized_hash": hashlib.md5(norm_code.encode("utf-8")).hexdigest(),
-            }
-        )
+        results.append({
+            **row._asdict(),
+            "code_normalized": norm_code,
+            "normalized_hash": hashlib.md5(
+                norm_code.encode("utf-8")
+            ).hexdigest(),
+        })
 
     return results
-
 
 # ----------------------------
 # MAIN PIPELINE
 # ----------------------------
-
 
 def run_step_01():
     """
@@ -152,12 +146,15 @@ def run_step_01():
 
         valid_rows = []
 
-        with ProcessPoolExecutor(max_workers=MAX_WORKERS, initializer=init_worker) as executor:
+        with ProcessPoolExecutor(
+            max_workers=MAX_WORKERS,
+            initializer=init_worker
+        ) as executor:
 
             for batch_result in tqdm(
                 executor.map(process_batch, batches),
                 total=len(batches),
-                desc=f"Normalizing {f.stem}",
+                desc=f"Normalizing {f.stem}"
             ):
                 for item in batch_result:
                     valid_rows.append(item)

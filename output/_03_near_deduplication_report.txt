@@ -1,3 +1,0 @@
-=== UNIFIED FAIRNESS REPORT ===
-dataset_1: 2 -> 1 (Loss: 50.00%)
-dataset_2: 4 -> 2 (Loss: 50.00%)

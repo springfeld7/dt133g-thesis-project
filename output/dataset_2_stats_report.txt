@@ -1,0 +1,66 @@
+=== STEP 04 - DATASET STATISTICS ===
+
+Dataset: dataset_2.parquet
+Total samples: 2
+ERROR samples: 2
+ERROR ratio: 1.0000
+
+--- GLOBAL AVERAGES ---
+char_count: 5318.500000
+loc: 193.500000
+lloc: 151.500000
+identifier_density: 0.604651
+for_loop_density: 0.006645
+comment_density: 0.161039
+whitespace_ratio: 0.069489
+
+--- PER LABEL AVERAGES ---
+
+[0]
+char_count: 31.000000
+loc: 2.000000
+lloc: 2.000000
+identifier_density: 0.000000
+for_loop_density: 0.000000
+comment_density: 0.000000
+whitespace_ratio: 0.000000
+
+[1]
+char_count: 10606.000000
+loc: 385.000000
+lloc: 301.000000
+identifier_density: 1.209302
+for_loop_density: 0.013289
+comment_density: 0.322078
+whitespace_ratio: 0.138978
+
+--- PER LANGUAGE AVERAGES ---
+
+[python]
+char_count: 5318.500000
+loc: 193.500000
+lloc: 151.500000
+identifier_density: 0.604651
+for_loop_density: 0.006645
+comment_density: 0.161039
+whitespace_ratio: 0.069489
+
+--- PER (LANGUAGE, LABEL) AVERAGES ---
+
+[python | 0]
+char_count: 31.000000
+loc: 2.000000
+lloc: 2.000000
+identifier_density: 0.000000
+for_loop_density: 0.000000
+comment_density: 0.000000
+whitespace_ratio: 0.000000
+
+[python | 1]
+char_count: 10606.000000
+loc: 385.000000
+lloc: 301.000000
+identifier_density: 1.209302
+for_loop_density: 0.013289
+comment_density: 0.322078
+whitespace_ratio: 0.138978

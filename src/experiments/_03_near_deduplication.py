@@ -17,15 +17,15 @@ from transformers import AutoTokenizer
 
 from evaluation.varclr.models.encoders import BERT
 from evaluation.varclr.models import urls_pretrained_model
-from .sample_selection.calculate_balance_score import calculate_balance_score
-
+from .utils.calculate_balance_score import calculate_balance_score
+from .utils import env_init
 
 # ----------------------------
 # CONFIG
 # ----------------------------
 
-INPUT_DIR = Path("data/_02_exact_deduplication")
-OUTPUT_DIR = Path("data/_03_near_deduplication")
+INPUT_DIR = Path("data/_02_exact_deduplicated_datasets")
+OUTPUT_DIR = Path("data/_03_near_deduplicated_datasets")
 REPORT_DIR = Path("output/")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_DIR.mkdir(parents=True, exist_ok=True)

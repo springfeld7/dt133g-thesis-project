@@ -7,7 +7,7 @@ metrics from a manually constructed Tree-sitter-shaped node tree.
 import pytest
 from tree_sitter import Point
 
-from src.experiments.sample_selection.analysis import SampleAnalyzer
+from src.experiments.utils.analysis import SampleAnalyzer
 
 
 # ===== Helpers =====

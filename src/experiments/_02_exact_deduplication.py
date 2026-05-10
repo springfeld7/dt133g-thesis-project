@@ -10,14 +10,14 @@ import pandas as pd
 from tqdm import tqdm
 from collections import defaultdict, Counter
 
-from .sample_selection.calculate_balance_score import calculate_balance_score
+from .utils.calculate_balance_score import calculate_balance_score
 
 # ----------------------------
 # CONFIG
 # ----------------------------
 
 INPUT_DIR = Path("data/_01_normalized_datasets")
-OUTPUT_DIR = Path("data/_02_exact_deduplication")
+OUTPUT_DIR = Path("data/_02_exact_deduplicated_datasets")
 REPORT_DIR = Path("output/")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

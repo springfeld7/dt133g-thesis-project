@@ -6,7 +6,7 @@ Step 03: Semantic Cleaning Layer (VarCLR-based Deduplication with HNSW)
 from pathlib import Path
 from collections import Counter, defaultdict
 import random
-
+from .utils import env_init
 import numpy as np
 import pandas as pd
 import re
@@ -18,7 +18,6 @@ from transformers import AutoTokenizer
 from evaluation.varclr.models.encoders import BERT
 from evaluation.varclr.models import urls_pretrained_model
 from .utils.calculate_balance_score import calculate_balance_score
-from .utils import env_init
 
 # ----------------------------
 # CONFIG
@@ -216,8 +215,6 @@ def run_step_03():
     print("Loading datasets...")
     dfs = {f.stem: pd.read_parquet(f) for f in files}
 
-    print("Loading datasets (testing with first 500 rows)...")
-
     initial_counts = Counter({k: len(v) for k, v in dfs.items()})
 
     # Flatten all samples into a single list with metadata for tracking
@@ -356,7 +353,7 @@ def run_step_03():
 
     report_path = REPORT_DIR / "_03_near_deduplication_report.txt"
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write("=== UNIFIED FAIRNESS REPORT ===\n")
+        f.write("=== NEAR DEDUPLICATION REMOVAL REPORT ===\n")
         for ds in initial_counts:
             start = initial_counts[ds]
             end = final_counts.get(ds, 0)

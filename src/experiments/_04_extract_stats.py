@@ -19,7 +19,6 @@ import pandas as pd
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 
-import ...notebooks
 from .utils.analysis import SampleAnalyzer
 from .utils.resource_manager import ResourceManager
 
@@ -56,6 +55,7 @@ NUMERIC_COLS = [
 # WORKER STATE
 # ----------------------------
 
+
 def init_worker():
     """
     Initializes analyzer inside each worker process.
@@ -80,6 +80,7 @@ def process_sample(args):
     metrics = analyzer.calculate_metrics(code, tree)
 
     return metrics
+
 
 # ----------------------------
 # MAIN PIPELINE
@@ -111,16 +112,11 @@ def run_step_04():
 
         inputs = list(zip(codes, langs, labels))
 
-        with ProcessPoolExecutor(
-            max_workers=MAX_WORKERS,
-            initializer=init_worker
-        ) as executor:
+        with ProcessPoolExecutor(max_workers=MAX_WORKERS, initializer=init_worker) as executor:
 
-            metrics_list = list(tqdm(
-                executor.map(process_sample, inputs),
-                total=len(df),
-                desc="Analyzing"
-            ))
+            metrics_list = list(
+                tqdm(executor.map(process_sample, inputs), total=len(df), desc="Analyzing")
+            )
 
         # Integration
         df_metrics = pd.DataFrame.from_records(metrics_list)

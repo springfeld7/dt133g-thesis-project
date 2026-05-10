@@ -18,7 +18,7 @@ from transformers import AutoTokenizer
 from evaluation.varclr.models.encoders import BERT
 from evaluation.varclr.models import urls_pretrained_model
 from .utils.calculate_balance_score import calculate_balance_score
-
+from .utils import env_init
 
 # ----------------------------
 # CONFIG

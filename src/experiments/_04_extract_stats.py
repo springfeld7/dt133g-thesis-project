@@ -17,20 +17,24 @@ This stage:
 from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor
 
-from .sample_selection.analysis import SampleAnalyzer
+from .utils.analysis import SampleAnalyzer
+from .utils.resource_manager import ResourceManager
 
 
 # ----------------------------
 # CONFIG
 # ----------------------------
 
-INPUT_DIR = Path("data/_03_near_deduplication")
+INPUT_DIR = Path("data/_03_near_deduplicated_datasets")
 OUTPUT_DIR = Path("data/_04_extract_stats")
 REPORT_DIR = Path("output/")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_WORKERS = ResourceManager.get_cpu_limit()
 
 
 # ----------------------------
@@ -48,6 +52,35 @@ NUMERIC_COLS = [
 ]
 
 # ----------------------------
+# WORKER STATE
+# ----------------------------
+
+def init_worker():
+    """
+    Initializes analyzer inside each worker process.
+    """
+    global analyzer
+    analyzer = SampleAnalyzer()
+
+
+def process_sample(args):
+    """
+    Processes a single sample in parallel.
+
+    Args:
+        args (tuple): (code, lang, label)
+
+    Returns:
+        dict: extracted metrics
+    """
+    code, lang, label = args
+
+    tree = analyzer.get_valid_tree(code, lang, label)
+    metrics = analyzer.calculate_metrics(code, tree)
+
+    return metrics
+
+# ----------------------------
 # MAIN PIPELINE
 # ----------------------------
 
@@ -61,7 +94,6 @@ def run_step_04():
     Returns:
         None
     """
-    analyzer = SampleAnalyzer()
     files = list(INPUT_DIR.glob("*.parquet"))
 
     if not files:
@@ -70,19 +102,24 @@ def run_step_04():
 
     for file in files:
         print(f"\nProcessing: {file.name}")
-
         df = pd.read_parquet(file).reset_index(drop=True)
+
         codes = df["code"].to_numpy()
         langs = df["language"].to_numpy()
         labels = df["label"].to_numpy()
 
-        metrics_list = []
+        inputs = list(zip(codes, langs, labels))
 
-        # Extraction Loop
-    for code, lang, label in tqdm(zip(codes, langs, labels), total=len(df), desc="Analyzing"):
-        tree = analyzer.get_valid_tree(code, lang, label)
-        metrics = analyzer.calculate_metrics(code, tree)
-        metrics_list.append(metrics)
+        with ProcessPoolExecutor(
+            max_workers=MAX_WORKERS,
+            initializer=init_worker
+        ) as executor:
+
+            metrics_list = list(tqdm(
+                executor.map(process_sample, inputs),
+                total=len(df),
+                desc="Analyzing"
+            ))
 
         # Integration
         df_metrics = pd.DataFrame.from_records(metrics_list)

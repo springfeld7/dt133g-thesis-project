@@ -68,7 +68,7 @@ class SampleAnalyzer:
 
         return tree
 
-    def calculate_metrics(self, code: str, tree: TSNode) -> dict:
+    def calculate_metrics(self, code: str, tree: TSNode | None) -> dict:
         """
         Calculates stylistic and structural metrics for a validated sample.
 

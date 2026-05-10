@@ -3,19 +3,18 @@
 Step 03: Semantic Cleaning Layer (VarCLR-based Deduplication with HNSW)
 """
 
+from .utils import env_init
 from pathlib import Path
 from collections import Counter, defaultdict
 import random
-from .utils import env_init
 import numpy as np
 import pandas as pd
 import re
 import torch
-import faiss
 from tqdm import tqdm
 from transformers import AutoTokenizer
 
-from evaluation.varclr.models.encoders import BERT
+from evaluation.varclr.models.encoders import BERT, Encoder
 from evaluation.varclr.models import urls_pretrained_model
 from .utils.calculate_balance_score import calculate_balance_score
 
@@ -40,9 +39,8 @@ SIM_THRESHOLD = 0.85
 MAX_TOKENS = 510  # We reserve 2 tokens for special tokens of the model.
 STRIDE = 256
 
-HNSW_M = 32
-HNSW_EF_CONSTRUCTION = 200
-HNSW_EF_SEARCH = 128
+ANNOY_TREES = 50
+ANNOY_SEARCH_K = -1 # -1 means use default (n_trees * k)
 
 
 class DSU:
@@ -122,7 +120,7 @@ def chunk_text(text: str, tokenizer, max_tokens: int = 510, stride: int = 256) -
     return chunks
 
 
-def embed_batch(model: torch.nn.Module, texts: list[str], tokenizer: AutoTokenizer) -> np.ndarray:
+def embed_batch(model: Encoder, texts: list[str], tokenizer: AutoTokenizer) -> np.ndarray:
     """
     Flattens all chunks from the text batch into a single GPU pass.
 
@@ -179,14 +177,13 @@ def embed_batch(model: torch.nn.Module, texts: list[str], tokenizer: AutoTokeniz
 
 def run_step_03():
     """
-    Executes the VarCLR + HNSW semantic deduplication pipeline.
+    Executes the VarCLR + Annoy semantic deduplication pipeline.
 
     This includes:
     1. Embedding generation.
-    2. HNSW indexing for Approximate Nearest Neighbor (ANN) search.
+    2. Annoy indexing for Approximate Nearest Neighbor (ANN) search.
     3. Disjoint Set Union (DSU) clustering of near-duplicates.
     4. Proportional fair selection to protect smaller datasets.
-    5.
     """
 
     # ----------------------------
@@ -231,59 +228,51 @@ def run_step_03():
     texts = [r["code_normalized"] for r in rows]
 
     # ----------------------------
-    # FAISS INDEX INITIALIZATION (lazy init)
-    # We only create index after first embedding batch to infer dimension
+    # ANNOY INDEX INITIALIZATION (lazy init)
     # ----------------------------
     dim = None
     index = None
 
-    print("Building FAISS index...")
+    print("Building Annoy index...")
 
     # ----------------------------
-    # EMBEDDING + INDEX BUILD (STREAMING)
-    # This avoids storing all embeddings in memory at once
-    # Critical for scaling to ~1M+ samples
+    # EMBEDDING + INDEX BUILD
     # ----------------------------
-    for i in tqdm(range(0, len(texts), BATCH_SIZE), desc="Encoding+Indexing"):
+    for i in tqdm(range(0, len(texts), BATCH_SIZE), desc="Encoding"):
         batch = texts[i : i + BATCH_SIZE]
 
         # GPU forward pass → embeddings
         emb = embed_batch(model, batch, tokenizer)
+        
+        # Normalize for cosine similarity
+        norms = np.linalg.norm(emb, axis=1, keepdims=True)
+        emb = emb / (norms + 1e-10)
 
-        # Normalize for cosine similarity via inner product
-        faiss.normalize_L2(emb)
-
-        # Initialize FAISS index once we know embedding dimension
-        if index is None:
+        if dim is None:
             dim = emb.shape[1]
-            index = faiss.IndexHNSWFlat(dim, HNSW_M, faiss.METRIC_INNER_PRODUCT)
-            index.hnsw.efConstruction = HNSW_EF_CONSTRUCTION
-            index.hnsw.efSearch = HNSW_EF_SEARCH
+            index = annoy.AnnoyIndex(dim, 'angular')
 
-        index.add(emb)
+        for vector in emb:
+            index.add_item(index.get_n_items(), vector)
+
+    print(f"Building trees ({ANNOY_TREES})...")
+    index.build(ANNOY_TREES)
 
     # ----------------------------
     # NEAREST NEIGHBOR SEARCH
-    # WARNING: reconstruct_n() scales with index size
-    # For very large datasets, consider batched search instead
     # ----------------------------
     print("Running ANN search...")
-    D_list, I_list = [], []
-    batch_size_search = 100000
+    I = []
+    D = []
 
-    for i in tqdm(range(0, index.ntotal, batch_size_search), desc="Searching"):
-        # Pull only a small chunk of vectors to query
-        n_to_extract = min(batch_size_search, index.ntotal - i)
-        query_vectors = index.reconstruct_n(i, n_to_extract)
+    for i in tqdm(range(len(texts)), desc="Searching"):
+        # Distance is sqrt(2 - 2*cos(theta)) for angular, so we convert back to cosine similarity
+        indices, distances = index.get_nns_by_item(i, KNN, search_k=ANNOY_SEARCH_K, include_distances=True)
 
-        # Search for neighbors for this chunk
-        batch_d, batch_i = index.search(query_vectors, KNN)
-        D_list.append(batch_d)
-        I_list.append(batch_i)
-
-    # Stack results back into full arrays
-    D = np.vstack(D_list)
-    I = np.vstack(I_list)
+        similarities = [1.0 - (d**2 / 2.0) for d in distances]
+        
+        I.append(indices)
+        D.append(similarities)
 
     # ----------------------------
     # DSU CLUSTERING
@@ -294,7 +283,7 @@ def run_step_03():
 
     for i in range(len(rows)):
         for neighbor_idx, sim in zip(I[i], D[i]):
-            if neighbor_idx != i and neighbor_idx != -1:
+            if neighbor_idx != i:
                 if sim >= SIM_THRESHOLD:
                     dsu.union(i, neighbor_idx)
 

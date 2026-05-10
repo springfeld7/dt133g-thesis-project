@@ -38,7 +38,7 @@ class DatasetManager:
         """
         self.repo_id = repo_id
 
-    def authenticate(self, token: str = None) -> None:
+    def authenticate(self, token: str | None = None) -> None:
         """
         Secures access to the Hugging Face repository.
 
@@ -124,13 +124,14 @@ def main():
         # streaming datasets don't always expose full metadata reliably
         try:
             features = stream.features
-            print(f"Columns: {list(features.keys())}")
+            print(f"Columns: {list(features.keys() if features else "")}")
         except Exception:
             print("Could not infer full schema from streaming dataset.")
 
         try:
-            expected_rows = stream.info.splits["train"].num_examples
-            print(f"Total Rows (Metadata): {expected_rows}")
+            if stream.info.splits:
+                expected_rows = stream.info.splits["train"].num_examples
+                print(f"Total Rows (Metadata): {expected_rows}")
         except Exception:
             print("Total row count not available in streaming mode.")
 

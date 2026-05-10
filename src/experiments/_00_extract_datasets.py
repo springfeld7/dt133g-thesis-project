@@ -11,12 +11,14 @@ The script also produces dataset-level statistics and writes a global normalizat
 to support reproducibility and dataset quality analysis.
 """
 
-import hashlib
-from pathlib import Path
-from collections import defaultdict
+from numpy import isin
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import hashlib
+from pathlib import Path
+from collections import defaultdict
+from datasets import IterableDataset
 from concurrent.futures import ProcessPoolExecutor
 
 from .utils.dataset_manager import DatasetManager
@@ -48,7 +50,7 @@ BATCH_SIZE = 10_000
 # ----------------------------
 
 
-def _normalize_language(lang: str) -> str | None:
+def _normalize_language(lang: str | None) -> str | None:
     """
     Normalizes raw language labels into a unified set.
 
@@ -63,7 +65,7 @@ def _normalize_language(lang: str) -> str | None:
     Returns:
         str | None: Normalized language string or None if unsupported.
     """
-    if not isinstance(lang, str):
+    if not lang or not isinstance(lang, str):
         return None
 
     lang = lang.strip().lower()
@@ -209,55 +211,56 @@ def process_dataset(item) -> dict:
     label_counter = defaultdict(int)
     seen_hashes = set()
 
-    for entry in stream:
-        stats["total"] += 1
+    if isinstance(stream, IterableDataset):
+        for entry in stream:
+            stats["total"] += 1
 
-        code = _extract_code(entry)
-        lang = _extract_language(entry)
-        label = _extract_label(entry)
+            code = _extract_code(entry)
+            lang = _extract_language(entry)
+            label = _extract_label(entry)
 
-        if not isinstance(code, str) or str(code).strip() == "":
-            continue
+            if not isinstance(code, str) or str(code).strip() == "":
+                continue
 
-        code_hash = hashlib.md5(code.encode("utf-8")).hexdigest()
-        if code_hash in seen_hashes:
-            stats["duplicates"] += 1
-            continue
-        seen_hashes.add(code_hash)
+            code_hash = hashlib.md5(code.encode("utf-8")).hexdigest()
+            if code_hash in seen_hashes:
+                stats["duplicates"] += 1
+                continue
+            seen_hashes.add(code_hash)
 
-        norm_lang = _normalize_language(lang)
-        if norm_lang is None:
-            stats["dropped_lang"] += 1
-            continue
+            norm_lang = _normalize_language(lang)
+            if norm_lang is None:
+                stats["dropped_lang"] += 1
+                continue
 
-        norm_label = _normalize_label(label, name)
-        if norm_label is None:
-            stats["dropped_label"] += 1
-            continue
+            norm_label = _normalize_label(label, name)
+            if norm_label is None:
+                stats["dropped_label"] += 1
+                continue
 
-        batch.append(
-            {
-                "code": code,
-                "language": norm_lang,
-                "label": norm_label,
-                "code_hash": code_hash,
-            }
-        )
+            batch.append(
+                {
+                    "code": code,
+                    "language": norm_lang,
+                    "label": norm_label,
+                    "code_hash": code_hash,
+                }
+            )
 
-        stats["kept"] += 1
-        lang_counter[norm_lang] += 1
-        label_counter[norm_label] += 1
+            stats["kept"] += 1
+            lang_counter[norm_lang] += 1
+            label_counter[norm_label] += 1
 
-        if len(batch) >= BATCH_SIZE:
-            table = pa.Table.from_pandas(pd.DataFrame(batch))
+            if len(batch) >= BATCH_SIZE:
+                table = pa.Table.from_pandas(pd.DataFrame(batch))
 
-            if writer is None:
-                writer = pq.ParquetWriter(output_path, table.schema)
+                if writer is None:
+                    writer = pq.ParquetWriter(output_path, table.schema)
 
-            writer.write_table(table)
-            processed_count += len(batch)
-            print(f"[{name}] Written {processed_count:,} samples...")
-            batch.clear()
+                writer.write_table(table)
+                processed_count += len(batch)
+                print(f"[{name}] Written {processed_count:,} samples...")
+                batch.clear()
 
     # Final flush for the last partial batch
     if batch:

@@ -19,6 +19,7 @@ import pandas as pd
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 
+import ...notebooks
 from .utils.analysis import SampleAnalyzer
 from .utils.resource_manager import ResourceManager
 

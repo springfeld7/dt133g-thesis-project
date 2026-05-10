@@ -61,11 +61,6 @@ def normalize_sample(
     return tree.to_code()
 
 
-def fairness_score(ds_name: str, remaining_counts: dict, initial_counts: dict) -> float:
-    """Returns ratio of remaining data to protect smaller datasets."""
-    return remaining_counts[ds_name] / (initial_counts[ds_name] + 1e-9)
-
-
 # ----------------------------
 # MAIN PIPELINE
 # ----------------------------

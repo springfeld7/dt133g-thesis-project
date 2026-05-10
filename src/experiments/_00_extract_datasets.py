@@ -28,10 +28,10 @@ from .utils.resource_manager import ResourceManager
 # ----------------------------
 
 DATASETS = {
-    # "droidcollection": "DaniilOr/DroidCollection",
+    "droidcollection": "DaniilOr/DroidCollection",
     "hairosetta": "isThisYouLLM/H-AIRosettaMP",
-    # "codet_m4": "DaniilOr/CoDET-M4",
-    # "ai_detector": "mhb-maaz/ai-detector-dataset",
+    "codet_m4": "DaniilOr/CoDET-M4",
+    "ai_detector": "mhb-maaz/ai-detector-dataset",
 }
 
 OUTPUT_DIR = Path("data/_00_extracted_datasets")

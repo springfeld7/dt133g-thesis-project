@@ -10,6 +10,7 @@ comment removal for normalization.
 Since the TranStructIVER parser is used, samples that are considered unmeaningful are filtered out.
 """
 
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 import hashlib
 import pandas as pd
@@ -23,31 +24,45 @@ from transtructiver.mutation.mutation_context import MutationContext
 # CONFIG
 # ----------------------------
 
-INPUT_DIR = Path("data/_00_extract_datasets")
+INPUT_DIR = Path("data/_00_extracted_datasets")
 OUTPUT_DIR = Path("data/_01_normalized_datasets")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+BATCH_SIZE = 256
+MAX_WORKERS = min(16, len(os.sched_getaffinity(0)) - 2)
+
+# ----------------------------
+# WORKER INITIALIZATION
+# ----------------------------
+
+
+def init_worker():
+    """
+    Initializes heavy objects inside each process worker.
+
+    This avoids pickling issues and ensures thread/process safety
+    for TranStructIVER components.
+    """
+    global parser, comment_rule, context
+
+    parser = Parser()
+    comment_rule = CommentDeletionRule(level=3)
+    context = MutationContext()
+
 
 # ----------------------------
 # HELPERS
 # ----------------------------
 
 
-def normalize_sample(
-    parser: Parser,
-    comment_rule: CommentDeletionRule,
-    code: str,
-    lang: str,
-    context: MutationContext,
-) -> str | None:
+def normalize_sample(code: str, lang: str) -> str | None:
     """
     Parses, removes comments, and returns normalized code.
 
     Args:
-        parser: TranStructIVER parser instance.
-        comment_rule: Instance of CommentDeletionRule for comment removal.
         code: Raw source code string to normalize.
         lang: Language of the source code.
-        context: Mutation context for handling transformations.
+
     Returns:
         str | None: Normalized code string or None if parsing fails.
     """
@@ -59,6 +74,56 @@ def normalize_sample(
     comment_rule.apply(tree, context)
 
     return tree.to_code()
+
+
+def chunk_list(data, batch_size: int):
+    """
+    Splits a list into smaller batches.
+
+    Args:
+        data (list): Input list.
+        batch_size (int): Size of each batch.
+
+    Yields:
+        list: Chunked batch of data.
+    """
+    for i in range(0, len(data), batch_size):
+        yield data[i : i + batch_size]
+
+
+def process_batch(batch):
+    """
+    Processes a batch of dataset rows in a single worker process.
+
+    Each batch:
+    - parses code
+    - removes comments
+    - filters invalid samples
+    - returns normalized rows
+
+    Args:
+        batch (list): List of pandas row objects (itertuples).
+
+    Returns:
+        list[dict]: Cleaned and normalized rows.
+    """
+    results = []
+
+    for row in batch:
+        norm_code = normalize_sample(row.code, row.language)
+
+        if norm_code is None or not str(norm_code).strip():
+            continue
+
+        results.append(
+            {
+                **row._asdict(),
+                "code_normalized": norm_code,
+                "normalized_hash": hashlib.md5(norm_code.encode("utf-8")).hexdigest(),
+            }
+        )
+
+    return results
 
 
 # ----------------------------
@@ -77,39 +142,29 @@ def run_step_01():
         print(f"No parquet files found in {INPUT_DIR}")
         return
 
-    parser = Parser()
-    context = MutationContext()
-    comment_rule = CommentDeletionRule(level=3)
-
     for f in files:
         print(f"\nProcessing: {f.name}")
         df = pd.read_parquet(f)
         print(f"Initial samples: {len(df)}")
 
+        rows = list(df.itertuples(index=False))
+        batches = chunk_list(rows, BATCH_SIZE)
+
         valid_rows = []
-        removed_samples = 0
 
-        for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Normalizing {f.stem}"):
+        with ProcessPoolExecutor(max_workers=MAX_WORKERS, initializer=init_worker) as executor:
 
-            norm_code = normalize_sample(
-                parser, comment_rule, row["code"], row.get("language"), context
-            )
-
-            # Remove invalid / unmeaningful samples
-            if norm_code is None or str(norm_code).strip() == "":
-                removed_samples += 1
-                continue
-
-            row = row.copy()
-
-            row["code_normalized"] = norm_code
-            row["normalized_hash"] = hashlib.md5(norm_code.encode("utf-8")).hexdigest()
-
-            valid_rows.append(row)
+            for batch_result in tqdm(
+                executor.map(process_batch, batches),
+                total=len(batches),
+                desc=f"Normalizing {f.stem}",
+            ):
+                for item in batch_result:
+                    valid_rows.append(item)
 
         df_clean = pd.DataFrame(valid_rows)
 
-        print(f"Removed {removed_samples} invalid samples from {f.stem}")
+        print(f"Removed samples: {len(df) - len(df_clean)}")
         print(f"Remaining samples: {len(df_clean)}")
 
         df_clean.to_parquet(OUTPUT_DIR / f.name, index=False)

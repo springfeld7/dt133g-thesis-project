@@ -17,6 +17,8 @@ from collections import defaultdict
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from concurrent.futures import ProcessPoolExecutor
+import os
 
 from .sample_selection.dataset_manager import DatasetManager
 
@@ -32,8 +34,8 @@ DATASETS = {
     "ai_detector": "mhb-maaz/ai-detector-dataset",
 }
 
-OUTPUT_DIR = Path("data/_00_extract_datasets")
-REPORT_PATH = Path("output/_00_extract_datasets_report.txt")
+OUTPUT_DIR = Path("data/_00_extracted_datasets")
+REPORT_PATH = Path("output/_00_extracted_datasets_report.txt")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -162,28 +164,28 @@ def _extract_label(entry: dict):
 
 
 # ----------------------------
-# DATASET PROCESSOR
+# WORKER FUNCTION
 # ----------------------------
 
 
-def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
+def process_dataset(item) -> dict:
     """
-    Processes a single Hugging Face dataset and normalizes it.
+    Worker wrapper for parallel dataset processing.
 
-    Steps:
-        1. Loads dataset (train split only)
-        2. Extracts code, language, and label
-        3. Normalizes schema into unified format
-        4. Tracks dataset statistics
-        5. Writes output as Parquet file in batches
+    Each process must create its own DatasetManager instance
+    to avoid shared state / authentication / streaming issues.
 
     Args:
-        name (str): Internal dataset name identifier.
-        repo_id (str): Hugging Face dataset repository ID.
+        item (tuple): (name, repo_id) for the dataset to process.
 
     Returns:
         dict: Summary statistics and distribution information for the dataset.
     """
+    name, repo_id = item
+
+    manager = DatasetManager()
+    manager.authenticate()
+
     print(f"\n--- Processing {name} ---")
 
     manager.set_repo(repo_id)
@@ -214,7 +216,6 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
         lang = _extract_language(entry)
         label = _extract_label(entry)
 
-        # Filter out entries with missing/invalid code early
         if not isinstance(code, str) or str(code).strip() == "":
             continue
 
@@ -251,14 +252,11 @@ def process_dataset(name: str, repo_id: str, manager: DatasetManager) -> dict:
             table = pa.Table.from_pandas(pd.DataFrame(batch))
 
             if writer is None:
-                # Initialize the writer with the schema of the first batch
                 writer = pq.ParquetWriter(output_path, table.schema)
 
             writer.write_table(table)
-            print(f"Appended {len(batch)} rows to {output_path}...")
             batch.clear()
 
-    # flush remaining batch
     if batch:
         table = pa.Table.from_pandas(pd.DataFrame(batch))
         if writer is None:
@@ -350,14 +348,14 @@ def run_step_00():
         - Collection of dataset statistics
         - Generation of final normalization report
     """
+    items = list(DATASETS.items())
     results = []
 
-    manager = DatasetManager()
-    manager.authenticate()
+    max_workers = min(len(items), len(os.sched_getaffinity(0)))
 
-    for name, repo_id in DATASETS.items():
-        result = process_dataset(name, repo_id, manager)
-        results.append(result)
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        for result in executor.map(process_dataset, items):
+            results.append(result)
 
     write_report(results)
 

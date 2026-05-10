@@ -18,9 +18,9 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from concurrent.futures import ProcessPoolExecutor
-import os
 
-from .sample_selection.dataset_manager import DatasetManager
+from .utils.dataset_manager import DatasetManager
+from .utils.resource_manager import ResourceManager
 
 
 # ----------------------------
@@ -28,10 +28,10 @@ from .sample_selection.dataset_manager import DatasetManager
 # ----------------------------
 
 DATASETS = {
-    "droidcollection": "DaniilOr/DroidCollection",
+    # "droidcollection": "DaniilOr/DroidCollection",
     "hairosetta": "isThisYouLLM/H-AIRosettaMP",
-    "codet_m4": "DaniilOr/CoDET-M4",
-    "ai_detector": "mhb-maaz/ai-detector-dataset",
+    # "codet_m4": "DaniilOr/CoDET-M4",
+    # "ai_detector": "mhb-maaz/ai-detector-dataset",
 }
 
 OUTPUT_DIR = Path("data/_00_extracted_datasets")
@@ -195,6 +195,7 @@ def process_dataset(item) -> dict:
 
     batch = []
     writer = None
+    processed_count = 0
 
     stats = {
         "total": 0,
@@ -206,7 +207,6 @@ def process_dataset(item) -> dict:
 
     lang_counter = defaultdict(int)
     label_counter = defaultdict(int)
-
     seen_hashes = set()
 
     for entry in stream:
@@ -255,8 +255,11 @@ def process_dataset(item) -> dict:
                 writer = pq.ParquetWriter(output_path, table.schema)
 
             writer.write_table(table)
+            processed_count += len(batch)
+            print(f"[{name}] Written {processed_count:,} samples...")
             batch.clear()
 
+    # Final flush for the last partial batch
     if batch:
         table = pa.Table.from_pandas(pd.DataFrame(batch))
         if writer is None:
@@ -266,7 +269,7 @@ def process_dataset(item) -> dict:
     if writer:
         writer.close()
 
-    print(f"Finished {name}")
+    print(f"--- Finished: {name} ---")
 
     return {
         "name": name,
@@ -343,15 +346,19 @@ def run_step_00():
     """
     Executes dataset normalization pipeline across all configured datasets.
 
-    This function orchestrates:
-        - Sequential dataset processing
-        - Collection of dataset statistics
-        - Generation of final normalization report
+    This function orchestrates the parallelization strategy by:
+        - Mapping each dataset to a single dedicated worker process.
+        - Using ProcessPoolExecutor to manage the lifecycle of these workers.
+        - Gathering results and passing them to the report generator.
+
+    Note:
+        The number of workers is dynamically set to match the number of datasets
+        to ensure one worker per dataset.
     """
     items = list(DATASETS.items())
     results = []
 
-    max_workers = min(len(items), len(os.sched_getaffinity(0)))
+    max_workers = min(len(items), ResourceManager.get_cpu_limit())
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         for result in executor.map(process_dataset, items):

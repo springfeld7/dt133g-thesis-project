@@ -11,7 +11,6 @@ Since the TranStructIVER parser is used, samples that are considered unmeaningfu
 """
 
 from concurrent.futures import ProcessPoolExecutor
-import os
 from pathlib import Path
 import hashlib
 import pandas as pd
@@ -20,6 +19,7 @@ from tqdm import tqdm
 from transtructiver.parsing.parser import Parser
 from transtructiver.mutation.rules.comment_deletion import CommentDeletionRule
 from transtructiver.mutation.mutation_context import MutationContext
+from .utils.resource_manager import ResourceManager
 
 # ----------------------------
 # CONFIG
@@ -30,11 +30,12 @@ OUTPUT_DIR = Path("data/_01_normalized_datasets")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 BATCH_SIZE = 256
-MAX_WORKERS = min(16, len(os.sched_getaffinity(0)) - 2)
+MAX_WORKERS = ResourceManager.get_cpu_limit()
 
 # ----------------------------
 # WORKER INITIALIZATION
 # ----------------------------
+
 
 def init_worker():
     """
@@ -49,9 +50,11 @@ def init_worker():
     comment_rule = CommentDeletionRule(level=3)
     context = MutationContext()
 
+
 # ----------------------------
 # HELPERS
 # ----------------------------
+
 
 def normalize_sample(code: str, lang: str) -> str | None:
     """
@@ -73,6 +76,7 @@ def normalize_sample(code: str, lang: str) -> str | None:
 
     return tree.to_code()
 
+
 def chunk_list(data, batch_size: int):
     """
     Splits a list into smaller batches.
@@ -85,7 +89,8 @@ def chunk_list(data, batch_size: int):
         list: Chunked batch of data.
     """
     for i in range(0, len(data), batch_size):
-        yield data[i:i + batch_size]
+        yield data[i : i + batch_size]
+
 
 def process_batch(batch):
     """
@@ -106,24 +111,26 @@ def process_batch(batch):
     results = []
 
     for row in batch:
-        norm_code = normalize_sample(row.code, row.language)
+        norm_code = normalize_sample(row["code"], row["language"])
 
         if norm_code is None or not str(norm_code).strip():
             continue
 
-        results.append({
-            **row._asdict(),
-            "code_normalized": norm_code,
-            "normalized_hash": hashlib.md5(
-                norm_code.encode("utf-8")
-            ).hexdigest(),
-        })
+        results.append(
+            {
+                **row,
+                "code_normalized": norm_code,
+                "normalized_hash": hashlib.md5(norm_code.encode("utf-8")).hexdigest(),
+            }
+        )
 
     return results
+
 
 # ----------------------------
 # MAIN PIPELINE
 # ----------------------------
+
 
 def run_step_01():
     """
@@ -141,23 +148,20 @@ def run_step_01():
         df = pd.read_parquet(f)
         print(f"Initial samples: {len(df)}")
 
-        rows = list(df.itertuples(index=False))
-        batches = chunk_list(rows, BATCH_SIZE)
+        rows = df.to_dict(orient="records")
+        num_batches = (len(rows) + BATCH_SIZE - 1) // BATCH_SIZE
+        batches = list(chunk_list(rows, BATCH_SIZE))
 
         valid_rows = []
 
-        with ProcessPoolExecutor(
-            max_workers=MAX_WORKERS,
-            initializer=init_worker
-        ) as executor:
+        with ProcessPoolExecutor(max_workers=MAX_WORKERS, initializer=init_worker) as executor:
 
             for batch_result in tqdm(
                 executor.map(process_batch, batches),
-                total=len(batches),
-                desc=f"Normalizing {f.stem}"
+                total=num_batches,
+                desc=f"Normalizing {f.stem}",
             ):
-                for item in batch_result:
-                    valid_rows.append(item)
+                valid_rows.extend(batch_result)
 
         df_clean = pd.DataFrame(valid_rows)
 

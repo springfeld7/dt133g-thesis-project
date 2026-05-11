@@ -6,10 +6,10 @@ including edge cases with various node types, Unicode content, and tree structur
 
 import pytest
 from tree_sitter import Node as TSNode, Parser as TSParser
-from tree_sitter_language_pack import get_language
 
 from src.transtructiver.node import Node
 from src.transtructiver.parsing.converter import convert_node
+from transtructiver.utils.languages import get_language
 
 
 @pytest.fixture
@@ -40,7 +40,8 @@ class TestConvertNodeBasics:
         code = "42"
         source_bytes = bytes(code, "utf8")
         tree = parser_setup.parse(source_bytes)
-        leaf = tree.root_node.children[0]  # Navigate to a leaf node
+        child = tree.root_node.children[0]  # Navigate to a leaf node
+        leaf = child.children[0]
 
         node = convert_node(leaf, source_bytes)
 

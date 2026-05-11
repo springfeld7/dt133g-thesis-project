@@ -39,7 +39,12 @@ class PythonAnnotator(BaseAnnotator):
     }
 
     def handle_special_node(self, node: Node, parent: Node) -> bool:
-        if node.type == "string" and parent.type in {"module", "block"}:
+        if (
+            node.type == "string"
+            and parent.type == "expression_statement"
+            and parent.parent
+            and parent.parent.type in {"module", "block"}
+        ):
             if any(
                 child.type in {"string_start", "string_end"} and child.text in ('"""', "'''")
                 for child in node.children

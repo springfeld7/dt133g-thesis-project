@@ -9,7 +9,6 @@ from tkinter import N
 
 import pytest
 from tree_sitter import Parser as TSParser
-from tree_sitter_language_pack import get_language
 
 from transtructiver.node import Node
 from transtructiver.parsing.adapter import convert_node
@@ -17,6 +16,7 @@ from transtructiver.parsing.adapter import convert_node
 from transtructiver.parsing.annotation.annotator import annotate
 from transtructiver.parsing.annotation.annotators import *
 from transtructiver.parsing.annotation.builtin_checker import make_profile_from_files
+from transtructiver.utils.languages import get_language
 import os
 
 

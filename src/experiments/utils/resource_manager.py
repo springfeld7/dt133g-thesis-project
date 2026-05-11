@@ -34,7 +34,7 @@ class ResourceManager:
         if hasattr(os, "sched_getaffinity"):
             try:
                 # 0 refers to the process ID of the current process
-                return len(os.sched_getaffinity(0))
+                return len(os.sched_getaffinity(0))  # type: ignore
             except (AttributeError, OSError, NotImplementedError):
                 # Fallback if affinity call fails despite attribute existing
                 pass

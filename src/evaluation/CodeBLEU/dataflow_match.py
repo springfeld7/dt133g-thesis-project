@@ -8,7 +8,7 @@ from .parser import (
     index_to_code_token,
 )
 from tree_sitter import Parser
-from tree_sitter_language_pack import get_language
+from ...experiments.utils.languages import get_language
 
 dfg_function = {
     "python": DFG_python,

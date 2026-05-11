@@ -4,7 +4,7 @@
 from .parser import DFG_python, DFG_java, DFG_ruby, DFG_go, DFG_php, DFG_javascript, DFG_csharp
 from .parser import remove_comments_and_docstrings
 from tree_sitter import Parser
-from tree_sitter_language_pack import get_language
+from ...experiments.utils.languages import get_language
 
 dfg_function = {
     "python": DFG_python,

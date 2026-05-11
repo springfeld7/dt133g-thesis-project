@@ -6,6 +6,7 @@ Step 03: Semantic Cleaning Layer (VarCLR-based Deduplication with HNSW)
 from .utils import env_init
 from pathlib import Path
 from collections import Counter, defaultdict
+import annoy
 import random
 import numpy as np
 import pandas as pd
@@ -40,7 +41,7 @@ MAX_TOKENS = 510  # We reserve 2 tokens for special tokens of the model.
 STRIDE = 256
 
 ANNOY_TREES = 50
-ANNOY_SEARCH_K = -1 # -1 means use default (n_trees * k)
+ANNOY_SEARCH_K = -1  # -1 means use default (n_trees * k)
 
 
 class DSU:
@@ -227,13 +228,12 @@ def run_step_03():
 
     texts = [r["code_normalized"] for r in rows]
 
-    # ----------------------------
-    # ANNOY INDEX INITIALIZATION (lazy init)
-    # ----------------------------
-    dim = None
-    index = None
-
     print("Building Annoy index...")
+
+    # Determine dimension from the first sample to initialize index cleanly
+    first_emb = embed_batch(model, texts[:1], tokenizer)
+    dim = first_emb.shape[1]
+    index = annoy.AnnoyIndex(dim, "angular")
 
     # ----------------------------
     # EMBEDDING + INDEX BUILD
@@ -243,20 +243,17 @@ def run_step_03():
 
         # GPU forward pass → embeddings
         emb = embed_batch(model, batch, tokenizer)
-        
+
         # Normalize for cosine similarity
         norms = np.linalg.norm(emb, axis=1, keepdims=True)
         emb = emb / (norms + 1e-10)
 
-        if dim is None:
-            dim = emb.shape[1]
-            index = annoy.AnnoyIndex(dim, 'angular')
-
         for vector in emb:
             index.add_item(index.get_n_items(), vector)
 
-    print(f"Building trees ({ANNOY_TREES})...")
-    index.build(ANNOY_TREES)
+    if index.get_n_items() > 0:
+        print(f"Building trees ({ANNOY_TREES})...")
+        index.build(ANNOY_TREES)
 
     # ----------------------------
     # NEAREST NEIGHBOR SEARCH
@@ -267,10 +264,12 @@ def run_step_03():
 
     for i in tqdm(range(len(texts)), desc="Searching"):
         # Distance is sqrt(2 - 2*cos(theta)) for angular, so we convert back to cosine similarity
-        indices, distances = index.get_nns_by_item(i, KNN, search_k=ANNOY_SEARCH_K, include_distances=True)
+        indices, distances = index.get_nns_by_item(
+            i, KNN, search_k=ANNOY_SEARCH_K, include_distances=True
+        )
 
         similarities = [1.0 - (d**2 / 2.0) for d in distances]
-        
+
         I.append(indices)
         D.append(similarities)
 

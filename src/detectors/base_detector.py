@@ -12,7 +12,7 @@ Supported Architectures:
 - UniXcoder (AST-aware)
 """
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Optional
 import torch
 import torch.nn.functional as F
@@ -60,7 +60,9 @@ class AuthorshipDetector(torch.nn.Module):
         pass
 
     @torch.no_grad()
-    def get_inference_data(self, code_snippet: str, original_embedding: Optional[torch.Tensor] = None):
+    def get_inference_data(
+        self, code_snippet: str, original_embedding: Optional[torch.Tensor] = None
+    ):
         """
         The core experiment method. Performs a single forward pass to
         extract both the categorical prediction and the latent embedding.

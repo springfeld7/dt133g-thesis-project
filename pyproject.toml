@@ -28,6 +28,7 @@ dependencies = [
     "scikit-learn>=1.8.0",
     "torchvision",
     "torchaudio",
+    "annoy>=1.17.3",
 ]
 
 [project.scripts]

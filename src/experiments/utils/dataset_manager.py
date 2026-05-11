@@ -124,7 +124,7 @@ def main():
         # streaming datasets don't always expose full metadata reliably
         try:
             features = stream.features
-            print(f"Columns: {list(features.keys() if features else "")}")
+            print(f"Columns: {list(features.keys() if features else " ")}")
         except Exception:
             print("Could not infer full schema from streaming dataset.")
 

@@ -7,7 +7,7 @@ stylistic attributes of source code samples from the DroidCollection.
 from typing import Iterator, cast
 
 from tree_sitter import Node as TSNode, Parser as TSParser, Point
-from tree_sitter_language_pack import SupportedLanguage, get_language
+from .languages import get_language
 from transtructiver.parsing.parser import Parser
 
 
@@ -61,7 +61,7 @@ class SampleAnalyzer:
         if not lang or not label or not (code and code.strip()):
             return None
 
-        self._ts_parser.language = get_language(cast(SupportedLanguage, lang.lower()))
+        self._ts_parser.language = get_language(lang)
         tree = self._ts_parser.parse(bytes(code, "utf8")).root_node
         if not tree:
             return None

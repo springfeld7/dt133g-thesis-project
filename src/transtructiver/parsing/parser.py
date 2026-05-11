@@ -4,12 +4,12 @@ This module defines a Parser class that produces a CST using Tree-sitter
 and converts the resulting syntax tree into the project's Node structure.
 """
 
-from tree_sitter import Node as TSNode
+from tree_sitter import Language, Node as TSNode
 from tree_sitter import Parser as TSParser
-from tree_sitter_language_pack import get_language, SupportedLanguage, LanguageNotFoundError
 from typing import cast
 from .adapter import adapt
 from ..node import Node
+from ..utils.languages import get_language
 
 # Keywords used to identify nodes with meaningful code logic.
 # These patterns match node types that represent substantive program constructs.
@@ -186,9 +186,9 @@ class Parser:
             ValueError: If the specified language is not supported.
         """
         try:
-            ts_language = get_language(cast(SupportedLanguage, language.lower()))
-        except LanguageNotFoundError:
-            raise ValueError(f"Unsupported language: {language}")
+            ts_language = get_language(language)
+        except ValueError as e:
+            raise ValueError(f"Unsupported language: {language}") from e
 
         try:
             code.encode("utf-8")

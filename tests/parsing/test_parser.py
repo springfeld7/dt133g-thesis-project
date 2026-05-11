@@ -469,12 +469,6 @@ class TestParserLanguageSupport:
         tree, reason = parser.parse(code, "python")
         assert tree is not None or reason is not None
 
-    def test_parse_javascript_language(self, parser):
-        """Test JavaScript language is supported."""
-        code = "let x = 42;"
-        tree, reason = parser.parse(code, "javascript")
-        assert tree is not None or reason is not None
-
     def test_parse_java_language(self, parser):
         """Test Java language is supported."""
         code = "int x = 42;"

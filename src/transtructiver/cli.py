@@ -12,6 +12,8 @@ Outputs written per run (inside ``--output-dir``):
 # Python version precheck
 import sys
 
+from tqdm import tqdm
+
 if sys.version_info < (3, 14):
     sys.exit("Error: Python 3.14 or higher is required. Please upgrade your interpreter.")
 
@@ -298,9 +300,12 @@ def run_pipeline(
     ) as outputs:
         index = 0
 
-        for idx, row in loader.iter_snippets(
-            batch_size=pipeline_options.batch_size,
-            start_index=start_index,
+        for idx, row in tqdm(
+            loader.iter_snippets(
+                batch_size=pipeline_options.batch_size,
+                start_index=start_index,
+            ),
+            total=loader.num_rows,
         ):
             index = idx
             snippet_id = f"row_{idx}"

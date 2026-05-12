@@ -21,11 +21,10 @@ class SampleAnalyzer:
 
     Attributes:
         target_languages (set): Set of languages (lowercase) to include.
-        target_labels (set): Set of authorship labels (uppercase) to include.
         parser (Parser): An instance of TranStructIVer's Parser for future CST-based metrics.
     """
 
-    def __init__(self, target_languages: set | None = None, target_labels: set | None = None):
+    def __init__(self, target_languages: set | None = None):
         """
         Initializes the analyzer. If no criteria are passed, it defaults
         to the standard thesis scope (Python/Java/Cpp + Human/Machine).
@@ -36,10 +35,6 @@ class SampleAnalyzer:
         """
         # If nothing is passed, we use  specific thesis targets
         self.target_languages = target_languages or {"java", "python", "cpp"}
-
-        # We normalize labels to uppercase to match the DroidCollection schema
-        labels = target_labels or {"MACHINE_GENERATED", "HUMAN_GENERATED"}
-        self.target_labels = {iter_var.upper() for iter_var in labels}
 
         self._ts_parser = TSParser()
         self._parser = Parser()
@@ -58,7 +53,7 @@ class SampleAnalyzer:
         Returns:
             Node | None: The parsed tree if the sample is valid, otherwise None.
         """
-        if not lang or not label or not (code and code.strip()):
+        if lang is None or label is None or not (isinstance(code, str) and code.strip()):
             return None
 
         self._ts_parser.language = get_language(cast(SupportedLanguage, lang.lower()))

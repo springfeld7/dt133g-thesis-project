@@ -162,7 +162,9 @@ class Parser:
     # Parse
     # ------------------------------------------------------------
 
-    def parse(self, code: str, language: str, annotate: bool = True) -> tuple[Node, None] | tuple[None, str]:
+    def parse(
+        self, code: str, language: str, annotate: bool = True
+    ) -> tuple[Node, None] | tuple[None, str]:
         """Parse source code into a Concrete Syntax Tree (CST).
 
         Parses the provided source code using Tree-sitter, applies
@@ -208,7 +210,7 @@ class Parser:
 
         if annotate:
             return adapt(root_node, source_bytes, language=language), None
-        
+
         converted = convert_node(root_node, source_bytes)
         if language:
             converted.language = language.lower()

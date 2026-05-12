@@ -109,7 +109,7 @@ class BERT(Encoder):
             bert_model=os.path.join(save_path, urls_pretrained_model.PRETRAINED_CODEBERT_FOLDER)
         )
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids, attention_mask):  # type: ignore
         output = self.transformer(
             input_ids=input_ids,
             attention_mask=attention_mask,

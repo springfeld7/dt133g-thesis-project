@@ -62,6 +62,11 @@ class AbstractDataLoader(ABC):
         self.filepath = filepath
         self.checkpoint_path = checkpoint_path or "output/checkpoint.json"
 
+    @property
+    def num_rows(self) -> int:
+        parquet_file = pq.ParquetFile(self.filepath)
+        return parquet_file.metadata.num_rows
+
     @abstractmethod
     def iter_snippets(self, batch_size: int, start_index: int) -> Iterator[tuple]:
         """Yield (global_index, code, language) for each snippet."""

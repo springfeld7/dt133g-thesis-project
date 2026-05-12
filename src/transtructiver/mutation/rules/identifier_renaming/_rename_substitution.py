@@ -1,305 +1,177 @@
-"""Substitution helpers for identifier renaming.
+"""Substitution workflow for identifier renaming.
 
-This module rebuilds an identifier by splitting it into words, moving
-recognized prepositions to the front, and replacing a trailing type-like
-suffix with a deterministic synonym from ``_SUFFIXES``. The resulting
-candidate is then formatted according to language naming conventions
-using ``format_identifier``.
+Provides semantic identifier renaming using masked language modeling and
+cross-encoder similarity scoring. Leverages CodeBERT and VarCLR to generate
+contextually-aware replacement names for identifiers in source code while
+preserving semantic meaning.
 """
 
-from operator import indexOf
+import itertools
+import warnings
+
+warnings.filterwarnings(
+    "ignore", category=DeprecationWarning, module="transformers.models.roberta.tokenization_roberta"
+)
+
 import random
+import torch
+from difflib import SequenceMatcher
+from functools import lru_cache
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-from transtructiver.node import Node
-from transtructiver.mutation.rules.utils.formatter import split_words, format_identifier
+from evaluation.varclr.models.encoders import Encoder
+from ....node import Node
+from ..utils.formatter import format_identifier, split_words
 
-
-# Canonical suffix map that collapses equivalent type names to shared tokens.
-_SUFFIXES = {
-    "list": [
-        "items",
-        "elements",
-        "arr",
-        "array",
-        "buffer",
-        "sequence",
-        "values",
-        "collection",
-        "vector",
-        "series",
-        "stream",
-        "entries",
-        "cluster",
-        "bundle",
-        "lineup",
-        "store",
-    ],
-    "tuple": [
-        "n_tuple",
-        "tup",
-        "coordinate",
-        "immutable_list",
-        "struct",
-        "coord",
-        "point",
-        "record",
-        "row",
-        "data",
-    ],
-    "map": [
-        "dictionary",
-        "lookup_table",
-        "kv_pairs",
-        "object_map",
-        "mapping",
-        "lookup",
-        "registry",
-        "dict",
-        "hash",
-        "cache",
-        "kv",
-        "table",
-    ],
-    "set": [
-        "unique_collection",
-        "bag",
-        "membership_list",
-        "distinct_vals",
-        "distinct_values",
-        "unique_items",
-        "seen",
-        "visited",
-        "distinct",
-        "pool",
-    ],
-    "str": [
-        "text",
-        "message",
-        "char_array",
-        "chars",
-        "msg",
-        "lbl",
-        "label",
-        "raw",
-        "content",
-        "name",
-    ],
-    "num": [
-        "value",
-        "digit",
-        "scalar",
-        "count",
-        "idx",
-        "constant",
-        "total",
-        "index",
-        "offset",
-        "amt",
-        "size",
-        "nmb",
-    ],
-    "flag": [
-        "toggle",
-        "switch",
-        "boolean",
-        "bit",
-        "indicator",
-        "signal",
-        "trigger",
-        "check",
-        "hint",
-    ],
-    "func": [
-        "handler",
-        "callback",
-        "cb",
-        "fn",
-        "method",
-        "routine",
-        "subroutine",
-        "procedure",
-        "hook",
-        "callback",
-        "logic",
-        "task",
-    ],
-    "cls": [
-        "blueprint",
-        "template",
-        "type",
-        "object",
-        "model",
-        "entity",
-        "schema",
-        "base",
-        "impl",
-        "wrapper",
-        "component",
-    ],
-    "attr": [
-        "property",
-        "prop",
-        "field",
-        "meta",
-        "member",
-        "state",
-        "val",
-        "key",
-        "info",
-        "metadata",
-    ],
-    "var": [
-        "reference",
-        "pointer",
-        "ref",
-        "ptr",
-        "identifier",
-        "id",
-        "bucket",
-        "handle",
-        "obj",
-        "item",
-        "temp",
-        "res",
-        "result",
-        "entry",
-    ],
-    "param": ["input", "cfg", "option", "opt", "arg", "param", "requirement", "req", "placeholder"],
-    "arg": ["val", "passed_val", "data", "operand", "payload", "passed"],
-}
+_RESOURCES = None
 
 
-_PREPOSITIONS = [
-    "aboard",
-    "about",
-    "above",
-    "absent",
-    "across",
-    "after",
-    "against",
-    "along",
-    "alongside",
-    "amid",
-    "amidst",
-    "among",
-    "amongst",
-    "around",
-    "as",
-    "astride",
-    "at",
-    "atop",
-    "before",
-    "afore",
-    "behind",
-    "below",
-    "beneath",
-    "beside",
-    "besides",
-    "between",
-    "beyond",
-    "by",
-    "circa",
-    "despite",
-    "down",
-    "during",
-    "except",
-    "for",
-    "from",
-    "in",
-    "inside",
-    "into",
-    "less",
-    "like",
-    "minus",
-    "near",
-    "nearer",
-    "nearest",
-    "of",
-    "off",
-    "on",
-    "onto",
-    "opposite",
-    "outside",
-    "over",
-    "past",
-    "per",
-    "save",
-    "since",
-    "through",
-    "throughout",
-    "to",
-    "toward",
-    "towards",
-    "under",
-    "underneath",
-    "until",
-    "up",
-    "upon",
-    "upside",
-    "versus",
-    "via",
-    "with",
-    "within",
-    "without",
-]
+def _get_resources():
+    """
+    Load and cache ML models for identifier synonym generation.
+
+    Initializes CodeBERT tokenizer/MLM model and VarCLR encoder on the first call.
+    Results are cached globally to avoid redundant model loading.
+
+    Returns:
+        Tuple[AutoTokenizer, AutoModelForMaskedLM, Encoder, str]:
+            Tokenizer, masked language model, VarCLR encoder, and device string.
+    """
+    global _RESOURCES
+    if _RESOURCES is not None:
+        return _RESOURCES
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    model_name = "microsoft/codebert-base-mlm"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForMaskedLM.from_pretrained(model_name).to(device)
+    model.eval()
+
+    varclr = Encoder.from_pretrained("varclr-codebert")
+    varclr.to(device)
+    varclr.eval()
+
+    _RESOURCES = (tokenizer, model, varclr, device)
+    return _RESOURCES
+
+
+@lru_cache(maxsize=512)
+def _get_candidate_pool(word: str, context_code: str, top_n=5) -> list[str]:
+    """
+    Generate a semantically-similar synonym for an identifier using masked language modeling.
+
+    Uses CodeBERT MLM to predict plausible replacements in context.
+
+    Args:
+        original (str): The original identifier name.
+        context_code (str): Source code context containing the identifier.
+
+    Returns:
+        str: Pool of top-N semantic synonym.
+    """
+    tokenizer, model, _, device = _get_resources()
+
+    # Mask only the specific sub-word in context
+    masked_code = context_code.replace(word, tokenizer.mask_token)
+    inputs = tokenizer(masked_code, return_tensors="pt", truncation=True, max_length=512).to(device)
+
+    mask_idx = torch.where(inputs.input_ids == tokenizer.mask_token_id)[1]
+    if mask_idx.numel() == 0:
+        return [word]
+
+    with torch.no_grad():
+        logits = model(**inputs).logits[0, mask_idx, :]
+        top_tokens = torch.topk(logits, 100, dim=1).indices[0].tolist()
+
+    candidates = []
+    for t_id in top_tokens:
+        cand = tokenizer.decode([t_id]).strip()
+        # Quality filters
+        if SequenceMatcher(a=word, b=cand).ratio() > 0.9:
+            continue
+        if cand.isalnum() and cand.lower() not in word.lower() and len(cand) > 1:
+            candidates.append(cand)
+
+        if len(candidates) >= top_n:
+            break
+
+    return candidates if candidates else [word]
 
 
 def _build_substitute_name(node: Node, language: str) -> str:
-    """Generate a substitution text for an identifier node.
+    """
+    Generate a semantically-aware replacement name for an identifier node.
 
-    The transformation is intentionally simple and reproducible:
-      1. Split the existing identifier into words.
-      2. Reverse the token order while keeping prepositions grouped at the
-         front of the rebuilt name.
-      3. If the final token matches a known suffix family, replace it with
-         a deterministic synonym chosen from ``_SUFFIXES``.
+    Extracts the containing scope to provide context, splits the original identifier
+    into constituent words, generates semantic synonyms for each word, and combines
+    them back into a properly formatted identifier for the target language.
 
     Args:
-        node: The identifier node being renamed.
-        language: Language key (e.g. "python", "java", "cpp").
+        node (Node): The identifier node to rename.
+        language (str): The programming language of the source code.
 
     Returns:
-        The new identifier string formatted to match language conventions.
-        If no text is available, an empty string is returned.
+        str: A new identifier name formatted appropriately for the language,
+            or an empty string if the node has no text.
     """
-    _rng = random.Random(42)
-
     if not node.text:
         return ""
 
-    old_text = node.text
-    words = split_words(old_text)
-    rearranged = []
-    last = None
-    pos = 0
+    # Find nearest scoping ancestor
+    context_node = next(
+        (
+            ancestor
+            for ancestor in node.traverse_up()
+            if (
+                ancestor.semantic_label
+                and "scope" in ancestor.semantic_label
+                and len(ancestor.to_code()) > 50
+            )
+        ),
+        node.parent or node,  # Fallback
+    )
 
-    for word in words:
-        w = word.lower()
+    context_code = context_node.to_code()
+    original = node.text
+    original_words = split_words(original)
 
-        # Keep known suffix tokens fixed in last position.
-        if w in _SUFFIXES and indexOf(words, word) == len(words) - 1:
-            last = w
-            continue
+    word_pools = []
+    for word in original_words:
+        word_pools.append(_get_candidate_pool(word, context_code))
 
-        # Ensure preposition is set with related words by moving insertion behind it.
-        if w in _PREPOSITIONS:
-            rearranged.insert(0, w)
-            pos = 1
-            continue
+    # 3. Global Semantic Scoring via VarCLR
+    _, _, varclr, _ = _get_resources()
+    with torch.no_grad():
+        # Generate all combinations (Cartesian Product)
+        combos = itertools.product(*word_pools)
+        combinations = [
+            "_".join(combo) for combo in combos if varclr.score(combo[0], combo[1])[0] < 0.8
+        ]
+        joined_original = "_".join(original_words)
 
-        # Rearrange words by inserting them at the start of the list.
-        rearranged.insert(pos, w)
+        # Remove original from combinations if it snuck in
+        combinations = [c for c in combinations if c != joined_original]
 
-    if last:
-        # Replace trailing suffix token.
-        subs = _SUFFIXES[last]
-        rearranged.append(subs[_rng.randint(0, len(subs) - 1)])
+        if not combinations:
+            return original
 
-    # If no rearrangement occurred, preserve the original text.
-    # Should always be false. If not, _rename_appendage failed.
-    if all(word == old_text for word in rearranged):
-        return old_text
+        # Score the FULL original name against all FULL combinations
+        nested_scores = varclr.cross_score(joined_original, combinations)
+        scores = torch.tensor(nested_scores[0])
 
-    new_text = "_".join(rearranged)
+        # Pick from the top 3 overall performers for adversarial variety
+        top_k = min(5, len(combinations))
+        top_vals, top_indices = torch.topk(scores, top_k)
 
-    return format_identifier(node, new_text, language)
+        # Keep only those within 0.1 of the best_score
+        best_score = top_vals[0]
+        competitive_mask = (best_score - top_vals) <= 0.1
+
+        final_pool_indices = top_indices[competitive_mask].tolist()
+
+        # Select one at random from the best
+        final_idx = random.choice(final_pool_indices)
+        final_name = combinations[final_idx]
+
+    return format_identifier(node, final_name, language)

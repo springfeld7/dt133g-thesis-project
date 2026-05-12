@@ -7,6 +7,9 @@ deterministic identifier renaming over annotated CST nodes and emits
 MutationRecord entries for each rename action.
 """
 
+import random
+import string
+
 from ....node import Node
 from ...mutation_context import MutationContext
 from ..mutation_rule import MutationRecord, MutationRule
@@ -180,6 +183,10 @@ class RenameIdentifiersRule(MutationRule):
                 new_name = base_name
                 bump_index = 1
                 while new_name == outer_existing or self._name_exists_in_visible_scope(new_name):
+                    if self.level == 1:
+                        new_name = self._make_scoped_name(node, original_name, language)
+                    if self.level == 3:
+                        new_name = random.choice(string.ascii_lowercase)
                     new_name = self._bump_name(base_name, bump_index, language)
                     bump_index += 1
                 self._scope.declare(original_name, new_name)

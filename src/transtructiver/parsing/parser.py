@@ -4,9 +4,10 @@ This module defines a Parser class that produces a CST using Tree-sitter
 and converts the resulting syntax tree into the project's Node structure.
 """
 
-from tree_sitter import Language, Node as TSNode
+from tree_sitter import Node as TSNode
 from tree_sitter import Parser as TSParser
-from typing import cast
+
+from .converter import convert_node
 from .adapter import adapt
 from ..node import Node
 from ..utils.languages import get_language
@@ -161,7 +162,9 @@ class Parser:
     # Parse
     # ------------------------------------------------------------
 
-    def parse(self, code: str, language: str) -> tuple[Node, None] | tuple[None, str]:
+    def parse(
+        self, code: str, language: str, annotate: bool = True
+    ) -> tuple[Node, None] | tuple[None, str]:
         """Parse source code into a Concrete Syntax Tree (CST).
 
         Parses the provided source code using Tree-sitter, applies
@@ -205,5 +208,11 @@ class Parser:
         if reason:
             return None, reason
 
-        converted_tree = adapt(root_node, source_bytes, language=language)
-        return converted_tree, None
+        if annotate:
+            return adapt(root_node, source_bytes, language=language), None
+
+        converted = convert_node(root_node, source_bytes)
+        if language:
+            converted.language = language.lower()
+
+        return converted, None

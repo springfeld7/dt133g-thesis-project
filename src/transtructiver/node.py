@@ -86,6 +86,19 @@ class Node:
         for child in self.children:
             yield from child.traverse()
 
+    def traverse_up(self) -> Iterator[Node]:
+        """
+        Yields ancestors of the current node, starting from the parent
+        up to the root of the tree.
+
+        Yields:
+            Node: Each parent node in the tree.
+        """
+        curr = self.parent
+        while curr is not None:
+            yield curr
+            curr = curr.parent
+
     def clone(self, parent: Optional[Node] = None) -> Node:
         """
         Creates a deep copy of this node and its entire subtree.
@@ -193,11 +206,9 @@ class Node:
         Returns:
             str: The reconstructed source code string.
         """
-        tokens: List[str] = []
-        for node in self.traverse():
-            if not node.children and node.text is not None:
-                tokens.append(node.text)
-        return "".join(tokens)
+        return "".join(
+            node.text for node in self.traverse() if not node.children and node.text is not None
+        )
 
     def pretty(self, indent: int = 0) -> None:
         """

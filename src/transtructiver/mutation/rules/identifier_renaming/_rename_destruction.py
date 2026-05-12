@@ -16,13 +16,16 @@ from ..utils.formatter import format_identifier
 
 # Compact type code map used by the destruction strategy.
 _TYPE_MAP = {
-    "set": "c",
-    "tuple": "t",
     "list": "l",
-    "map": "m",
-    "string": "s",
-    "number": "n",
-    "boolean": "b",
+    "arr": "a",
+    "dict": "d",
+    "str": "s",
+    "int": "i",
+    "num": "n",
+    "bool": "b",
+    "func": "f",
+    "df": "d",
+    "conn": "c",
 }
 
 
@@ -41,8 +44,11 @@ def _build_destructed_name(node: Node, language: str) -> str:
     if not node.text:
         return ""
 
-    context_type = node.context_type if node.context_type else ""
-    code = _TYPE_MAP.get(context_type, "x")
+    original = node.text
+    new_text = "destruct"
 
-    new_text = f"destruct_{code}"
-    return format_identifier(node, new_text, language)
+    for hint, char in _TYPE_MAP.items():
+        if hint in original:
+            return format_identifier(node, f"{new_text}_{char}", language)
+
+    return format_identifier(node, f"{new_text}_{original[0]}", language)

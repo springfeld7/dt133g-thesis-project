@@ -43,11 +43,17 @@ def run_step_02():
         initial_counts[f.stem] = len(df)
         all_dfs[f.stem] = df
 
+    hash_counts = Counter()
+    for df in all_dfs.values():
+        hash_counts.update(df["normalized_hash"].astype(str).tolist())
+
     remaining_counts = initial_counts.copy()
 
     # GLOBAL REGISTRY
     registry = {}
     drop_indices = defaultdict(set)
+    pair_records = []
+    pair_id = 0
 
     # Tracking for report
     collision_stats = defaultdict(lambda: {"lost_to": Counter(), "won_against": Counter()})
@@ -73,12 +79,57 @@ def run_step_02():
                     remaining_counts[ds_name] -= 1
                     collision_stats[ds_name]["lost_to"][exist_ds] += 1
                     collision_stats[exist_ds]["won_against"][ds_name] += 1
+                    pair_records.append(
+                        {
+                            "pair_id": pair_id,
+                            "pair_type": "exact",
+                            "group_id": h,
+                            "group_size": hash_counts[str(h)],
+                            "normalized_hash": h,
+                            "removed_dataset": ds_name,
+                            "removed_idx": idx,
+                            "removed_row_index": idx,
+                            "removed_sample_id": f"{ds_name}::{idx}",
+                            "kept_dataset": exist_ds,
+                            "kept_idx": existing["idx"],
+                            "kept_row_index": existing["idx"],
+                            "survivor_sample_id": f"{exist_ds}::{existing['idx']}",
+                            "removed_score": curr_score,
+                            "kept_score": exist_score,
+                            "similarity": 1.0,
+                            "winner": exist_ds,
+                        }
+                    )
+                    pair_id += 1
                 else:
                     # Existing DS in registry is healthier, it drops the row
                     drop_indices[exist_ds].add(existing["idx"])
                     remaining_counts[exist_ds] -= 1
                     collision_stats[exist_ds]["lost_to"][ds_name] += 1
                     collision_stats[ds_name]["won_against"][exist_ds] += 1
+
+                    pair_records.append(
+                        {
+                            "pair_id": pair_id,
+                            "pair_type": "exact",
+                            "group_id": h,
+                            "group_size": hash_counts[str(h)],
+                            "normalized_hash": h,
+                            "removed_dataset": exist_ds,
+                            "removed_idx": existing["idx"],
+                            "removed_row_index": existing["idx"],
+                            "removed_sample_id": f"{exist_ds}::{existing['idx']}",
+                            "kept_dataset": ds_name,
+                            "kept_idx": idx,
+                            "kept_row_index": idx,
+                            "survivor_sample_id": f"{ds_name}::{idx}",
+                            "removed_score": exist_score,
+                            "kept_score": curr_score,
+                            "similarity": 1.0,
+                            "winner": ds_name,
+                        }
+                    )
+                    pair_id += 1
 
                     # Update registry: current DS now 'owns' this hash
                     registry[h] = {"ds": ds_name, "idx": idx}
@@ -93,6 +144,10 @@ def run_step_02():
         out_path = OUTPUT_DIR / f"{ds_name}.parquet"
         df_cleaned.to_parquet(out_path, index=False)
         final_counts[ds_name] = len(df_cleaned)
+
+    pair_df = pd.DataFrame(pair_records)
+    pair_df.to_parquet(REPORT_DIR / "_02_exact_duplicate_pairs.parquet", index=False)
+    pair_df.to_csv(REPORT_DIR / "_02_exact_duplicate_pairs.csv", index=False)
 
     # WRITE SUMMARY REPORT
     print("\nWriting summary report...")
@@ -134,6 +189,8 @@ def write_summary_report(initial, final, collisions):
             f.write("\n")
 
     print(f"Report written to: {report_path}")
+    print(f"Pair lookup written to: {REPORT_DIR / '_02_exact_duplicate_pairs.parquet'}")
+    print(f"Pair lookup written to: {REPORT_DIR / '_02_exact_duplicate_pairs.csv'}")
 
 
 if __name__ == "__main__":

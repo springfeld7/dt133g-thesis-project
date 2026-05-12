@@ -67,10 +67,35 @@ def normalize_sample(code: str, lang: str) -> str | None:
     Returns:
         str | None: Normalized code string or None if parsing fails.
     """
-    tree, _result = parser.parse(code, lang)
-
+    tree, _result = parser.parse(code, lang, annotate=False)
     if tree is None:
         return None
+
+    for node in tree.traverse():
+        if lang == "cpp" and node.type == "comment" and node.text:
+            if node.text.startswith("//"):
+                node.semantic_label = "line_comment"
+            elif node.text.startswith("/*"):
+                node.semantic_label = "block_comment"
+        elif lang == "python":
+            parent = node.parent
+            if (
+                node.type == "string"
+                and parent
+                and parent.type == "expression_statement"
+                and parent.parent
+                and parent.parent.type in {"module", "block"}
+            ):
+                if any(
+                    child.type in {"string_start", "string_end"} and child.text in ('"""', "'''")
+                    for child in node.children
+                ):
+                    node.semantic_label = "block_comment"
+            elif node.type == "comment":
+                node.semantic_label = "line_comment"
+        elif lang == "java":
+            if "comment" in node.type:
+                node.semantic_label = node.type
 
     comment_rule.apply(tree, context)
 

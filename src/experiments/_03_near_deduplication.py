@@ -1,23 +1,35 @@
-"""_03_near_deduplication.py
+"""
+_03_near_deduplication.py
 
-Step 03: Semantic Cleaning Layer (VarCLR-based Deduplication with HNSW)
+Tree-sitter-based, parallel, authorship-safe near-deduplication:
+
+1. Tree-sitter parse (Python / Java / C++) in PARALLEL
+2. Canonicalize *local* identifiers (params, locals, loop vars)
+3. Serialize syntax tree with semantic anchors
+4. Shingle (n-grams) + MinHash
+5. LSH retrieval + verified similarity graph
+6. Connected-components clustering
+7. Deterministic survivor selection
+8. Persist near-duplicate cluster metadata
 """
 
-from .utils import env_init
-from pathlib import Path
-from collections import Counter, defaultdict
-import annoy
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import random
+import builtins
+import hashlib
+import re
+from pathlib import Path
+from collections import Counter, defaultdict, deque
+from typing import Any
+
 import numpy as np
 import pandas as pd
-import re
-import torch
 from tqdm import tqdm
-from transformers import AutoTokenizer
+from datasketch import MinHash, MinHashLSH
+from tree_sitter import Parser
 
-from evaluation.varclr.models.encoders import BERT, Encoder
-from evaluation.varclr.models import urls_pretrained_model
-from .utils.calculate_balance_score import calculate_balance_score
+from .utils.resource_manager import ResourceManager
+from .utils.languages import get_language
 
 # ----------------------------
 # CONFIG
@@ -32,143 +44,218 @@ REPORT_DIR.mkdir(parents=True, exist_ok=True)
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
-torch.manual_seed(SEED)
 
-BATCH_SIZE = 4096
-KNN = 10
-SIM_THRESHOLD = 0.85
-MAX_TOKENS = 510  # We reserve 2 tokens for special tokens of the model.
-STRIDE = 256
+NUM_HASHES = 128
+LSH_THRESHOLD = 0.85
+SHINGLE_N = 5
+N_JOBS = -1  # use all cores
 
-ANNOY_TREES = 50
-ANNOY_SEARCH_K = -1  # -1 means use default (n_trees * k)
+BUILTINS = set(dir(builtins))
+TOK_RE = re.compile(r"\w+|[^\s\w]")
 
+MAX_WORKERS = ResourceManager.get_cpu_limit()
 
-class DSU:
-    """
-    Union-Find structure for clustering near-duplicates.
-    """
+# ----------------------------
+# TREE-SITTER HELPERS
+# ----------------------------
 
-    def __init__(self, n: int):
-        """
-        Initializes the DSU with n elements.
+PARAM_PARENT_TYPES = {
+    "parameter",
+    "parameter_declaration",
+    "formal_parameter",
+    "formal_parameters",
+    "parameter_list",
+}
 
-        Args:
-            n (int): The number of elements in the set.
-        """
-        self.parent = list(range(n))
+LOCAL_DECL_PARENT_TYPES = {
+    "local_variable_declaration",
+    "variable_declarator",
+    "init_declarator",
+    "for_statement",
+    "enhanced_for_statement",
+    "for_in_statement",
+    "for_range_loop",
+}
 
-    def find(self, x: int) -> int:
-        """
-        Finds the representative of the set containing x with path compression.
-
-        Args:
-            x (int): The element to find.
-
-        Returns:
-            int: The representative of the set.
-        """
-        while self.parent[x] != x:
-            self.parent[x] = self.parent[self.parent[x]]
-            x = self.parent[x]
-        return x
-
-    def union(self, a: int, b: int):
-        """
-        Unites the sets containing a and b.
-
-        Args:
-            a (int): The first element.
-            b (int): The second element.
-        """
-        ra, rb = self.find(a), self.find(b)
-        if ra != rb:
-            self.parent[rb] = ra
+LITERAL_NODE_TYPES = {
+    "string_literal",
+    "character_literal",
+    "number_literal",
+    "integer_literal",
+    "float_literal",
+    "true",
+    "false",
+    "null",
+}
 
 
-def chunk_text(text: str, tokenizer, max_tokens: int = 510, stride: int = 256) -> list[str]:
-    """
-    Splits long code into overlapping token chunks.
+def serialize_tree_sitter(root_node, code_bytes, lang: str):
+    tokens = []
 
-    Args:
-        text (str): Raw source code.
-        tokenizer: HuggingFace tokenizer.
-        max_tokens (int): Max tokens per chunk.
-        stride (int): Overlap between chunks.
+    local_names = set()
+    var_map = {}
+    arg_map = {}
+    var_counter = 0
+    arg_counter = 0
 
-    Returns:
-        list[str]: List of decoded text chunks.
-    """
-    # Manually apply the model's internal preprocessing first
-    text = text.replace("@", "")
-    text = re.sub("([a-z]|^)([A-Z]{1})", r"\1_\2", text).lower().replace("_", " ").strip()
+    def get_text(node):
+        return code_bytes[node.start_byte : node.end_byte].decode("utf-8", errors="ignore")
 
-    tokens = tokenizer.encode(text, add_special_tokens=False)
+    def collect_locals(node, parent_type=None):
+        nonlocal local_names
+        if parent_type in PARAM_PARENT_TYPES and node.type == "identifier":
+            local_names.add(get_text(node))
+        if parent_type in LOCAL_DECL_PARENT_TYPES and node.type == "identifier":
+            local_names.add(get_text(node))
+        for child in node.children:
+            collect_locals(child, node.type)
 
-    chunks = []
-    start = 0
+    collect_locals(root_node, None)
 
-    while start < len(tokens):
-        end = start + max_tokens
-        chunk = tokens[start:end]
-        chunks.append(tokenizer.decode(chunk, skip_special_tokens=True))
+    def canon_var(name):
+        nonlocal var_counter
+        if name not in var_map:
+            var_counter += 1
+            var_map[name] = f"v{var_counter}"
+        return var_map[name]
 
-        if end >= len(tokens):
-            break
+    def canon_arg(name):
+        nonlocal arg_counter
+        if name not in arg_map:
+            arg_counter += 1
+            arg_map[name] = f"p{arg_counter}"
+        return arg_map[name]
 
-        start += max_tokens - stride
+    def walk(node, parent_type=None):
+        tokens.append(node.type)
 
-    return chunks
+        if node.type == "identifier":
+            name = get_text(node)
+            if lang == "python" and name in BUILTINS:
+                tokens.append(f"ID:{name}")
+            elif name in local_names:
+                if parent_type in PARAM_PARENT_TYPES:
+                    tokens.append(f"ID:{canon_arg(name)}")
+                else:
+                    tokens.append(f"ID:{canon_var(name)}")
+            else:
+                tokens.append(f"ID:{name}")
+
+        elif node.type in LITERAL_NODE_TYPES:
+            text = get_text(node)
+            if text in {"true", "false", "null"}:
+                tokens.append(f"CONST:{text}")
+            else:
+                try:
+                    v = int(text)
+                    tokens.append(f"SMALLINT:{v}" if abs(v) <= 10 else "INT")
+                except ValueError:
+                    try:
+                        v = float(text)
+                        tokens.append(f"SMALLFLOAT:{v}" if abs(v) <= 10 else "FLOAT")
+                    except ValueError:
+                        tokens.append(f"SMALLSTR:{text}" if len(text) <= 8 else "STR")
+
+        for child in node.children:
+            walk(child, node.type)
+
+    walk(root_node, None)
+    return tokens
 
 
-def embed_batch(model: Encoder, texts: list[str], tokenizer: AutoTokenizer) -> np.ndarray:
-    """
-    Flattens all chunks from the text batch into a single GPU pass.
+# ----------------------------
+# MINHASH
+# ----------------------------
 
-    Args:
-        model: VarCLR encoder with `.encode()`.
-        texts (list[str]): Raw code samples.
-        tokenizer: HuggingFace tokenizer used for chunking.
-        device (torch.device): Computation device.
 
-    Returns:
-        np.ndarray: Shape (batch_size, embedding_dim), float32 embeddings.
-    """
-    all_chunks = []
-    chunk_counts = []  # To track how many chunks belong to each original text
+def make_ngrams(seq, n=SHINGLE_N):
+    if len(seq) < n:
+        return [" ".join(seq)]
+    return [" ".join(seq[i : i + n]) for i in range(len(seq) - n + 1)]
 
-    # Prepare all chunks
-    for text in texts:
-        chunks = chunk_text(text, tokenizer, max_tokens=MAX_TOKENS, stride=STRIDE)
-        all_chunks.extend(chunks)
-        chunk_counts.append(len(chunks))
 
-    # Process all chunks in one go to leverage GPU parallelism
-    if not all_chunks:
-        return np.array([])
+def minhash_from_shingles(shingles):
+    m = MinHash(num_perm=NUM_HASHES, seed=SEED)
+    for s in shingles:
+        m.update(s.encode("utf-8"))
+    return m
 
-    # We use a sub-batch size here to avoid OOM if a file batch has
-    # an insane amount of chunks. 128-256 is usually safe for 8GB.
-    gpu_sub_batch = 128
-    all_embeddings = []
 
-    with torch.no_grad():
-        for i in range(0, len(all_chunks), gpu_sub_batch):
-            batch_slice = all_chunks[i : i + gpu_sub_batch]
-            embs = model.encode(batch_slice)
-            all_embeddings.append(embs)
+# ----------------------------
+# SURVIVOR PRIORITY
+# ----------------------------
 
-    flattened_embs = torch.cat(all_embeddings)
 
-    # --- Mean Pooling Phase: Re-aggregate chunks back to original files ---
-    final_embeddings = []
-    cursor = 0
-    for count in chunk_counts:
-        file_chunks = flattened_embs[cursor : cursor + count]
-        final_embeddings.append(file_chunks.mean(dim=0))
-        cursor += count
+def sample_priority(row):
+    return (
+        row.get("source_quality", 0),
+        len(row.get("code", "")),
+        -row["_orig_idx"],
+    )
 
-    return torch.stack(final_embeddings).cpu().numpy().astype("float32")
+
+# ----------------------------
+# PARALLEL WORKER
+# ----------------------------
+
+
+def process_sample(i, row):
+    code = row["code"]
+    lang_raw = str(row.get("language", "python")).lower()
+
+    # map to TS languages
+    if lang_raw.startswith("py"):
+        ts_lang = "python"
+    elif lang_raw.startswith("java") and "script" not in lang_raw:
+        ts_lang = "java"
+    elif lang_raw in {"c++", "cpp", "cxx"}:
+        ts_lang = "cpp"
+    else:
+        tokens = TOK_RE.findall(code)
+        structural_repr = " ".join(tokens)
+        shingles = make_ngrams(tokens, SHINGLE_N)
+        mh = minhash_from_shingles(shingles)
+        return i, mh, hashlib.sha256(structural_repr.encode()).hexdigest()
+
+    try:
+        parser = Parser()
+        parser.language = get_language(ts_lang)
+        code_bytes = code.encode("utf-8", errors="ignore")
+        tree = parser.parse(code_bytes)
+        tokens = serialize_tree_sitter(tree.root_node, code_bytes, ts_lang)
+    except Exception:
+        tokens = TOK_RE.findall(code)
+
+    structural_repr = " ".join(tokens)
+    shingles = make_ngrams(tokens, SHINGLE_N)
+    mh = minhash_from_shingles(shingles)
+
+    return i, mh, hashlib.sha256(structural_repr.encode()).hexdigest()
+
+
+# ----------------------------
+# GRAPH / CONNECTED COMPONENTS
+# ----------------------------
+
+
+def connected_components(adj):
+    visited = set()
+    components = []
+    for node in adj:
+        if node in visited:
+            continue
+        comp = []
+        queue = deque([node])
+        visited.add(node)
+        while queue:
+            u = queue.popleft()
+            comp.append(u)
+            for v in adj[u]:
+                if v not in visited:
+                    visited.add(v)
+                    queue.append(v)
+        components.append(comp)
+    return components
 
 
 # ----------------------------
@@ -177,178 +264,178 @@ def embed_batch(model: Encoder, texts: list[str], tokenizer: AutoTokenizer) -> n
 
 
 def run_step_03():
-    """
-    Executes the VarCLR + Annoy semantic deduplication pipeline.
-
-    This includes:
-    1. Embedding generation.
-    2. Annoy indexing for Approximate Nearest Neighbor (ANN) search.
-    3. Disjoint Set Union (DSU) clustering of near-duplicates.
-    4. Proportional fair selection to protect smaller datasets.
-    """
-
-    # ----------------------------
-    # DEVICE SELECTION (GPU preferred, CPU fallback)
-    # ----------------------------
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-
-    # ----------------------------
-    # LOAD VARCLR ENCODER
-    # IMPORTANT: model.encode() already handles tokenization + forward pass
-    # ----------------------------
-    model = BERT.from_pretrained("varclr-codebert")
-    model = model.to(device)
-    model.eval()
-    tokenizer = AutoTokenizer.from_pretrained(urls_pretrained_model.PRETRAINED_TOKENIZER)
-
-    # ----------------------------
-    # LOAD INPUT FILES (multi-dataset parquet inputs)
-    # ----------------------------
     files = list(INPUT_DIR.glob("*.parquet"))
     if not files:
-        print("No files found in input directory.")
+        print("No files found.")
         return
 
-    print("Loading datasets...")
     dfs = {f.stem: pd.read_parquet(f) for f in files}
-
     initial_counts = Counter({k: len(v) for k, v in dfs.items()})
 
-    # Flatten all samples into a single list with metadata for tracking
+    # Flatten rows
     rows = []
+    print("Flattening datasets...")
     for ds_name, df in dfs.items():
-        for idx, r in df.iterrows():
-            row_data = r.to_dict()
-            row_data["_orig_ds"] = ds_name
-            row_data["_orig_idx"] = idx
-            rows.append(row_data)
+        for r in tqdm(df.itertuples(index=True), total=len(df), desc=f"{ds_name}"):
+            row = r._asdict()  # type: ignore
+            row["_orig_ds"] = ds_name
+            row["_orig_idx"] = r.Index
+            row["near_dup_cluster_id"] = None
+            row["near_dup_cluster_size"] = 1
+            row["canonical_survivor"] = False
+            row["structural_hash"] = None
+            rows.append(row)
 
-    print(f"Input to semantic stage: {len(rows)}")
-
-    texts = [r["code_normalized"] for r in rows]
-
-    print("Building Annoy index...")
-
-    # Determine dimension from the first sample to initialize index cleanly
-    first_emb = embed_batch(model, texts[:1], tokenizer)
-    dim = first_emb.shape[1]
-    index = annoy.AnnoyIndex(dim, "angular")
+    print(f"Total samples before near-dedup: {len(rows)}")
 
     # ----------------------------
-    # EMBEDDING + INDEX BUILD
+    # Build MinHash + LSH index
     # ----------------------------
-    for i in tqdm(range(0, len(texts), BATCH_SIZE), desc="Encoding"):
-        batch = texts[i : i + BATCH_SIZE]
+    print("Parallel parsing + MinHash...")
+    import sys
 
-        # GPU forward pass → embeddings
-        emb = embed_batch(model, batch, tokenizer)
+    sys.stdout.flush()
 
-        # Normalize for cosine similarity
-        norms = np.linalg.norm(emb, axis=1, keepdims=True)
-        emb = emb / (norms + 1e-10)
+    results: list[Any] = [None] * len(rows)
+    print(f"Processing {len(rows)} samples with {MAX_WORKERS} workers...")
+    sys.stdout.flush()
 
-        for vector in emb:
-            index.add_item(index.get_n_items(), vector)
+    raw_chunks = max(1, len(rows) // (max(1, MAX_WORKERS) * 16))
+    chunksize = max(1, min(1024, raw_chunks))
+    print(f"Using chunksize={chunksize} for executor.map (raw={raw_chunks})")
+    sys.stdout.flush()
 
-    if index.get_n_items() > 0:
-        print(f"Building trees ({ANNOY_TREES})...")
-        index.build(ANNOY_TREES)
+    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as ex:
+        mapped = ex.map(process_sample, range(len(rows)), rows, chunksize=chunksize)
+        it = iter(mapped)
 
-    # ----------------------------
-    # NEAREST NEIGHBOR SEARCH
-    # ----------------------------
-    print("Running ANN search...")
-    I = []
-    D = []
+        for _ in tqdm(range(len(rows)), desc="Parsing + MinHash (parallel)"):
+            i, mh, structural_hash = next(it)
+            results[i] = (mh, structural_hash)
 
-    for i in tqdm(range(len(texts)), desc="Searching"):
-        # Distance is sqrt(2 - 2*cos(theta)) for angular, so we convert back to cosine similarity
-        indices, distances = index.get_nns_by_item(
-            i, KNN, search_k=ANNOY_SEARCH_K, include_distances=True
-        )
+    # Fill any missing results with a fallback
+    for idx, val in enumerate(results):
+        if val is None:
+            results[idx] = (MinHash(num_perm=NUM_HASHES, seed=SEED), None)
 
-        similarities = [1.0 - (d**2 / 2.0) for d in distances]
+    print("Building signatures...")
 
-        I.append(indices)
-        D.append(similarities)
+    lsh = MinHashLSH(threshold=LSH_THRESHOLD, num_perm=NUM_HASHES)
+    signatures = {}
+    id_to_idx = {}
 
-    # ----------------------------
-    # DSU CLUSTERING
-    # Groups semantically similar samples into connected components
-    # Each cluster represents a "near-duplicate group"
-    # ----------------------------
-    dsu = DSU(len(rows))
-
-    for i in range(len(rows)):
-        for neighbor_idx, sim in zip(I[i], D[i]):
-            if neighbor_idx != i:
-                if sim >= SIM_THRESHOLD:
-                    dsu.union(i, neighbor_idx)
+    for i, (mh, structural_hash) in tqdm(
+        enumerate(results), total=len(results), desc="Building signatures"
+    ):
+        rows[i]["structural_hash"] = structural_hash
+        sample_id = f"{rows[i]['_orig_ds']}::{rows[i]['_orig_idx']}"
+        signatures[sample_id] = mh
+        id_to_idx[sample_id] = i
+        lsh.insert(sample_id, mh)
 
     # ----------------------------
-    # BUILD CLUSTERS FROM DSU STRUCTURE
-    # Each root node becomes a cluster
+    # Build similarity graph via LSH (with verification)
     # ----------------------------
-    clusters = defaultdict(list)
-    for i in range(len(rows)):
-        clusters[dsu.find(i)].append(i)
-
-    # We reset the counts before this stage to treat the post-exact pool
-    # as the current 'truth' for the semantic stage.
-    current_pool_counts = Counter(r["_orig_ds"] for r in rows)
-    remaining_in_stage = dict(current_pool_counts)
-
-    drop_indices = defaultdict(set)
+    print("Building similarity graph...")
+    adj = defaultdict(set)
+    for sample_id, mh in tqdm(signatures.items(), desc="LSH queries"):
+        for nb in lsh.query(mh):
+            if nb == sample_id:
+                continue
+            if mh.jaccard(signatures[nb]) >= LSH_THRESHOLD:
+                adj[sample_id].add(nb)
+                adj[nb].add(sample_id)
 
     # ----------------------------
-    # FAIR REPRESENTATIVE SELECTION PER CLUSTER
+    # Connected components = near-dup clusters
     # ----------------------------
-    for cluster_indices in tqdm(clusters.values(), desc="Reducing Clusters"):
-        candidates = [rows[idx] for idx in cluster_indices]
+    print("Computing connected components...")
+    components = connected_components(adj)
+    print(f"Found {len(components)} clusters.")
 
-        if len(candidates) == 1:
+    keep_mask = np.ones(len(rows), dtype=bool)
+    cluster_id_counter = 0
+    pair_records = []
+
+    for comp in tqdm(components, desc="Processing clusters"):
+        cluster_label = f"cluster_{cluster_id_counter}"
+        cluster_id_counter += 1
+
+        cluster_rows = [rows[id_to_idx[sid]] for sid in comp]
+        cluster_size = len(cluster_rows)
+
+        for r in cluster_rows:
+            r["near_dup_cluster_id"] = cluster_label
+            r["near_dup_cluster_size"] = cluster_size
+
+        if cluster_size == 1:
+            cluster_rows[0]["canonical_survivor"] = True
             continue
 
-        # Pick the sample from the dataset that has the highest % of its data remaining.
-        winner = max(
-            candidates,
-            key=lambda iter_var: calculate_balance_score(
-                iter_var["_orig_ds"], remaining_in_stage, current_pool_counts
-            ),
-        )
+        survivor_row = max(cluster_rows, key=sample_priority)
+        survivor_sid = f"{survivor_row['_orig_ds']}::{survivor_row['_orig_idx']}"
+        survivor_idx = id_to_idx[survivor_sid]
+        rows[survivor_idx]["canonical_survivor"] = True
 
-        # Mark losers for drop and update stage health
-        for c in candidates:
-            if c["_orig_ds"] == winner["_orig_ds"] and c["_orig_idx"] == winner["_orig_idx"]:
-                continue
+        for sid in comp:
+            idx = id_to_idx[sid]
+            if idx != survivor_idx:
+                keep_mask[idx] = False
+                pair_records.append(
+                    {
+                        "pair_id": len(pair_records),
+                        "pair_type": "near",
+                        "cluster_id": cluster_label,
+                        "cluster_size": cluster_size,
+                        "group_id": cluster_label,
+                        "group_size": cluster_size,
+                        "removed_sample_id": sid,
+                        "removed_dataset": rows[idx]["_orig_ds"],
+                        "removed_idx": rows[idx]["_orig_idx"],
+                        "removed_row_index": idx,
+                        "survivor_sample_id": survivor_sid,
+                        "survivor_dataset": survivor_row["_orig_ds"],
+                        "survivor_idx": survivor_row["_orig_idx"],
+                        "survivor_row_index": survivor_idx,
+                        "jaccard_to_survivor": signatures[sid].jaccard(signatures[survivor_sid]),
+                        "similarity": signatures[sid].jaccard(signatures[survivor_sid]),
+                    }
+                )
 
-            drop_indices[c["_orig_ds"]].add(c["_orig_idx"])
-            remaining_in_stage[c["_orig_ds"]] -= 1
+    # ----------------------------
+    # Apply mask and save
+    # ----------------------------
+    final_rows = [r for r, keep in zip(rows, keep_mask) if keep]
+    print(f"Final survivors: {len(final_rows)}")
 
-    # SAVE & REPORT
+    out_map = defaultdict(list)
+    for r in final_rows:
+        out_map[r["_orig_ds"]].append(r)
+
     final_counts = Counter()
-    for ds_name, df in dfs.items():
-        indices_to_drop = drop_indices[ds_name]
-        cleaned_df = df.drop(index=list(indices_to_drop)).reset_index(drop=True)
-        cleaned_df = cleaned_df.drop(
-            columns=["code_normalized", "normalized_hash"], errors="ignore"
-        )
+    for ds_name, items in tqdm(out_map.items(), desc="Saving datasets"):
+        df = pd.DataFrame(items)
+        df = df.drop(columns=["_orig_ds", "_orig_idx"], errors="ignore")
+        df.to_parquet(OUTPUT_DIR / f"{ds_name}.parquet", index=False)
+        final_counts[ds_name] = len(df)
 
-        out_path = OUTPUT_DIR / f"{ds_name}.parquet"
-        cleaned_df.to_parquet(out_path, index=False)
-        final_counts[ds_name] = len(cleaned_df)
+    pair_df = pd.DataFrame(pair_records)
+    pair_df.to_parquet(REPORT_DIR / "_03_near_duplicate_pairs.parquet", index=False)
+    pair_df.to_csv(REPORT_DIR / "_03_near_duplicate_pairs.csv", index=False)
 
-    report_path = REPORT_DIR / "_03_near_deduplication_report.txt"
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write("=== NEAR DEDUPLICATION REMOVAL REPORT ===\n")
-        for ds in initial_counts:
+    # ----------------------------
+    # Report
+    # ----------------------------
+    with open(REPORT_DIR / "_03_near_deduplication_report.txt", "w") as f:
+        f.write("=== Parallel Tree-sitter + MinHash NEAR-DEDUP REPORT ===\n\n")
+        for ds in sorted(initial_counts.keys()):
             start = initial_counts[ds]
             end = final_counts.get(ds, 0)
-            f.write(f"{ds}: {start} -> {end} (Loss: {100*(1-end/start):.2f}%)\n")
+            reduction = 100 * (1 - end / start) if start > 0 else 0
+            f.write(f"{ds}: {start} -> {end} ({reduction:.2f}% reduction)\n")
 
-    print(f"Pipeline complete. Processed {len(initial_counts)} separate files.")
+        f.write("\nPair lookup files:\n")
+        f.write(f"- {REPORT_DIR / '_03_near_duplicate_pairs.parquet'}\n")
+        f.write(f"- {REPORT_DIR / '_03_near_duplicate_pairs.csv'}\n")
 
-
-if __name__ == "__main__":
-    run_step_03()
+    print("Step 03 complete.")

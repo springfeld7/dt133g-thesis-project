@@ -30,6 +30,7 @@ dependencies = [
     "torchvision",
     "torchaudio",
     "annoy>=1.17.3",
+    "datasketch>=1.10.0",
 ]
 
 [project.scripts]
@@ -42,7 +43,7 @@ cli = "transtructiver.cli:main"
 parser = "transtructiver.parsing.parser:main"
 
 # Experiments scripts
-verify-login = "experiments.sample_selection.dataset_manager:main"
+verify-login = "experiments.utils.dataset_manager:main"
 step00 = "experiments._00_extract_datasets:run_step_00"
 step01 = "experiments._01_normalize_datasets:run_step_01"
 step02 = "experiments._02_exact_deduplication:run_step_02"

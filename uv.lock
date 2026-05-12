@@ -517,6 +517,19 @@ wheels = [
 ]
 
 [[package]]
+name = "datasketch"
+version = "1.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8d/73/8e9014887f9fca2d785777a0a6186813e4fc7faa24f05fc88c6420624891/datasketch-1.10.0.tar.gz", hash = "sha256:d23aea80ce4c40790ca7a40795659848be92ecc43db80942be26f21e81d24714", size = 91699, upload-time = "2026-04-17T23:06:56.388Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ed/e7/a94668082e078099eb0161635649510aa887690767b779fffe4bdc479913/datasketch-1.10.0-py3-none-any.whl", hash = "sha256:303dd90cda0948a21abba3aaefc9f8528fa12b8204edc5e1ae8b1d7b750234e7", size = 99914, upload-time = "2026-04-17T23:06:54.39Z" },
+]
+
+[[package]]
 name = "debugpy"
 version = "1.8.20"
 source = { registry = "https://pypi.org/simple" }
@@ -2523,6 +2536,7 @@ dependencies = [
     { name = "accelerate" },
     { name = "annoy" },
     { name = "datasets" },
+    { name = "datasketch" },
     { name = "gdown" },
     { name = "matplotlib" },
     { name = "pandas" },
@@ -2557,6 +2571,7 @@ requires-dist = [
     { name = "accelerate", specifier = ">=1.13.0" },
     { name = "annoy", specifier = ">=1.17.3" },
     { name = "datasets", specifier = ">=4.8.5" },
+    { name = "datasketch", specifier = ">=1.10.0" },
     { name = "gdown", specifier = ">=6.0.0" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "pandas", specifier = ">=3.0.1" },

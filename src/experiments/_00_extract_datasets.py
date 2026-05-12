@@ -268,16 +268,15 @@ def process_dataset(item) -> dict:
         "stats": stats,
         "lang": dict(lang_counter),
         "label": dict(label_counter),
-        "label_lang": {
-            lang: dict(labels)
-            for lang, labels in label_lang_counter.items()
-        },
+        "label_lang": {lang: dict(labels) for lang, labels in label_lang_counter.items()},
         "output_path": str(output_path),
     }
+
 
 # ----------------------------
 # REPORT GENERATION
 # ----------------------------
+
 
 def write_report(results: list[dict]):
     """
@@ -323,11 +322,7 @@ def write_report(results: list[dict]):
             for lang, labels in r["label_lang"].items():
                 human = labels.get(0, 0)
                 ai = labels.get(1, 0)
-                f.write(
-                    f"  {lang}: "
-                    f"human={human}, "
-                    f"ai={ai}\n"
-                )
+                f.write(f"  {lang}: " f"human={human}, " f"ai={ai}\n")
 
             f.write("\n----------------------------\n\n")
 

@@ -193,21 +193,13 @@ def run_step_01():
 
             report.write("\nLabel distribution per language:\n")
 
-            lang_label_dist = (
-                df_clean.groupby(["language", "label"])
-                .size()
-                .unstack(fill_value=0)
-            )
+            lang_label_dist = df_clean.groupby(["language", "label"]).size().unstack(fill_value=0)
 
             for lang, row in lang_label_dist.iterrows():
                 human = row.get(0, 0)
                 ai = row.get(1, 0)
 
-                report.write(
-                    f"  {lang}: "
-                    f"human={human}, "
-                    f"ai={ai}\n"
-                )
+                report.write(f"  {lang}: " f"human={human}, " f"ai={ai}\n")
             report.write("\n----------------------------\n\n")
 
         df_clean.to_parquet(OUTPUT_DIR / f.name, index=False)

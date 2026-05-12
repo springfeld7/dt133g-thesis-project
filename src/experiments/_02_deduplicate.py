@@ -28,21 +28,24 @@ REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 # HELPER
 # ----------------------------
 
+
 def _generate_hash(code: str) -> str:
     """
     Generates a hash for the raw, original code.
-    
+
     Args:
         code (str): The source code string to hash.
-    
+
     Returns:
         str: A hexadecimal hash string representing the input code.
     """
     return hashlib.md5(code.encode("utf-8")).hexdigest()
 
+
 # ----------------------------
 # MAIN PIPELINE
 # ----------------------------
+
 
 def run_step_02():
     """
@@ -119,7 +122,9 @@ def run_step_02():
         df_cleaned = df.drop(index=indices_to_drop).reset_index(drop=True)
 
         df_cleaned = df_cleaned.drop(
-            columns=[col for col in ["code_normalized", "hash_normalized"] if col in df_cleaned.columns]
+            columns=[
+                col for col in ["code_normalized", "hash_normalized"] if col in df_cleaned.columns
+            ]
         )
 
         out_path = OUTPUT_DIR / f"{ds_name}.parquet"
@@ -131,6 +136,7 @@ def run_step_02():
     print("\nWriting summary report...")
     write_summary_report(initial_counts, final_counts, collision_stats, cleaned_dfs)
     print("Step 02 complete.")
+
 
 def write_summary_report(initial, final, collisions, datasets):
 
@@ -170,7 +176,7 @@ def write_summary_report(initial, final, collisions, datasets):
             lang_dist = dict(Counter(df["language"]))
             label_dist = dict(Counter(df["label"]))
             lang_label_dist = defaultdict(Counter)
-            
+
             for lang, label in zip(df["language"], df["label"]):
                 lang_label_dist[lang][label] += 1
 
@@ -187,11 +193,7 @@ def write_summary_report(initial, final, collisions, datasets):
                 human = label_counter.get(0, 0)
                 ai = label_counter.get(1, 0)
 
-                f.write(
-                    f"    {lang}: "
-                    f"human={human}, "
-                    f"ai={ai}\n"
-                )
+                f.write(f"    {lang}: " f"human={human}, " f"ai={ai}\n")
 
     print(f"Report written to: {REPORT_PATH}")
 

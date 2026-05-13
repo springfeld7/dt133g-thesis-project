@@ -1,0 +1,11 @@
+{
+  "model_name": "microsoft/unixcoder-base",
+  "cv_folds": 10,
+  "window": 512,
+  "params": {
+    "learning_rate": [5e-5, 3e-5, 2e-5],
+    "batch_size": [8, 16],
+    "grad_acc_step": [2, 4],
+    "epoch": [20, 40]
+  }
+}

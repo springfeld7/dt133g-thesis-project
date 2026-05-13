@@ -18,8 +18,8 @@ from .utils.calculate_balance_score import calculate_balance_score
 # ----------------------------
 
 INPUT_DIR = Path("data/_01_normalized_datasets")
-OUTPUT_DIR = Path("data/_02_deduplicated_exact_datasets")
-REPORT_PATH = Path("output/_02_deduplication_exact_report.txt")
+OUTPUT_DIR = Path("data/_02_exact_deduplicated_datasets")
+REPORT_PATH = Path("output/_02_exact_deduplication_report.txt")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)

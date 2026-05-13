@@ -106,10 +106,6 @@ def _normalize_label(value, dataset: str) -> int | None:
         if "ai" in v:
             return 1
 
-    if dataset == "ai_detector":
-        if value in [0, 1]:
-            return int(value)
-
     return None
 
 

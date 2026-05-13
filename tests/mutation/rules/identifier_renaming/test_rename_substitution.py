@@ -61,7 +61,7 @@ def test_rename_substitution_visual_check():
             "lang": "python",
         },
         {
-            "original": "db_conn",
+            "original": "db",
             "code": "class Database:\n    def connect(self, db_conn):\n        self.connection = db_conn.open()",
             "lang": "python",
         },

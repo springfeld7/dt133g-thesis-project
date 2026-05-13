@@ -1,4 +1,4 @@
-"""_02_deduplicate.py
+"""_02_deduplicate_exact.py
 
 Step 02: Deduplication inter- and intra-dataset.
 Uses a balance-weighted selection to preserve the proportional integrity of smaller datasets.
@@ -18,8 +18,8 @@ from .utils.calculate_balance_score import calculate_balance_score
 # ----------------------------
 
 INPUT_DIR = Path("data/_01_normalized_datasets")
-OUTPUT_DIR = Path("data/_02_deduplicated_datasets")
-REPORT_PATH = Path("output/_02_deduplication_report.txt")
+OUTPUT_DIR = Path("data/_02_deduplicated_exact_datasets")
+REPORT_PATH = Path("output/_02_deduplication_exact_report.txt")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -121,12 +121,6 @@ def run_step_02():
         indices_to_drop = list(drop_indices[ds_name])
         df_cleaned = df.drop(index=indices_to_drop).reset_index(drop=True)
 
-        df_cleaned = df_cleaned.drop(
-            columns=[
-                col for col in ["code_normalized", "hash_normalized"] if col in df_cleaned.columns
-            ]
-        )
-
         out_path = OUTPUT_DIR / f"{ds_name}.parquet"
         df_cleaned.to_parquet(out_path, index=False)
         final_counts[ds_name] = len(df_cleaned)
@@ -193,7 +187,7 @@ def write_summary_report(initial, final, collisions, datasets):
                 human = label_counter.get(0, 0)
                 ai = label_counter.get(1, 0)
 
-                f.write(f"    {lang}: " f"human={human}, " f"ai={ai}\n")
+                f.write(f"    {lang}: " f"human={human}, " f"ai={ai}\n\n")
 
     print(f"Report written to: {REPORT_PATH}")
 

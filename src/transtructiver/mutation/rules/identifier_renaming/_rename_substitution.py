@@ -136,32 +136,37 @@ def _build_substitute_name(node: Node, language: str) -> str:
     original = node.text
     original_words = split_words(original)
 
-    word_pools = []
+    word_pool = []
     for word in original_words:
-        word_pools.append(_get_candidate_pool(word, context_code))
+        word_pool.append(_get_candidate_pool(word, context_code))
 
     # 3. Global Semantic Scoring via VarCLR
     _, _, varclr, _ = _get_resources()
     with torch.no_grad():
-        # Generate all combinations (Cartesian Product)
-        combos = itertools.product(*word_pools)
-        combinations = [
-            "_".join(combo) for combo in combos if varclr.score(combo[0], combo[1])[0] < 0.8
-        ]
+        new_words = []
+        if len(word_pool) > 1:
+            # Generate all combinations (Cartesian Product)
+            combos = itertools.product(*word_pool)
+            new_words = [
+                "_".join(combo) for combo in combos if varclr.score(combo[0], combo[1])[0] < 0.8
+            ]
+        else:
+            new_words = word_pool[0]
+
         joined_original = "_".join(original_words)
 
         # Remove original from combinations if it snuck in
-        combinations = [c for c in combinations if c != joined_original]
+        new_words = [c for c in new_words if c != joined_original]
 
-        if not combinations:
+        if not new_words:
             return original
 
         # Score the FULL original name against all FULL combinations
-        nested_scores = varclr.cross_score(joined_original, combinations)
+        nested_scores = varclr.cross_score(joined_original, new_words)
         scores = torch.tensor(nested_scores[0])
 
         # Pick from the top 3 overall performers for adversarial variety
-        top_k = min(5, len(combinations))
+        top_k = min(5, len(new_words))
         top_vals, top_indices = torch.topk(scores, top_k)
 
         # Keep only those within 0.1 of the best_score
@@ -172,6 +177,6 @@ def _build_substitute_name(node: Node, language: str) -> str:
 
         # Select one at random from the best
         final_idx = random.choice(final_pool_indices)
-        final_name = combinations[final_idx]
+        final_name = new_words[final_idx]
 
     return format_identifier(node, final_name, language)

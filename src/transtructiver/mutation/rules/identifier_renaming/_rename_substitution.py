@@ -6,27 +6,23 @@ contextually-aware replacement names for identifiers in source code while
 preserving semantic meaning.
 """
 
-import itertools
-import warnings
-
-warnings.filterwarnings(
-    "ignore", category=DeprecationWarning, module="transformers.models.roberta.tokenization_roberta"
-)
-
 import random
 import torch
+import itertools
+from typing import Optional
 from difflib import SequenceMatcher
 from functools import lru_cache
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 from evaluation.varclr.models.encoders import Encoder
+from ...mutation_context import MutationContext
 from ....node import Node
 from ..utils.formatter import format_identifier, split_words
 
-_RESOURCES = None
+context: MutationContext
 
 
-def _get_resources():
+def _get_resources(context: Optional[MutationContext]):
     """
     Load and cache ML models for identifier synonym generation.
 
@@ -37,27 +33,22 @@ def _get_resources():
         Tuple[AutoTokenizer, AutoModelForMaskedLM, Encoder, str]:
             Tokenizer, masked language model, VarCLR encoder, and device string.
     """
-    global _RESOURCES
-    if _RESOURCES is not None:
-        return _RESOURCES
+    if not context:
+        return
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     model_name = "microsoft/codebert-base-mlm"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForMaskedLM.from_pretrained(model_name).to(device)
-    model.eval()
+    context.tokenizer = AutoTokenizer.from_pretrained(model_name)
+    context.mlm_model = AutoModelForMaskedLM.from_pretrained(model_name).to(device).eval()
 
-    varclr = Encoder.from_pretrained("varclr-codebert")
-    varclr.to(device)
-    varclr.eval()
-
-    _RESOURCES = (tokenizer, model, varclr, device)
-    return _RESOURCES
+    context.varclr = Encoder.from_pretrained("varclr-codebert").to(device).eval()
 
 
 @lru_cache(maxsize=512)
-def _get_candidate_pool(word: str, context_code: str, top_n=5) -> list[str]:
+def _get_candidate_pool(
+    word: str, context_code: str, tokenizer, mlm_model, top_n: int = 5
+) -> list[str]:
     """
     Generate a semantically-similar synonym for an identifier using masked language modeling.
 
@@ -70,7 +61,8 @@ def _get_candidate_pool(word: str, context_code: str, top_n=5) -> list[str]:
     Returns:
         str: Pool of top-N semantic synonym.
     """
-    tokenizer, model, _, device = _get_resources()
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Mask only the specific sub-word in context
     masked_code = context_code.replace(word, tokenizer.mask_token)
@@ -81,7 +73,7 @@ def _get_candidate_pool(word: str, context_code: str, top_n=5) -> list[str]:
         return [word]
 
     with torch.no_grad():
-        logits = model(**inputs).logits[0, mask_idx, :]
+        logits = mlm_model(**inputs).logits[0, mask_idx, :]
         top_tokens = torch.topk(logits, 100, dim=1).indices[0].tolist()
 
     candidates = []
@@ -99,7 +91,7 @@ def _get_candidate_pool(word: str, context_code: str, top_n=5) -> list[str]:
     return candidates if candidates else [word]
 
 
-def _build_substitute_name(node: Node, language: str) -> str:
+def _build_substitute_name(node: Node, language: str, context: Optional[MutationContext]) -> str:
     """
     Generate a semantically-aware replacement name for an identifier node.
 
@@ -115,8 +107,11 @@ def _build_substitute_name(node: Node, language: str) -> str:
         str: A new identifier name formatted appropriately for the language,
             or an empty string if the node has no text.
     """
-    if not node.text:
+    if not node.text or not context:
         return ""
+
+    if context.mlm_model is None or context.tokenizer is None:
+        _get_resources(context)
 
     # Find nearest scoping ancestor
     context_node = next(
@@ -138,17 +133,22 @@ def _build_substitute_name(node: Node, language: str) -> str:
 
     word_pool = []
     for word in original_words:
-        word_pool.append(_get_candidate_pool(word, context_code))
+        assert context
+        word_pool.append(
+            _get_candidate_pool(word, context_code, context.tokenizer, context.mlm_model)
+        )
 
     # 3. Global Semantic Scoring via VarCLR
-    _, _, varclr, _ = _get_resources()
     with torch.no_grad():
+        assert context.varclr
         new_words = []
         if len(word_pool) > 1:
             # Generate all combinations (Cartesian Product)
             combos = itertools.product(*word_pool)
             new_words = [
-                "_".join(combo) for combo in combos if varclr.score(combo[0], combo[1])[0] < 0.8
+                "_".join(combo)
+                for combo in combos
+                if context.varclr.score(combo[0], combo[1])[0] < 0.8
             ]
         else:
             new_words = word_pool[0]
@@ -162,7 +162,7 @@ def _build_substitute_name(node: Node, language: str) -> str:
             return original
 
         # Score the FULL original name against all FULL combinations
-        nested_scores = varclr.cross_score(joined_original, new_words)
+        nested_scores = context.varclr.cross_score(joined_original, new_words)
         scores = torch.tensor(nested_scores[0])
 
         # Pick from the top 3 overall performers for adversarial variety

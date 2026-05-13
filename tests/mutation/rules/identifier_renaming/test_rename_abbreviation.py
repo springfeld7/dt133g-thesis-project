@@ -51,14 +51,14 @@ def test_compress_words_language_difference():
 def test_build_abbreviated_name_empty():
     """Test abbreviation returns empty string for empty node text."""
     node = Node((0, 0), (0, 0), "identifier", text="")
-    assert _build_abbreviated_name(node, "python") == ""
+    assert _build_abbreviated_name(node, "python", None) == ""
 
 
 def test_build_abbreviated_name_long_camelcase():
     """Test abbreviation for long camelCase identifier."""
     node = Node((0, 0), (0, 0), "identifier", text="longVariableName")
     # Should split to ["long", "Variable", "Name"] and compress to "lvn" for python
-    result = _build_abbreviated_name(node, "python")
+    result = _build_abbreviated_name(node, "python", None)
     assert isinstance(result, str)
     assert result == "lvn"
 
@@ -66,8 +66,8 @@ def test_build_abbreviated_name_long_camelcase():
 def test_build_abbreviated_name_language():
     """Test abbreviation output for different languages."""
     node = Node((0, 0), (0, 0), "identifier", text="foo_bar_baz")
-    py = _build_abbreviated_name(node, "python")
-    java = _build_abbreviated_name(node, "java")
+    py = _build_abbreviated_name(node, "python", None)
+    java = _build_abbreviated_name(node, "java", None)
     assert py != java
     assert py == "fbb"
     assert java == "fBB"
@@ -76,4 +76,4 @@ def test_build_abbreviated_name_language():
 def test_build_abbreviated_name_short_word():
     """Test abbreviation for very short identifier."""
     node = Node((0, 0), (0, 0), "identifier", text="id")
-    assert _build_abbreviated_name(node, "java") == "id"
+    assert _build_abbreviated_name(node, "java", None) == "id"

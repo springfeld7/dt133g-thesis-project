@@ -1,7 +1,7 @@
 """Unit tests for the MutationContext class."""
 
 import pytest
-from src.transtructiver.mutation.mutation_context import MutationContext
+from transtructiver.mutation.mutation_context import MutationContext
 
 
 @pytest.fixture
@@ -39,3 +39,10 @@ class TestMutationContext:
         """Ensures each call to next_id produces a unique value."""
         seen = {ctx.next_id(), ctx.next_id(), ctx.next_id()}
         assert len(seen) == 3
+
+    def test_reset_row_counter_and_taken_names(self, ctx):
+        for _ in range(3):
+            ctx.next_id()
+        assert ctx.synthetic_row_counter == -4
+        ctx.reset()
+        assert ctx.synthetic_row_counter == -1

@@ -72,7 +72,7 @@ def run_step_02():
 
     hash_counts = Counter()
     for df in all_dfs.values():
-        hash_counts.update(df["normalized_hash"].astype(str).tolist())
+        hash_counts.update(df["hash_normalized"].astype(str).tolist())
 
     remaining_counts = initial_counts.copy()
     registry_raw = {}
@@ -171,12 +171,6 @@ def run_step_02():
     for ds_name, df in all_dfs.items():
         indices_to_drop = list(drop_indices[ds_name])
         df_cleaned = df.drop(index=indices_to_drop).reset_index(drop=True)
-
-        df_cleaned = df_cleaned.drop(
-            columns=[
-                col for col in ["code_normalized", "hash_normalized"] if col in df_cleaned.columns
-            ]
-        )
 
         out_path = OUTPUT_DIR / f"{ds_name}.parquet"
         df_cleaned.to_parquet(out_path, index=False)

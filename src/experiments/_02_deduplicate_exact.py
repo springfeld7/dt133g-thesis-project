@@ -248,7 +248,7 @@ def write_summary_report(initial, final, collisions, datasets):
                 human = label_counter.get(0, 0)
                 ai = label_counter.get(1, 0)
 
-                f.write(f"    {lang}: " f"human={human}, " f"ai={ai}\n")
+                f.write(f"    {lang}: " f"human={human}, " f"ai={ai}\n\n")
 
     print(f"Report written to: {REPORT_PATH}")
 

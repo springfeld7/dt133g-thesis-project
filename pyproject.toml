@@ -46,12 +46,13 @@ parser = "transtructiver.parsing.parser:main"
 verify-login = "experiments.utils.dataset_manager:main"
 step00 = "experiments._00_extract_datasets:run_step_00"
 step01 = "experiments._01_normalize_datasets:run_step_01"
-step02 = "experiments._02_exact_deduplication:run_step_02"
-step03 = "experiments._03_near_deduplication:run_step_03"
+step02 = "experiments._02_deduplicate_exact:run_step_02"
+step03 = "experiments._03_deduplicate_near:run_step_03"
 step04 = "experiments._04_extract_stats:run_step_04"
-step05 = "experiments._05_select_final_samples:run_step_05"
-step06 = "experiments._06_run_all_mutations:main"
-step07 = "experiments._07_map_gradient:main"
+step05 = "experiments._05_filter_datasets:run_step_05"
+step06 = "experiments._06_generate_splits:run_step_06"
+step07 = "experiments._07_run_all_mutations:main"
+step08 = "experiments._08_map_gradient:main"
 
 [tool.black]
 line-length = 100

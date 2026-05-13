@@ -1,21 +1,21 @@
-"""_00_normalize_datasets.py
+"""_00_extract_datasets.py
 
-Step 0: Dataset normalization for multi-source code classification experiments.
+Step 0: Dataset extraction for multi-source code classification experiments.
 
 This module standardizes heterogeneous Hugging Face code datasets into a unified schema:
     - code: raw source code string
     - language: normalized programming language (python, java, cpp)
     - label: binary classification label (0 = human, 1 = AI-generated)
 
-The script also produces dataset-level statistics and writes a global normalization report
+The script also produces dataset-level statistics and writes a global extraction report
 to support reproducibility and dataset quality analysis.
 """
 
-from numpy import isin
+from pathlib import Path
+from collections import defaultdict
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import hashlib
 from pathlib import Path
 from collections import defaultdict
 from datasets import IterableDataset
@@ -30,10 +30,8 @@ from .utils.resource_manager import ResourceManager
 # ----------------------------
 
 DATASETS = {
-    # "droidcollection": "DaniilOr/DroidCollection",
-    "hairosetta": "isThisYouLLM/H-AIRosettaMP",
-    # "codet_m4": "DaniilOr/CoDET-M4",
-    # "ai_detector": "mhb-maaz/ai-detector-dataset",
+    "droidcollection": "DaniilOr/DroidCollection",
+    "codet_m4": "DaniilOr/CoDET-M4",
 }
 
 OUTPUT_DIR = Path("data/_00_extracted_datasets")
@@ -101,7 +99,7 @@ def _normalize_label(value, dataset: str) -> int | None:
         if value == "MACHINE_GENERATED":
             return 1
 
-    if dataset in ["hairosetta", "codet_m4"]:
+    if dataset == "codet_m4":
         v = str(value).lower()
         if "human" in v:
             return 0
@@ -143,7 +141,7 @@ def _extract_language(entry: dict) -> str | None:
     return entry.get("language") or entry.get("Language") or entry.get("language_name")
 
 
-def _extract_label(entry: dict):
+def _extract_label(entry: dict) -> str | None:
     """
     Extracts label field from dataset entry.
 
@@ -151,7 +149,7 @@ def _extract_label(entry: dict):
         entry (dict): Dataset sample.
 
     Returns:
-        Raw label value (type varies per dataset).
+        str | None: Raw label value (type varies per dataset), or None if missing.
     """
     if "label" in entry:
         label = entry["label"]
@@ -204,12 +202,11 @@ def process_dataset(item) -> dict:
         "kept": 0,
         "dropped_lang": 0,
         "dropped_label": 0,
-        "duplicates": 0,
     }
 
     lang_counter = defaultdict(int)
     label_counter = defaultdict(int)
-    seen_hashes = set()
+    label_lang_counter = defaultdict(lambda: defaultdict(int))
 
     if isinstance(stream, IterableDataset):
         for entry in stream:
@@ -221,12 +218,6 @@ def process_dataset(item) -> dict:
 
             if not isinstance(code, str) or str(code).strip() == "":
                 continue
-
-            code_hash = hashlib.md5(code.encode("utf-8")).hexdigest()
-            if code_hash in seen_hashes:
-                stats["duplicates"] += 1
-                continue
-            seen_hashes.add(code_hash)
 
             norm_lang = _normalize_language(lang)
             if norm_lang is None:
@@ -243,13 +234,13 @@ def process_dataset(item) -> dict:
                     "code": code,
                     "language": norm_lang,
                     "label": norm_label,
-                    "code_hash": code_hash,
                 }
             )
 
             stats["kept"] += 1
             lang_counter[norm_lang] += 1
             label_counter[norm_label] += 1
+            label_lang_counter[norm_lang][norm_label] += 1
 
             if len(batch) >= BATCH_SIZE:
                 table = pa.Table.from_pandas(pd.DataFrame(batch))
@@ -279,6 +270,7 @@ def process_dataset(item) -> dict:
         "stats": stats,
         "lang": dict(lang_counter),
         "label": dict(label_counter),
+        "label_lang": {lang: dict(labels) for lang, labels in label_lang_counter.items()},
         "output_path": str(output_path),
     }
 
@@ -290,7 +282,7 @@ def process_dataset(item) -> dict:
 
 def write_report(results: list[dict]):
     """
-    Writes a global dataset normalization report.
+    Writes a global dataset extraction report.
 
     The report includes:
         - Per-dataset sample counts
@@ -303,24 +295,22 @@ def write_report(results: list[dict]):
         results (list[dict]): List of dataset processing results.
     """
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
-        f.write("=== DATASET NORMALIZATION REPORT ===\n\n")
+        f.write("=== DATASET EXTRACTION REPORT ===\n\n")
 
         global_total = 0
         global_kept = 0
-        global_duplicates = 0
+
         for r in results:
             s = r["stats"]
 
             global_total += s["total"]
             global_kept += s["kept"]
-            global_duplicates += s["duplicates"]
 
             f.write(f"--- {r['name']} ---\n")
             f.write(f"Total samples: {s['total']}\n")
             f.write(f"Kept samples: {s['kept']}\n")
             f.write(f"Dropped (language): {s['dropped_lang']}\n")
             f.write(f"Dropped (label): {s['dropped_label']}\n")
-            f.write(f"Duplicates: {s['duplicates']}\n\n")
 
             f.write("Language distribution:\n")
             for k, v in r["lang"].items():
@@ -330,12 +320,17 @@ def write_report(results: list[dict]):
             for k, v in r["label"].items():
                 f.write(f"  {k}: {v}\n")
 
+            f.write("\nLabel distribution per language:\n")
+            for lang, labels in r["label_lang"].items():
+                human = labels.get(0, 0)
+                ai = labels.get(1, 0)
+                f.write(f"  {lang}: " f"human={human}, " f"ai={ai}\n")
+
             f.write("\n----------------------------\n\n")
 
         f.write("=== GLOBAL SUMMARY ===\n")
         f.write(f"Total processed: {global_total}\n")
         f.write(f"Total kept: {global_kept}\n")
-        f.write(f"Total duplicates: {global_duplicates}\n")
 
     print(f"\nReport written to: {REPORT_PATH}")
 
@@ -347,16 +342,7 @@ def write_report(results: list[dict]):
 
 def run_step_00():
     """
-    Executes dataset normalization pipeline across all configured datasets.
-
-    This function orchestrates the parallelization strategy by:
-        - Mapping each dataset to a single dedicated worker process.
-        - Using ProcessPoolExecutor to manage the lifecycle of these workers.
-        - Gathering results and passing them to the report generator.
-
-    Note:
-        The number of workers is dynamically set to match the number of datasets
-        to ensure one worker per dataset.
+    Executes dataset extraction for each specified dataset in parallel and generates a report.
     """
     items = list(DATASETS.items())
     results = []

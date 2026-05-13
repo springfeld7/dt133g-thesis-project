@@ -214,7 +214,7 @@ def _write_report(
         for (lang, label), vals in pair_avg.items():
             f.write(f"\n[{lang} | {label}]\n")
             for k, v in vals.items():
-                f.write(f"{k}: {v:.6f}\n")
+                f.write(f"{k}: {v:.6f}\n\n")
 
 
 if __name__ == "__main__":

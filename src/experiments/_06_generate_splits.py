@@ -212,8 +212,8 @@ def run_step_06():
         report_data.append((file.stem, df, train_df, test_df))
 
         # Temporary check to run during debugging
-        train_hashes = set(train_df['hash'])
-        test_hashes = set(test_df['hash'])
+        train_hashes = set(train_df["hash"])
+        test_hashes = set(test_df["hash"])
         overlap = train_hashes.intersection(test_hashes)
 
         if overlap:

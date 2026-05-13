@@ -474,19 +474,19 @@ def main():
         epilog="""
 Examples:
   # Show statistics
-  python compare_pairs.py --stats
+  python compare_dup_pairs.py --stats
   
   # Filter Step 02 exact duplicates
-  python compare_pairs.py --step 02 --show 20
+  python compare_dup_pairs.py --step 02 --show 20
   
   # Find pairs involving a specific sample
-  python compare_pairs.py --lookup ai_detector::12345
+  python compare_dup_pairs.py --lookup ai_detector::12345
   
   # Export low-similarity pairs from Step 03
-  python compare_pairs.py --step 03 --sim-max 0.95 --export low_similarity_pairs
+  python compare_dup_pairs.py --step 03 --sim-max 0.95 --export low_similarity_pairs
   
   # Find all pairs in a group
-  python compare_pairs.py --group-lookup <group_id>
+  python compare_dup_pairs.py --group-lookup <group_id>
         """,
     )
 

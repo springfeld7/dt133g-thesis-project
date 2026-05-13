@@ -101,7 +101,7 @@ def stratified_sample(df: pd.DataFrame, n: int, seed: int = 42) -> pd.DataFrame:
     # Combine both labels and shuffle final dataset
     result = pd.concat(out)
 
-    return result.sample(frac=1, random_state=seed).reset_index(drop=True)
+    return result.sample(frac=1, random_state=seed)
 
 
 def write_report(f, name, df, train_df, test_df) -> None:
@@ -174,7 +174,7 @@ def run_step_06():
     for file in files:
         print(f"\nProcessing: {file.name}")
 
-        df = pd.read_parquet(file)
+        df = pd.read_parquet(file).reset_index(drop=True)
 
         # ----------------------------
         # TEST SET (STRICT RULES)
@@ -194,11 +194,14 @@ def run_step_06():
         # TRAIN SET (SUBSET WILL BE USED AS VALIDATION IN FINE-TUNING)
         # ----------------------------
 
-        train_df = df.drop(test_df.index).reset_index(drop=True)
+        train_df = df.drop(test_df.index)
 
         # ----------------------------
         # SAVE
         # ----------------------------
+
+        train_df = train_df.reset_index(drop=True)
+        test_df = test_df.reset_index(drop=True)
 
         out_dir = OUTPUT_DIR / file.stem
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -207,6 +210,16 @@ def run_step_06():
         test_df.to_parquet(out_dir / "test.parquet", index=False)
 
         report_data.append((file.stem, df, train_df, test_df))
+
+        # Temporary check to run during debugging
+        train_hashes = set(train_df['hash'])
+        test_hashes = set(test_df['hash'])
+        overlap = train_hashes.intersection(test_hashes)
+
+        if overlap:
+            print(f"WARNING: Found {len(overlap)} duplicate hashes between splits in {file.stem}!")
+        else:
+            print(f"{file.stem} split is perfectly disjoint.")
 
     # ----------------------------
     # REPORT (single pass)

@@ -11,7 +11,6 @@ The script also produces dataset-level statistics and writes a global extraction
 to support reproducibility and dataset quality analysis.
 """
 
-import hashlib
 from pathlib import Path
 from collections import defaultdict
 import pandas as pd
@@ -30,7 +29,6 @@ from .utils.resource_manager import ResourceManager
 DATASETS = {
     "droidcollection": "DaniilOr/DroidCollection",
     "codet_m4": "DaniilOr/CoDET-M4",
-    "ai_detector": "mhb-maaz/ai-detector-dataset",
 }
 
 OUTPUT_DIR = Path("data/_00_extracted_datasets")

@@ -4,7 +4,6 @@ Step 08 of experiments: Cumulatively apply transformation tiers.
 
 """
 
-from datetime import datetime
 from operator import indexOf
 from pathlib import Path
 import subprocess
@@ -14,8 +13,8 @@ import subprocess
 # CONFIGURATION
 # -----------------------------
 
-INPUT_FILE = Path("data/final_samples/final_samples.parquet")
-BASE_OUTPUT_DIR = Path("output/transformations")
+INPUT_DIR = Path("data/_06_generated_splits")
+BASE_OUTPUT_DIR = Path("data/transformations")
 
 PYTHON_CMD = "python"
 
@@ -28,19 +27,19 @@ EXPERIMENTS = [
     # -----------------------------------
     # Tier 1 — Surface-level normalization
     # -----------------------------------
-    # {
-    #     "name": "tier_1",
-    #     "rules": [
-    #         "whitespace-normalization",
-    #         "rename-identifier",
-    #         "comment-normalization",
-    #     ],
-    #     "params": {
-    #         "whitespace-normalization": {"level": 0},
-    #         "rename-identifier": {"level": 0},
-    #         "comment-normalization": {"level": 0},
-    #     },
-    # },
+    {
+        "name": "tier_1",
+        "rules": [
+            "whitespace-normalization",
+            "rename-identifier",
+            "comment-normalization",
+        ],
+        "params": {
+            "whitespace-normalization": {"level": 0},
+            "rename-identifier": {"level": 0},
+            "comment-normalization": {"level": 0},
+        },
+    },
     # -----------------------------------
     # Tier 2 — Lexical drift (Tier 1 + Tier 2)
     # -----------------------------------
@@ -96,56 +95,63 @@ EXPERIMENTS = [
 
 def run_experiment(exp: dict):
     """Run a tiered experiment via CLI pipeline."""
-    print("\n==============================")
+    print("-------------------------------\n")
     print(f"Running experiment: {exp['name']}")
 
-    output_dir = BASE_OUTPUT_DIR / exp["name"]
-    output_dir.mkdir(parents=True, exist_ok=True)
+    files = list(INPUT_DIR.glob("*/test.parquet"))
+    
+    if not files:
+        print("No files found.")
+        return
 
-    _INPUT = INPUT_FILE
+    for file in files:
+        print(f"\nProcessing: {file.parent}/{file.name}")
 
-    exp_idx = indexOf(EXPERIMENTS, exp)
-    if exp_idx >= 0:
-        # get saved file with previous tier mutations to avoid reapplying them
-        prev_tier_file = BASE_OUTPUT_DIR / f"tier_{exp_idx+1}" / "augmented_dataset.parquet"
-        if prev_tier_file.exists():
-            _INPUT = prev_tier_file
-            print(f"  Fetched previous tier dataset from {prev_tier_file}")
+        base_dir = BASE_OUTPUT_DIR / file.parent.name
+        output_dir = base_dir / exp["name"]
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-    cmd = [
-        "uv",
-        "run",
-        "cli",
-        str(_INPUT),
-        *exp["rules"],
-        "--output-dir",
-        str(output_dir),
-    ]
+        _INPUT = file
 
-    # add rule parameters if present
-    params = exp.get("params", {})
-    for rule, rule_params in params.items():
-        for key, value in rule_params.items():
-            cmd += ["--rule-param", f"{rule}:{key}={value}"]
+        exp_idx = indexOf(EXPERIMENTS, exp)
+        if exp_idx >= 0:
+            # get saved file with previous tier mutations to avoid reapplying them
+            prev_tier_file = base_dir / f"tier_{exp_idx}" / "augmented_dataset.parquet"
+            if prev_tier_file.exists():
+                _INPUT = prev_tier_file
+                print(f"\n  Fetched previous tier dataset from {prev_tier_file}\n")
 
-    print(" ".join(cmd))
-    print("==============================\n")
+        cmd = [
+            "uv",
+            "run",
+            "cli",
+            str(_INPUT),
+            *exp["rules"],
+            "--output-dir",
+            str(output_dir),
+        ]
 
-    subprocess.run(cmd, check=True)
+        # add rule parameters if present
+        params = exp.get("params", {})
+        for rule, rule_params in params.items():
+            for key, value in rule_params.items():
+                cmd += ["--rule-param", f"{rule}:{key}={value}"]
+
+        print(" ".join(cmd))
+        print("-------------------------------\n")
+
+        subprocess.run(cmd, check=True)
 
 
 def main():
     BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("\n=== STEP 06: MAPPING GRADIENT ===\n")
-    print(f"Input dataset: {INPUT_FILE}")
-    print(f"Output base:   {BASE_OUTPUT_DIR}")
-    print(f"Total runs:    {len(EXPERIMENTS)}\n")
+    print("\n=== STEP 08: MAPPING GRADIENT ===\n")
 
     for exp in EXPERIMENTS:
         run_experiment(exp)
 
-    print("\n=== STEP 04 COMPLETE ===")
+    print("\n=== STEP 08 COMPLETE ===")
 
 
 if __name__ == "__main__":

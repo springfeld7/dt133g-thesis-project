@@ -10,6 +10,9 @@ maps common type keywords to short codes. When no type information can
 be inferred the generator falls back to the generic ``x`` code.
 """
 
+from typing import Optional
+
+from ...mutation_context import MutationContext
 from ....node import Node
 from ..utils.formatter import format_identifier
 
@@ -29,7 +32,7 @@ _TYPE_MAP = {
 }
 
 
-def _build_destructed_name(node: Node, language: str) -> str:
+def _build_destructed_name(node: Node, language: str, _: Optional[MutationContext]) -> str:
     """Build a short, type-hinted replacement name for *node*.
 
     Args:

@@ -1,6 +1,6 @@
 """_04_extract_stats.py
 
-Step 04: Dataset Characterization Layer
+Step 04: Extraction of statistical features and error annotation for valid/invalid parsing.
 
 This stage:
 1. Loads deduplicated datasets from Step 03
@@ -15,6 +15,7 @@ This stage:
 """
 
 from pathlib import Path
+import sys
 import pandas as pd
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
@@ -28,11 +29,11 @@ from .utils.resource_manager import ResourceManager
 # ----------------------------
 
 INPUT_DIR = Path("data/_03_near_deduplicated_datasets")
-OUTPUT_DIR = Path("data/_04_extract_stats")
-REPORT_DIR = Path("output/")
+OUTPUT_DIR = Path("data/_04_extracted_stats_datasets")
+REPORT_PATH = Path("output/_04_extracted_stats_report.txt")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 MAX_WORKERS = ResourceManager.get_cpu_limit()
 
@@ -102,6 +103,8 @@ def run_step_04():
         print("No files found.")
         return
 
+    REPORT_PATH.write_text("", encoding="utf-8")
+
     for file in files:
         print(f"\nProcessing: {file.name}")
         df = pd.read_parquet(file).reset_index(drop=True)
@@ -112,10 +115,15 @@ def run_step_04():
 
         inputs = list(zip(codes, langs, labels))
 
+        raw_chunks = max(1, len(df) // (max(1, MAX_WORKERS) * 16))
+        chunksize = max(1, min(1024, raw_chunks))
+        print(f"Using chunksize={chunksize} for executor.map (raw={raw_chunks})")
+        sys.stdout.flush()
+
         with ProcessPoolExecutor(max_workers=MAX_WORKERS, initializer=init_worker) as executor:
 
             metrics_list = list(
-                tqdm(executor.map(process_sample, inputs), total=len(df), desc="Analyzing")
+                tqdm(executor.map(process_sample, inputs, chunksize=chunksize), total=len(df), desc="Analyzing")
             )
 
         # Integration
@@ -129,6 +137,7 @@ def run_step_04():
         label_avg = df.groupby("label")[NUMERIC_COLS].mean().to_dict("index")
         lang_avg = df.groupby("language")[NUMERIC_COLS].mean().to_dict("index")
         pair_avg = df.groupby(["language", "label"])[NUMERIC_COLS].mean().to_dict("index")
+        label_error_ratio = (df.groupby("label")["ERROR"].mean().to_dict())
 
         # Save and report
         out_path = OUTPUT_DIR / file.name
@@ -142,10 +151,21 @@ def run_step_04():
             pair_avg=pair_avg,
             error_count=error_count,
             error_ratio=error_ratio,
+            label_error_ratio=label_error_ratio,
         )
 
 
-def _write_report(file, df, global_avg, label_avg, lang_avg, pair_avg, error_count, error_ratio):
+def _write_report(
+    file,
+    df,
+    global_avg,
+    label_avg,
+    lang_avg,
+    pair_avg,
+    error_count,
+    error_ratio,
+    label_error_ratio
+):
     """
     Handles the text formatting for the statistical report.
 
@@ -156,17 +176,27 @@ def _write_report(file, df, global_avg, label_avg, lang_avg, pair_avg, error_cou
         label_avg (dict): Averages grouped by label.
         lang_avg (dict): Averages grouped by language.
         pair_avg (dict): Averages grouped by (language, label).
+        error_count (int): Total count of ERROR=1.
+        error_ratio (float): Mean of ERROR column.
+        label_error_ratio (dict): ERROR ratio per label.
     Returns:
         None
     """
-    report_path = REPORT_DIR / f"{file.stem}_stats_report.txt"
-    with open(report_path, "w", encoding="utf-8") as f:
+    with open(REPORT_PATH, "a", encoding="utf-8") as f:
         f.write("=== STEP 04 - DATASET STATISTICS ===\n\n")
         f.write(f"Dataset: {file.name}\n")
         f.write(f"Total samples: {len(df)}\n")
 
-        f.write(f"ERROR samples: {error_count}\n")
-        f.write(f"ERROR ratio: {error_ratio:.4f}\n\n")
+        f.write(f"GLOBAL ERROR samples: {error_count}\n")
+        f.write(f"GLOBAL ERROR ratio: {error_ratio:.4f}\n\n")
+
+        f.write("--- ERROR RATIO PER LABEL ---\n")
+
+        for label, ratio in label_error_ratio.items():
+            f.write(f"{label}: {ratio:.4f}\n")
+
+        f.write("\n" + "=" * 40 + "\n")
+        f.write("--- METRIC AVERAGES ---\n")
 
         f.write("--- GLOBAL AVERAGES ---\n")
         for k, v in global_avg.items():

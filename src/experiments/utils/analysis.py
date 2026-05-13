@@ -58,7 +58,7 @@ class SampleAnalyzer:
         Returns:
             Node | None: The parsed tree if the sample is valid, otherwise None.
         """
-        if not lang or not label or not (code and code.strip()):
+        if lang is None or label is None or not (isinstance(code, str) and code.strip()):
             return None
 
         self._ts_parser.language = get_language(lang)

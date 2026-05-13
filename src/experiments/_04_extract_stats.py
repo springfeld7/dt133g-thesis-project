@@ -123,7 +123,11 @@ def run_step_04():
         with ProcessPoolExecutor(max_workers=MAX_WORKERS, initializer=init_worker) as executor:
 
             metrics_list = list(
-                tqdm(executor.map(process_sample, inputs, chunksize=chunksize), total=len(df), desc="Analyzing")
+                tqdm(
+                    executor.map(process_sample, inputs, chunksize=chunksize),
+                    total=len(df),
+                    desc="Analyzing",
+                )
             )
 
         # Integration
@@ -137,7 +141,7 @@ def run_step_04():
         label_avg = df.groupby("label")[NUMERIC_COLS].mean().to_dict("index")
         lang_avg = df.groupby("language")[NUMERIC_COLS].mean().to_dict("index")
         pair_avg = df.groupby(["language", "label"])[NUMERIC_COLS].mean().to_dict("index")
-        label_error_ratio = (df.groupby("label")["ERROR"].mean().to_dict())
+        label_error_ratio = df.groupby("label")["ERROR"].mean().to_dict()
 
         # Save and report
         out_path = OUTPUT_DIR / file.name
@@ -156,15 +160,7 @@ def run_step_04():
 
 
 def _write_report(
-    file,
-    df,
-    global_avg,
-    label_avg,
-    lang_avg,
-    pair_avg,
-    error_count,
-    error_ratio,
-    label_error_ratio
+    file, df, global_avg, label_avg, lang_avg, pair_avg, error_count, error_ratio, label_error_ratio
 ):
     """
     Handles the text formatting for the statistical report.

@@ -18,6 +18,7 @@ from tqdm import tqdm
 
 from transtructiver.parsing.parser import Parser
 from transtructiver.mutation.rules.comment_deletion import CommentDeletionRule
+from transtructiver.mutation.rules.whitespace_normalization import WhitespaceNormalizationRule
 from transtructiver.mutation.mutation_context import MutationContext
 from .utils.resource_manager import ResourceManager
 
@@ -27,7 +28,10 @@ from .utils.resource_manager import ResourceManager
 
 INPUT_DIR = Path("data/_00_extracted_datasets")
 OUTPUT_DIR = Path("data/_01_normalized_datasets")
+REPORT_PATH = Path("output/_01_normalized_datasets_report.txt")
+
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 BATCH_SIZE = 256
 MAX_WORKERS = ResourceManager.get_cpu_limit()
@@ -44,10 +48,11 @@ def init_worker():
     This avoids pickling issues and ensures thread/process safety
     for TranStructIVER components.
     """
-    global parser, comment_rule, context
+    global parser, comment_rule, whitespace_rule, context
 
     parser = Parser()
     comment_rule = CommentDeletionRule(level=3)
+    whitespace_rule = WhitespaceNormalizationRule(level=1)
     context = MutationContext()
 
 
@@ -98,6 +103,7 @@ def normalize_sample(code: str, lang: str) -> str | None:
                 node.semantic_label = node.type
 
     comment_rule.apply(tree, context)
+    whitespace_rule.apply(tree, context)
 
     return tree.to_code()
 
@@ -145,7 +151,6 @@ def process_batch(batch):
             {
                 **row,
                 "code_normalized": norm_code,
-                "normalized_hash": hashlib.md5(norm_code.encode("utf-8")).hexdigest(),
             }
         )
 
@@ -192,6 +197,35 @@ def run_step_01():
 
         print(f"Removed samples: {len(df) - len(df_clean)}")
         print(f"Remaining samples: {len(df_clean)}")
+
+        # ----------------------------
+        # REPORT (PER DATASET ONLY)
+        # ----------------------------
+
+        with open(REPORT_PATH, "a", encoding="utf-8") as report:
+            report.write(f"--- {f.stem} ---\n")
+            report.write(f"Initial samples: {len(df)}\n")
+            report.write(f"Removed samples: {len(df) - len(df_clean)}\n")
+            report.write(f"Remaining samples: {len(df_clean)}\n\n")
+
+            report.write("Language distribution:\n")
+            for lang, count in df_clean["language"].value_counts().items():
+                report.write(f"  {lang}: {count}\n")
+
+            report.write("\nLabel distribution:\n")
+            for label, count in df_clean["label"].value_counts().items():
+                report.write(f"  {label}: {count}\n")
+
+            report.write("\nLabel distribution per language:\n")
+
+            lang_label_dist = df_clean.groupby(["language", "label"]).size().unstack(fill_value=0)
+
+            for lang, row in lang_label_dist.iterrows():
+                human = row.get(0, 0)
+                ai = row.get(1, 0)
+
+                report.write(f"  {lang}: " f"human={human}, " f"ai={ai}\n")
+            report.write("\n----------------------------\n\n")
 
         df_clean.to_parquet(OUTPUT_DIR / f.name, index=False)
 

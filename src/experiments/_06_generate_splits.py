@@ -104,55 +104,51 @@ def stratified_sample(df: pd.DataFrame, n: int, seed: int = 42) -> pd.DataFrame:
     return result.sample(frac=1, random_state=seed).reset_index(drop=True)
 
 
-def write_report(name, df, train_df, test_df) -> None:
+def write_report(f, name, df, train_df, test_df) -> None:
     """
-    Writes dataset split report.
+    Writes one dataset section into an already open report file.
 
     Args:
-        - name: Dataset name (for report title)
-        - df: Original full dataset
-        - train_df: Train split DataFrame
-        - test_df: Test split DataFrame
+        f: Open file handle for the report (write mode).
+        name: Dataset name used as section header.
+        df: Original full dataset.
+        train_df: Train split DataFrame.
+        test_df: Test split DataFrame.
     """
 
-    with open(REPORT_PATH, "w", encoding="utf-8") as f:
-        f.write("=== STEP 06 - TRAIN/TEST SPLIT REPORT ===\n\n")
+    f.write(f"\n\n=== DATASET: {name} ===\n\n")
 
-        f.write(f"Dataset: {name}\n\n")
+    f.write("=== TOTAL ===\n")
+    f.write(f"Samples: {len(df)}\n\n")
 
-        f.write("=== TOTAL ===\n")
-        f.write(f"Samples: {len(df)}\n\n")
+    f.write("=== TEST SET ===\n")
+    f.write(f"Samples: {len(test_df)}\n")
+    f.write(f"ERROR = 0 only: {test_df['ERROR'].sum() == 0}\n\n")
 
-        f.write("=== TEST SET ===\n")
-        f.write(f"Samples: {len(test_df)}\n")
-        f.write(f"ERROR = 0 only: {test_df['ERROR'].sum() == 0}\n\n")
+    f.write("Label distribution:\n")
+    for k, v in test_df["label"].value_counts().items():
+        f.write(f"  {k}: {v}\n")
 
-        f.write("Label distribution:\n")
-        for k, v in test_df["label"].value_counts().items():
-            f.write(f"  {k}: {v}\n")
+    f.write("\nLanguage distribution:\n")
+    for k, v in test_df["language"].value_counts().items():
+        f.write(f"  {k}: {v}\n")
 
-        f.write("\nLanguage distribution:\n")
-        for k, v in test_df["language"].value_counts().items():
-            f.write(f"  {k}: {v}\n")
+    f.write("\nLanguage-Label distribution:\n")
+    for (lang, label), count in test_df.groupby(["language", "label"]).size().items():
+        f.write(f"  {lang} | {label}: {count}\n")
 
-        f.write("\nLanguage-Label distribution:\n")
-        for (lang, label), count in test_df.groupby(["language", "label"]).size().items():
-            f.write(f"  {lang} | {label}: {count}\n")
+    f.write("\n=== TRAIN SET ===\n")
+    f.write(f"Samples: {len(train_df)}\n\n")
 
-        f.write("\n=== TRAIN SET ===\n")
-        f.write(f"Samples: {len(train_df)}\n\n")
+    f.write("Label distribution:\n")
+    for k, v in train_df["label"].value_counts().items():
+        f.write(f"  {k}: {v}\n")
 
-        f.write("Label distribution:\n")
-        for k, v in train_df["label"].value_counts().items():
-            f.write(f"  {k}: {v}\n")
+    f.write("\nLanguage distribution:\n")
+    for k, v in train_df["language"].value_counts().items():
+        f.write(f"  {k}: {v}\n")
 
-        f.write("\nLanguage distribution:\n")
-        for k, v in train_df["language"].value_counts().items():
-            f.write(f"  {k}: {v}\n")
-
-        f.write("\n----------------------------\n")
-
-    print(f"Report written to {REPORT_PATH}")
+    f.write("\n----------------------------\n")
 
 
 # ----------------------------
@@ -172,6 +168,8 @@ def run_step_06():
         return
 
     print("\n=== STEP 06: SPLIT GENERATION ===")
+
+    report_data = []
 
     for file in files:
         print(f"\nProcessing: {file.name}")
@@ -208,14 +206,19 @@ def run_step_06():
         train_df.to_parquet(out_dir / "train.parquet", index=False)
         test_df.to_parquet(out_dir / "test.parquet", index=False)
 
-        # ----------------------------
-        # REPORT
-        # ----------------------------
+        report_data.append((file.stem, df, train_df, test_df))
 
-        write_report(file.stem, df, train_df, test_df)
+    # ----------------------------
+    # REPORT (single pass)
+    # ----------------------------
+
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
+        f.write("=== STEP 06 - TRAIN/TEST SPLIT REPORT ===\n")
+
+        for name, df, train_df, test_df in report_data:
+            write_report(f, name, df, train_df, test_df)
 
     print("\nStep 06 complete.")
-
 
 # ----------------------------
 # ENTRY POINT

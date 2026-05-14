@@ -76,6 +76,10 @@ def _get_candidate_pool(
         logits = mlm_model(**inputs).logits[0, mask_idx, :]
         top_tokens = torch.topk(logits, 100, dim=1).indices[0].tolist()
 
+    del logits
+    del inputs
+    torch.cuda.empty_cache()
+
     candidates = []
     for t_id in top_tokens:
         cand = tokenizer.decode([t_id]).strip()
@@ -110,7 +114,7 @@ def _build_substitute_name(node: Node, language: str, context: Optional[Mutation
     if not node.text or not context:
         return ""
 
-    if context.mlm_model is None or context.tokenizer is None:
+    if context.mlm_model is None or context.tokenizer is None or context.varclr is None:
         _get_resources(context)
 
     # Find nearest scoping ancestor
@@ -163,7 +167,10 @@ def _build_substitute_name(node: Node, language: str, context: Optional[Mutation
 
         # Score the FULL original name against all FULL combinations
         nested_scores = context.varclr.cross_score(joined_original, new_words)
-        scores = torch.tensor(nested_scores[0])
+        scores = torch.tensor(nested_scores[0], device="cpu")
+
+        del nested_scores
+        torch.cuda.empty_cache()
 
         # Pick from the top 3 overall performers for adversarial variety
         top_k = min(5, len(new_words))

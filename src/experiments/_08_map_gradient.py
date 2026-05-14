@@ -99,7 +99,7 @@ def run_experiment(exp: dict):
     print(f"Running experiment: {exp['name']}")
 
     files = list(INPUT_DIR.glob("*/test.parquet"))
-    
+
     if not files:
         print("No files found.")
         return

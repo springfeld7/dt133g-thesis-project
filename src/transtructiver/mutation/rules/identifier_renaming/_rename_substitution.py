@@ -47,7 +47,7 @@ def _get_resources(context: Optional[MutationContext]):
 
 @lru_cache(maxsize=512)
 def _get_candidate_pool(
-    word: str, context_code: str, tokenizer, mlm_model, top_n: int = 5
+    word: str, context_code: str, tokenizer, mlm_model, top_n: int = 3
 ) -> list[str]:
     """
     Generate a semantically-similar synonym for an identifier using masked language modeling.
@@ -74,7 +74,7 @@ def _get_candidate_pool(
 
     with torch.no_grad():
         logits = mlm_model(**inputs).logits[0, mask_idx, :]
-        top_tokens = torch.topk(logits, 100, dim=1).indices[0].tolist()
+        top_tokens = torch.topk(logits, 20, dim=1).indices[0].tolist()
 
     del logits
     del inputs
@@ -131,22 +131,26 @@ def _build_substitute_name(node: Node, language: str, context: Optional[Mutation
         node.parent or node,  # Fallback
     )
 
-    context_code = context_node.to_code()
+    code_string = context_node.to_code()
     original = node.text
     original_words = split_words(original)
 
     word_pool = []
     for word in original_words:
         assert context
+        context_code = code_string[:100] if len(code_string) > 100 else code_string
+        top_n = 2 if len(original_words) > 1 else 5
         word_pool.append(
-            _get_candidate_pool(word, context_code, context.tokenizer, context.mlm_model)
+            _get_candidate_pool(
+                word, context_code, context.tokenizer, context.mlm_model, top_n=top_n
+            )
         )
 
     # 3. Global Semantic Scoring via VarCLR
     with torch.no_grad():
         assert context.varclr
         new_words = []
-        if len(word_pool) > 1:
+        if len(original_words) > 1:
             # Generate all combinations (Cartesian Product)
             combos = itertools.product(*word_pool)
             new_words = [

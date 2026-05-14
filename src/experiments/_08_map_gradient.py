@@ -96,20 +96,28 @@ EXPERIMENTS = [
 def run_experiment(exp: dict):
     """Run a tiered experiment via CLI pipeline."""
     print("-------------------------------\n")
-    print(f"Running experiment: {exp['name']}")
+    print(f"Running experiment: {exp["name"]}")
 
     files = list(INPUT_DIR.glob("*/test.parquet"))
-    
+
     if not files:
         print("No files found.")
         return
 
     for file in files:
-        print(f"\nProcessing: {file.parent}/{file.name}")
+        print(f"\nProcessing: {file.parent.name}/{file.name}")
 
         base_dir = BASE_OUTPUT_DIR / file.parent.name
-        output_dir = base_dir / exp["name"]
+        output_dir = base_dir / f"{exp["name"]}"
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        this_tier_file = output_dir / "augmented_dataset.parquet"
+        if this_tier_file.exists():
+            print(
+                f"\nAugmentet dataset for {file.parent.name} already exists at:\n{this_tier_file}"
+            )
+            print("\n-------------------------------")
+            return
 
         _INPUT = file
 
@@ -138,7 +146,7 @@ def run_experiment(exp: dict):
                 cmd += ["--rule-param", f"{rule}:{key}={value}"]
 
         print(" ".join(cmd))
-        print("-------------------------------\n")
+        print("\n-------------------------------\n")
 
         subprocess.run(cmd, check=True)
 

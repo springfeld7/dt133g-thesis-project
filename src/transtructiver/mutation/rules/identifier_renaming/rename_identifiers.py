@@ -78,6 +78,7 @@ class RenameIdentifiersRule(MutationRule):
         self.targets = targets or []
         # Precompute rename filters and helper objects used during apply().
         self.allowed_labels = self._resolve_target_labels(self.targets)
+        self.context = None
         self._scope = ScopeManager()
         self._namer = NameGenerator(level)
 
@@ -153,9 +154,9 @@ class RenameIdentifiersRule(MutationRule):
     # Naming
     # ------------------------------------------------------------------
 
-    def _make_scoped_name(self, node: Node, _original_name: str, language: str) -> str:
+    def _make_scoped_name(self, node: Node, language: str) -> str:
         """Generate a deterministic rename for the current identifier."""
-        return self._namer.make_name(node, language)
+        return self._namer.make_name(node, language, self.context)
 
     def _name_exists_in_visible_scope(self, candidate: str) -> bool:
         """Return whether a generated name already exists in any active scope."""
@@ -179,12 +180,12 @@ class RenameIdentifiersRule(MutationRule):
             # Targeted shadow handling: when a parameter declaration shadows
             # an outer binding (e.g., class field), keep a distinct local name.
             if node.semantic_label == "parameter_name" and outer_existing is not None:
-                base_name = self._make_scoped_name(node, original_name, language)
+                base_name = self._make_scoped_name(node, language)
                 new_name = base_name
                 bump_index = 1
                 while new_name == outer_existing or self._name_exists_in_visible_scope(new_name):
                     if self.level == 1:
-                        new_name = self._make_scoped_name(node, original_name, language)
+                        new_name = self._make_scoped_name(node, language)
                     if self.level == 3:
                         new_name = random.choice(string.ascii_lowercase)
                     new_name = self._bump_name(base_name, bump_index, language)
@@ -195,7 +196,7 @@ class RenameIdentifiersRule(MutationRule):
             if outer_existing is not None:
                 return outer_existing
 
-            new_name = self._make_scoped_name(node, original_name, language)
+            new_name = self._make_scoped_name(node, language)
             self._scope.declare(original_name, new_name)
             return new_name
 
@@ -203,7 +204,7 @@ class RenameIdentifiersRule(MutationRule):
         if existing is not None:
             return existing
 
-        new_name = self._make_scoped_name(node, original_name, language)
+        new_name = self._make_scoped_name(node, language)
         self._scope.declare(original_name, new_name)
         return new_name
 
@@ -217,7 +218,7 @@ class RenameIdentifiersRule(MutationRule):
         Args:
             root: Annotated CST root node.
             context: MutationContext for this mutation application,
-                     unused by this rule but available for future extensions.
+                     used to hold models for level 1 renaming.
 
         Returns:
             A list of MutationRecord entries for performed rename actions.
@@ -227,6 +228,8 @@ class RenameIdentifiersRule(MutationRule):
         """
         if root is None:
             return []
+
+        self.context = context if self.level == 1 else None
 
         language = root.language.lower() if root.language else None
         if language is None:

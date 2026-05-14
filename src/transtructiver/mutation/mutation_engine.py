@@ -41,7 +41,8 @@ class MutationEngine:
             rules (List[MutationRule]): List of mutation rule objects.
         """
         self.rules: List[MutationRule] = rules
-        self.manifest: MutationManifest = MutationManifest()
+        self.manifest = MutationManifest()
+        self.context = MutationContext()
 
     def apply_mutations(self, cst: Node) -> MutationManifest:
         """
@@ -59,12 +60,12 @@ class MutationEngine:
             MutationManifest: The complete transformation Manifest.
         """
         manifest = MutationManifest()
-        context = MutationContext()
+        self.context.reset()
 
         ordered_rules = self._order_rules()
 
         for rule in ordered_rules:
-            local_changes = rule.apply(cst, context)
+            local_changes = rule.apply(cst, self.context)
             self._merge_to_manifest(manifest, local_changes, rule.name)
 
         self.manifest = manifest

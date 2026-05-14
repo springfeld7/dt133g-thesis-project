@@ -3,11 +3,14 @@
 Provides functions to abbreviate and compress identifiers to shorter forms.
 """
 
+from typing import Optional
+
+from ...mutation_context import MutationContext
 from ....node import Node
 from ..utils.formatter import split_words, format_identifier
 
 
-def _build_abbreviated_name(node: Node, language: str) -> str:
+def _build_abbreviated_name(node: Node, language: str, context: Optional[MutationContext]) -> str:
     """Build a shortened identifier name based on length.
 
     Args:

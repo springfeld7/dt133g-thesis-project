@@ -1,15 +1,23 @@
 """Tests semantic identifier rename substitution output using mocked CST nodes."""
 
 import pytest
+import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+from unittest.mock import create_autospec
 
-pytestmark = pytest.mark.filterwarnings(
-    "ignore:.*BPE.__init__ will not create from files anymore.*:DeprecationWarning"
-)
-
+from evaluation.varclr.models.encoders import Encoder
+from transtructiver.mutation.mutation_context import MutationContext
 from transtructiver.node import Node
 from transtructiver.mutation.rules.identifier_renaming._rename_substitution import (
     _build_substitute_name,
 )
+
+
+@pytest.fixture
+def ctx():
+    """Provides a fresh MutationContext with default counter for each test."""
+    context = MutationContext()
+    context.mlm_model
 
 
 class MockNode(Node):
@@ -40,10 +48,18 @@ class MockNode(Node):
             curr = curr.parent
 
 
-def test_rename_substitution_visual_check():
+def test_rename_substitution_visual_check(monkeypatch):
     """
     Visual verification of the MLM + VarCLR renaming logic.
     """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    mock_context = create_autospec(MutationContext, instance=True)
+
+    mock_context.tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base-mlm")
+    mock_context.mlm_model = (
+        AutoModelForMaskedLM.from_pretrained("microsoft/codebert-base-mlm").to(device).eval()
+    )
+    mock_context.varclr = Encoder.from_pretrained("varclr-codebert").to(device).eval()
     test_cases = [
         {
             "original": "payload_arg",
@@ -79,7 +95,7 @@ def test_rename_substitution_visual_check():
         target_node = MockNode(case["original"], parent=scope_node)
 
         # Run substitution
-        renamed = _build_substitute_name(target_node, case["lang"])
+        renamed = _build_substitute_name(target_node, case["lang"], mock_context)
 
         context_line = case["code"].split("\n")[0]
         print(f"{case['original']:<20} -> {renamed:<20} | {context_line}")

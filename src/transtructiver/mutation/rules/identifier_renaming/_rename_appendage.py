@@ -5,6 +5,9 @@ It derives type-aware suffix tokens from declaration context and formats
 renamed identifier text according to language-specific naming conventions.
 """
 
+from typing import Optional
+
+from ...mutation_context import MutationContext
 from ....node import Node
 from ..utils.formatter import format_identifier
 
@@ -31,7 +34,7 @@ _SEMANTIC_FALLBACK_SUFFIXES = {
 }
 
 
-def _build_appendage_name(node: Node, language: str) -> str:
+def _build_appendage_name(node: Node, language: str, _: Optional[MutationContext]) -> str:
     """Build renamed identifier text for a node.
 
     Args:

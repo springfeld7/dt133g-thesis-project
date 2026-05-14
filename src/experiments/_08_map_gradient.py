@@ -96,7 +96,7 @@ EXPERIMENTS = [
 def run_experiment(exp: dict):
     """Run a tiered experiment via CLI pipeline."""
     print("-------------------------------\n")
-    print(f"Running experiment: {exp["name"]}")
+    print(f"Running experiment: {exp['name']}")
 
     files = list(INPUT_DIR.glob("*/test.parquet"))
 
@@ -108,7 +108,7 @@ def run_experiment(exp: dict):
         print(f"\nProcessing: {file.parent.name}/{file.name}")
 
         base_dir = BASE_OUTPUT_DIR / file.parent.name
-        output_dir = base_dir / f"{exp["name"]}"
+        output_dir = base_dir / f"{exp['name']}"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         this_tier_file = output_dir / "augmented_dataset.parquet"

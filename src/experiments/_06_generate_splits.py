@@ -10,7 +10,10 @@ This stage:
     - balanced 50/50 label distribution
     - ERROR == 0 only
     - stratified across language + label
-4. Train set contains remaining samples (no balancing enforced)
+4. Builds a controlled train set:
+    - 100,000 samples per dataset
+    - balanced 50/50 label distribution
+    - stratified across language + label
 5. Writes split datasets + audit report
 """
 
@@ -29,6 +32,7 @@ REPORT_PATH = Path("output/_06_generated_split_reports.txt")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+TRAIN_SIZE = 100_000
 TEST_SIZE = 10_000
 RANDOM_SEED = 42
 
@@ -194,7 +198,20 @@ def run_step_06():
         # TRAIN SET (SUBSET WILL BE USED AS VALIDATION IN FINE-TUNING)
         # ----------------------------
 
-        train_df = df.drop(test_df.index)
+        remaining_df = df.drop(test_df.index)
+
+        if len(remaining_df) < TRAIN_SIZE:
+            raise ValueError(
+                f"Not enough remaining samples in {file.name}: "
+                f"{len(remaining_df)} available, {TRAIN_SIZE} required"
+            )
+
+        # Stratified train subset
+        train_df = stratified_sample(
+            remaining_df,
+            TRAIN_SIZE,
+            seed=RANDOM_SEED,
+        )
 
         # ----------------------------
         # SAVE

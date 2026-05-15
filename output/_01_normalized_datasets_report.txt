@@ -1,0 +1,42 @@
+--- codet_m4 ---
+Initial samples: 500504
+Removed samples: 6183
+Remaining samples: 494321
+
+Language distribution:
+  python: 182182
+  java: 172259
+  cpp: 139880
+
+Label distribution:
+  1: 248407
+  0: 245914
+
+Label distribution per language:
+  cpp: human=60539, ai=79341
+  java: human=88694, ai=83565
+  python: human=96681, ai=85501
+
+----------------------------
+
+--- droidcollection ---
+Initial samples: 515061
+Removed samples: 1356
+Remaining samples: 513705
+
+Language distribution:
+  python: 245750
+  java: 185124
+  cpp: 82831
+
+Label distribution:
+  0: 323157
+  1: 190548
+
+Label distribution per language:
+  cpp: human=40411, ai=42420
+  java: human=134924, ai=50200
+  python: human=147822, ai=97928
+
+----------------------------
+

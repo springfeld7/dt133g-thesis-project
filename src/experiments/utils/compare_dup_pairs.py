@@ -16,10 +16,18 @@ from typing import Optional, Dict, Any
 # ----------------------------
 
 REPORT_DIR = Path("output")
-STEP02_PAIRS = REPORT_DIR / "_02_exact_duplicate_pairs.parquet"
-STEP02_PAIRS_CSV = REPORT_DIR / "_02_exact_duplicate_pairs.csv"
-STEP03_PAIRS = REPORT_DIR / "_03_near_duplicate_pairs.parquet"
-STEP03_PAIRS_CSV = REPORT_DIR / "_03_near_duplicate_pairs.csv"
+STEP02_PAIRS = Path(
+    "data/_02_exact_deduplicated_datasets/_02_dup_pairs/_02_exact_duplicate_pairs.parquet"
+)
+STEP02_PAIRS_CSV = Path(
+    "data/_02_exact_deduplicated_datasets/_02_dup_pairs/_02_exact_duplicate_pairs.csv"
+)
+STEP03_PAIRS = Path(
+    "data/_03_near_deduplicated_datasets/_03_dup_pairs/_03_near_duplicate_pairs.parquet"
+)
+STEP03_PAIRS_CSV = Path(
+    "data/_03_near_deduplicated_datasets/_03_dup_pairs/_03_near_duplicate_pairs.csv"
+)
 
 STEP02_SOURCE_DIR = Path("data/_01_normalized_datasets")
 STEP03_SOURCE_DIR = Path("data/_02_exact_deduplicated_datasets")

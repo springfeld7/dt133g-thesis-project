@@ -1,0 +1,336 @@
+=== STEP 04 - DATASET STATISTICS ===
+
+Dataset: codet_m4.parquet
+Total samples: 451121
+GLOBAL ERROR samples: 36865
+GLOBAL ERROR ratio: 0.0817
+
+--- ERROR RATIO PER LABEL ---
+0: 0.0362
+1: 0.1268
+
+========================================
+--- METRIC AVERAGES ---
+--- GLOBAL AVERAGES ---
+char_count: 1160.050758
+loc: 59.763454
+lloc: 35.725969
+identifier_density: 2.084638
+for_loop_density: 0.044581
+comment_density: 0.043985
+whitespace_ratio: 0.252498
+
+--- PER LABEL AVERAGES ---
+
+[0]
+char_count: 1656.736283
+loc: 96.492586
+lloc: 51.081290
+identifier_density: 2.132333
+for_loop_density: 0.044206
+comment_density: 0.032808
+whitespace_ratio: 0.264443
+
+[1]
+char_count: 668.798528
+loc: 23.436105
+lloc: 20.538622
+identifier_density: 2.037464
+for_loop_density: 0.044951
+comment_density: 0.055039
+whitespace_ratio: 0.240684
+
+--- PER LANGUAGE AVERAGES ---
+
+[cpp]
+char_count: 1114.188702
+loc: 68.275753
+lloc: 40.600626
+identifier_density: 1.826184
+for_loop_density: 0.050155
+comment_density: 0.033496
+whitespace_ratio: 0.265601
+
+[java]
+char_count: 1551.146219
+loc: 81.536873
+lloc: 46.465101
+identifier_density: 2.069400
+for_loop_density: 0.031431
+comment_density: 0.037076
+whitespace_ratio: 0.292999
+
+[python]
+char_count: 834.872883
+loc: 33.033798
+lloc: 22.015186
+identifier_density: 2.300175
+for_loop_density: 0.052370
+comment_density: 0.058538
+whitespace_ratio: 0.204907
+
+--- PER (LANGUAGE, LABEL) AVERAGES ---
+
+[cpp | 0]
+char_count: 1659.467531
+
+loc: 122.369749
+
+lloc: 61.518704
+
+identifier_density: 2.124694
+
+for_loop_density: 0.055163
+
+comment_density: 0.025205
+
+whitespace_ratio: 0.271399
+
+
+[cpp | 1]
+char_count: 717.834758
+
+loc: 28.955743
+
+lloc: 25.395629
+
+identifier_density: 1.609203
+
+for_loop_density: 0.046515
+
+comment_density: 0.039523
+
+whitespace_ratio: 0.261386
+
+
+[java | 0]
+char_count: 2234.694278
+
+loc: 133.519869
+
+lloc: 68.033075
+
+identifier_density: 1.952328
+
+for_loop_density: 0.023873
+
+comment_density: 0.035083
+
+whitespace_ratio: 0.305894
+
+
+[java | 1]
+char_count: 832.791043
+
+loc: 26.906837
+
+lloc: 23.798858
+
+identifier_density: 2.192434
+
+for_loop_density: 0.039374
+
+comment_density: 0.039169
+
+whitespace_ratio: 0.279448
+
+
+[python | 0]
+char_count: 1151.524745
+
+loc: 48.587502
+
+lloc: 30.001645
+
+identifier_density: 2.293784
+
+for_loop_density: 0.055299
+
+comment_density: 0.035422
+
+whitespace_ratio: 0.224122
+
+
+[python | 1]
+char_count: 459.000996
+
+loc: 14.571251
+
+lloc: 12.535105
+
+identifier_density: 2.307760
+
+for_loop_density: 0.048894
+
+comment_density: 0.085977
+
+whitespace_ratio: 0.182099
+
+=== STEP 04 - DATASET STATISTICS ===
+
+Dataset: droidcollection.parquet
+Total samples: 501851
+GLOBAL ERROR samples: 13082
+GLOBAL ERROR ratio: 0.0261
+
+--- ERROR RATIO PER LABEL ---
+0: 0.0406
+1: 0.0021
+
+========================================
+--- METRIC AVERAGES ---
+--- GLOBAL AVERAGES ---
+char_count: 1434.225065
+loc: 43.937063
+lloc: 38.188522
+identifier_density: 2.067941
+for_loop_density: 0.032529
+comment_density: 0.067000
+whitespace_ratio: 0.245953
+
+--- PER LABEL AVERAGES ---
+
+[0]
+char_count: 1394.411686
+loc: 41.007905
+lloc: 36.528376
+identifier_density: 2.131372
+for_loop_density: 0.030762
+comment_density: 0.059285
+whitespace_ratio: 0.260696
+
+[1]
+char_count: 1499.553341
+loc: 48.743408
+lloc: 40.912594
+identifier_density: 1.963860
+for_loop_density: 0.035428
+comment_density: 0.079660
+whitespace_ratio: 0.221763
+
+--- PER LANGUAGE AVERAGES ---
+
+[cpp]
+char_count: 1597.740731
+loc: 56.412284
+lloc: 48.744382
+identifier_density: 1.250172
+for_loop_density: 0.022356
+comment_density: 0.071931
+whitespace_ratio: 0.237073
+
+[java]
+char_count: 1799.563885
+loc: 52.635512
+lloc: 45.750570
+identifier_density: 1.725546
+for_loop_density: 0.009364
+comment_density: 0.093147
+whitespace_ratio: 0.239311
+
+[python]
+char_count: 1111.068355
+loc: 33.533685
+lloc: 29.235691
+identifier_density: 2.580586
+for_loop_density: 0.052957
+comment_density: 0.046010
+whitespace_ratio: 0.253693
+
+--- PER (LANGUAGE, LABEL) AVERAGES ---
+
+[cpp | 0]
+char_count: 1372.388292
+
+loc: 46.060128
+
+lloc: 41.286346
+
+identifier_density: 1.407653
+
+for_loop_density: 0.021478
+
+comment_density: 0.064547
+
+whitespace_ratio: 0.238076
+
+
+[cpp | 1]
+char_count: 1782.118546
+
+loc: 64.882163
+
+lloc: 54.846365
+
+identifier_density: 1.121324
+
+for_loop_density: 0.023075
+
+comment_density: 0.077973
+
+whitespace_ratio: 0.236252
+
+
+[java | 0]
+char_count: 1788.281363
+
+loc: 51.770672
+
+lloc: 45.512521
+
+identifier_density: 1.716449
+
+for_loop_density: 0.008265
+
+comment_density: 0.100291
+
+whitespace_ratio: 0.243457
+
+
+[java | 1]
+char_count: 1829.178419
+
+loc: 54.905558
+
+lloc: 46.375405
+
+identifier_density: 1.749421
+
+for_loop_density: 0.012248
+
+comment_density: 0.074395
+
+whitespace_ratio: 0.228430
+
+
+[python | 0]
+char_count: 1045.759042
+
+loc: 30.139875
+
+lloc: 27.328144
+
+identifier_density: 2.675793
+
+for_loop_density: 0.053175
+
+comment_density: 0.021195
+
+whitespace_ratio: 0.281548
+
+
+[python | 1]
+char_count: 1208.636728
+
+loc: 38.603843
+
+lloc: 32.085456
+
+identifier_density: 2.438353
+
+for_loop_density: 0.052630
+
+comment_density: 0.083082
+
+whitespace_ratio: 0.212080
+

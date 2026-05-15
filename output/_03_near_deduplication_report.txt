@@ -1,0 +1,8 @@
+=== Parallel Tree-sitter + MinHash NEAR-DEDUP REPORT ===
+
+codet_m4: 481006 -> 451121 (6.21% reduction)
+droidcollection: 503084 -> 501851 (0.25% reduction)
+
+Pair lookup files:
+- output\_03_near_duplicate_pairs.parquet
+- output\_03_near_duplicate_pairs.csv

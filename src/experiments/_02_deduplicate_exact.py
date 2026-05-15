@@ -20,10 +20,8 @@ from .utils.calculate_balance_score import calculate_balance_score
 INPUT_DIR = Path("data/_01_normalized_datasets")
 OUTPUT_DIR = Path("data/_02_exact_deduplicated_datasets")
 REPORT_PATH = Path("output/_02_exact_deduplication_report.txt")
-REPORT_DIR = Path("output/")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -181,8 +179,10 @@ def run_step_02():
         cleaned_dfs[ds_name] = df_cleaned
 
     pair_df = pd.DataFrame(pair_records)
-    pair_df.to_parquet(REPORT_DIR / "_02_exact_duplicate_pairs.parquet", index=False)
-    pair_df.to_csv(REPORT_DIR / "_02_exact_duplicate_pairs.csv", index=False)
+    pair_df.to_parquet(
+        OUTPUT_DIR / "_02_dup_pairs" / "_02_exact_duplicate_pairs.parquet", index=False
+    )
+    pair_df.to_csv(OUTPUT_DIR / "_02_dup_pairs" / "_02_exact_duplicate_pairs.csv", index=False)
 
     # WRITE SUMMARY REPORT
     print("\nWriting summary report...")

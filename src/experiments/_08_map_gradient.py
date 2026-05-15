@@ -4,6 +4,7 @@ Step 08 of experiments: Cumulatively apply transformation tiers.
 
 """
 
+from .utils import env_init
 from operator import indexOf
 from pathlib import Path
 import subprocess

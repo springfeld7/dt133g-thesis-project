@@ -1,0 +1,83 @@
+=== STEP 06 - TRAIN/TEST SPLIT REPORT ===
+
+
+=== DATASET: codet_m4 ===
+
+=== TOTAL ===
+Samples: 346134
+
+=== TEST SET ===
+Samples: 10000
+ERROR = 0 only: True
+
+Label distribution:
+  1: 5000
+  0: 5000
+
+Language distribution:
+  python: 3334
+  cpp: 3333
+  java: 3333
+
+Language-Label distribution:
+  cpp | 0: 1666
+  cpp | 1: 1667
+  java | 0: 1667
+  java | 1: 1666
+  python | 0: 1667
+  python | 1: 1667
+
+=== TRAIN SET ===
+Samples: 100000
+
+Label distribution:
+  1: 50000
+  0: 50000
+
+Language distribution:
+  python: 33334
+  java: 33333
+  cpp: 33333
+
+----------------------------
+
+
+=== DATASET: droidcollection ===
+
+=== TOTAL ===
+Samples: 353082
+
+=== TEST SET ===
+Samples: 10000
+ERROR = 0 only: True
+
+Label distribution:
+  1: 5000
+  0: 5000
+
+Language distribution:
+  python: 3334
+  cpp: 3333
+  java: 3333
+
+Language-Label distribution:
+  cpp | 0: 1666
+  cpp | 1: 1667
+  java | 0: 1667
+  java | 1: 1666
+  python | 0: 1667
+  python | 1: 1667
+
+=== TRAIN SET ===
+Samples: 100000
+
+Label distribution:
+  1: 50000
+  0: 50000
+
+Language distribution:
+  python: 33334
+  java: 33333
+  cpp: 33333
+
+----------------------------

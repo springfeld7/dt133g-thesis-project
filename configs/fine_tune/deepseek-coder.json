@@ -1,11 +1,11 @@
 {
   "model_name": "deepseek-ai/deepseek-coder-1.3b-base",
-  "cv_folds": 10,
+  "cv_folds": 3,
   "window": 512,
   "params": {
-    "learning_rates": [8e-5, 5e-5, 3e-5],
-    "batch_sizes": [8, 16],
-    "grad_acc_steps": [2, 4],
-    "epochs": [20, 40]
+    "learning_rate": [2e-5, 5e-5],
+    "batch_size": [16],
+    "grad_acc_step": [2],
+    "epoch": [3]
   }
 }

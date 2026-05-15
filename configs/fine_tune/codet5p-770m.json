@@ -4,8 +4,8 @@
   "window": 512,
   "params": {
     "learning_rate": [3e-5, 5e-5],
-    "batch_size": [8],
-    "grad_acc_step": [4],
+    "batch_size": [16],
+    "grad_acc_step": [2],
     "epoch": [3]
   }
 }

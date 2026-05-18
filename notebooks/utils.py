@@ -13,7 +13,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
-    AutoTokenizer
+    AutoTokenizer,
 )
 
 
@@ -23,10 +23,7 @@ LABEL_ID = {
 }
 
 
-LABEL_TEXT = {
-    0: "HUMAN_GENERATED",
-    1: "MACHINE_GENERATED"
-}
+LABEL_TEXT = {0: "HUMAN_GENERATED", 1: "MACHINE_GENERATED"}
 
 
 def chunk_code(tokenizer, code, window=512, stride=0):
@@ -40,36 +37,33 @@ def chunk_code(tokenizer, code, window=512, stride=0):
         add_special_tokens=True,
         truncation=False,
     )
-    
+
     input_ids = full_encoded["input_ids"]
     attention_mask = full_encoded["attention_mask"]
-    
+
     # Split into chunks of size 'window'
     chunks = []
-    
+
     # If stride is 0 or too large, fall back to a full window step
     if stride <= 0 or stride >= window:
         step = window
     else:
         step = window - stride
     step = max(step, 1)
-    
+
     for i in range(0, len(input_ids), step):
         chunk_ids = input_ids[i : i + window]
         chunk_mask = attention_mask[i : i + window]
-        
+
         # Handle the final chunk padding
         if len(chunk_ids) < window:
             padding_length = window - len(chunk_ids)
             # Use tokenizer.pad_token_id explicitly
             chunk_ids = chunk_ids + [tokenizer.pad_token_id] * padding_length
             chunk_mask = chunk_mask + [0] * padding_length
-            
-        chunks.append({
-            "input_ids": chunk_ids,
-            "attention_mask": chunk_mask
-        })
-        
+
+        chunks.append({"input_ids": chunk_ids, "attention_mask": chunk_mask})
+
         # Break if we've reached the end of the ids
         if i + window >= len(input_ids):
             break
@@ -119,24 +113,24 @@ def tokenize_and_chunk(dataset, tokenizer, window, model_type, num_proc=1):
         batched=True,
         remove_columns=dataset.column_names,
         fn_kwargs={"tokenizer": tokenizer, "window": window, "model_type": model_type},
-        num_proc=num_proc
+        num_proc=num_proc,
     )
 
 
 def format_labels(dataset, tokenizer, model_type, window):
     """Format labels for encoder/seq2seq/causal models."""
     if model_type == "seq2seq":
+
         def format_t5(sample):
             return {
-                "labels": tokenizer(
-                    LABEL_TEXT[sample["labels"]],
-                    truncation=True
-                )["input_ids"],
+                "labels": tokenizer(LABEL_TEXT[sample["labels"]], truncation=True)["input_ids"],
                 "class_label": sample["class_label"],
             }
+
         return dataset.map(format_t5)
 
     if model_type == "causal":
+
         def format_deepseek(sample):
             prompt = (
                 "Classify the following code (output either HUMAN_GENERATED or MACHINE_GENERATED):\n\n"
@@ -166,6 +160,7 @@ def format_labels(dataset, tokenizer, model_type, window):
                 labels = [-100] * pad_len + labels
 
             return {"input_ids": ids, "attention_mask": attn, "labels": labels}
+
         return dataset.map(format_deepseek)
     return dataset
 
@@ -173,14 +168,14 @@ def format_labels(dataset, tokenizer, model_type, window):
 def load_tokenizer(model_name):
     """Load a tokenizer and ensure a usable pad token is set and configured."""
     if model_name.startswith("data"):
-        model_name == model_name[len("data/models/"):]
+        model_name == model_name[len("data/models/") :]
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    
+
     # Handle specific model padding requirements
     if "unixcoder" in model_name.lower():
         # UniXcoder uses <pad> but sometimes needs explicit setting
         if tokenizer.pad_token is None:
-             tokenizer.add_special_tokens({'pad_token': '<pad>'})
+            tokenizer.add_special_tokens({"pad_token": "<pad>"})
     elif "deepseek" in model_name.lower():
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
@@ -188,15 +183,15 @@ def load_tokenizer(model_name):
         if tokenizer.eos_token is not None:
             tokenizer.pad_token = tokenizer.eos_token
         else:
-            tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-            
+            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+
     return tokenizer
 
 
 def load_model(model_name, tokenizer, device):
     """Load appropriate model architecture based on name."""
     model_name_lower = model_name.lower()
-    
+
     if "codet5" in model_name_lower:
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True).to(device)
     elif "deepseek" in model_name_lower:
@@ -204,22 +199,22 @@ def load_model(model_name, tokenizer, device):
             model_name,
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
-            trust_remote_code=True
+            trust_remote_code=True,
         ).to(device)
         model.config.use_cache = False
     else:
         # CodeBERT, GraphCodeBERT, UniXcoder
         model = AutoModelForSequenceClassification.from_pretrained(
-            model_name,
-            num_labels=2,
-            trust_remote_code=True
+            model_name, num_labels=2, trust_remote_code=True
         ).to(device)
         # Ensure model config uses the tokenizer pad token
         model.config.pad_token_id = tokenizer.pad_token_id
 
     return model
 
+
 ####################################################################
+
 
 def compute_metrics(eval_pred):
     """Compute accuracy, precision, recall, and F1 from model logits."""
@@ -262,9 +257,7 @@ def store_eval_results(
     results_metrics = dict(metrics or {})
     if "roc_auc" not in results_metrics:
         results_metrics["roc_auc"] = (
-            float(roc_auc_score(true_arr, positive_proba))
-            if len(np.unique(true_arr)) > 1
-            else None
+            float(roc_auc_score(true_arr, positive_proba)) if len(np.unique(true_arr)) > 1 else None
         )
 
     cm = confusion_matrix(true_arr, pred_arr, labels=[0, 1])
@@ -324,7 +317,7 @@ def generate_predictions(model, tokenizer, dataset, model_type, device="cuda"):
         if "machine" in cleaned:
             return 1
         return -1
-    
+
     h_id = tokenizer.encode("H", add_special_tokens=False)[0]
     m_id = tokenizer.encode("M", add_special_tokens=False)[0]
 
@@ -344,14 +337,11 @@ def generate_predictions(model, tokenizer, dataset, model_type, device="cuda"):
                 outputs = model(**inputs)
                 last_token_logits = outputs.logits[0, -1, :]
                 if last_token_logits[h_id] > last_token_logits[m_id]:
-                    pred_label = 0 # HUMAN
+                    pred_label = 0  # HUMAN
                 else:
-                    pred_label = 1 # MACHINE
+                    pred_label = 1  # MACHINE
         elif model_type == "seq2seq":
-            inputs = tokenizer(
-                "classify: " + sample["raw_code"],
-                return_tensors="pt"
-            ).to(device)
+            inputs = tokenizer("classify: " + sample["raw_code"], return_tensors="pt").to(device)
             label_texts = [("HUMAN_GENERATED", 0), ("MACHINE_GENERATED", 1)]
             scores = []
             with torch.no_grad():
@@ -363,10 +353,7 @@ def generate_predictions(model, tokenizer, dataset, model_type, device="cuda"):
             pred_label = scores[0][1]
             pred_text = f"score_h={scores[0][0]:.4f}, score_m={scores[1][0]:.4f}"
         else:
-            inputs = tokenizer(
-                "classify: " + sample["raw_code"],
-                return_tensors="pt"
-            ).to(device)
+            inputs = tokenizer("classify: " + sample["raw_code"], return_tensors="pt").to(device)
             with torch.no_grad():
                 out = model.generate(**inputs, max_new_tokens=10)
             pred_text = tokenizer.decode(out[0], skip_special_tokens=True).strip()
@@ -384,20 +371,13 @@ def compute_f1(preds, labels):
     if not valid_idx:
         print("No valid predictions parsed; check model outputs.")
         return {"accuracy": 0, "precision": 0, "recall": 0, "f1": 0}
-        
+
     v_preds = [preds[i] for i in valid_idx]
     v_labels = [labels[i] for i in valid_idx]
-    
+
     acc = accuracy_score(v_labels, v_preds)
     precision, recall, f1, _ = precision_recall_fscore_support(
-        v_labels, v_preds,
-        average="macro",
-        zero_division=0
+        v_labels, v_preds, average="macro", zero_division=0
     )
 
-    return {
-        "accuracy": acc,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1
-    }
+    return {"accuracy": acc, "precision": precision, "recall": recall, "f1": f1}

@@ -1,0 +1,140 @@
+=== STEP 05 FILTERED DATASETS REPORT ===
+
+--- codet_m4 ---
+Total samples: 451121
+After LLOC filtering: 401614
+Final kept samples: 346134
+Filtered by LLOC constraints: 49507
+Removed by balancing: 55480
+
+=== ALL ===
+Language:
+  cpp: 130131
+  java: 154057
+  python: 166933
+
+Label:
+  0: 224320
+  1: 226801
+
+Language-Label:
+  cpp: human=54775, ai=75356
+  java: human=78941, ai=75116
+  python: human=90604, ai=76329
+
+=== FILTERED (LLOC) ===
+Language:
+  cpp: 9076
+  java: 19140
+  python: 21291
+
+Label:
+  0: 25359
+  1: 24148
+
+Language-Label:
+  cpp: human=6129, ai=2947
+  java: human=14394, ai=4746
+  python: human=4836, ai=16455
+
+=== BALANCE REMOVED ===
+Language:
+  cpp: 23763
+  java: 5823
+  python: 25894
+
+Label:
+  0: 25894
+  1: 29586
+
+Language-Label:
+  cpp: human=0, ai=23763
+  java: human=0, ai=5823
+  python: human=25894, ai=0
+
+=== FINAL KEPT ===
+Language:
+  cpp: 97292
+  java: 129094
+  python: 119748
+
+Label:
+  0: 173067
+  1: 173067
+
+Language-Label:
+  cpp: human=48646, ai=48646
+  java: human=64547, ai=64547
+  python: human=59874, ai=59874
+
+----------------------------
+
+--- droidcollection ---
+Total samples: 501851
+After LLOC filtering: 491848
+Final kept samples: 353082
+Filtered by LLOC constraints: 10003
+Removed by balancing: 138766
+
+=== ALL ===
+Language:
+  cpp: 76947
+  java: 181161
+  python: 243743
+
+Label:
+  0: 311818
+  1: 190033
+
+Language-Label:
+  cpp: human=34626, ai=42321
+  java: human=131183, ai=49978
+  python: human=146009, ai=97734
+
+=== FILTERED (LLOC) ===
+Language:
+  cpp: 252
+  java: 1294
+  python: 8457
+
+Label:
+  0: 4042
+  1: 5961
+
+Language-Label:
+  cpp: human=44, ai=208
+  java: human=510, ai=784
+  python: human=3488, ai=4969
+
+=== BALANCE REMOVED ===
+Language:
+  cpp: 7531
+  java: 81479
+  python: 49756
+
+Label:
+  0: 131235
+  1: 7531
+
+Language-Label:
+  cpp: human=0, ai=7531
+  java: human=81479, ai=0
+  python: human=49756, ai=0
+
+=== FINAL KEPT ===
+Language:
+  cpp: 69164
+  java: 98388
+  python: 185530
+
+Label:
+  0: 176541
+  1: 176541
+
+Language-Label:
+  cpp: human=34582, ai=34582
+  java: human=49194, ai=49194
+  python: human=92765, ai=92765
+
+----------------------------
+

@@ -37,9 +37,10 @@ from .utils.languages import get_language
 
 INPUT_DIR = Path("data/_02_exact_deduplicated_datasets")
 OUTPUT_DIR = Path("data/_03_near_deduplicated_datasets")
-REPORT_DIR = Path("output/")
+REPORT_PATH = Path("output/_03_near_deduplication_report.txt")
+
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
+REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 SEED = 42
 random.seed(SEED)
@@ -420,13 +421,15 @@ def run_step_03():
         final_counts[ds_name] = len(df)
 
     pair_df = pd.DataFrame(pair_records)
-    pair_df.to_parquet(REPORT_DIR / "_03_near_duplicate_pairs.parquet", index=False)
-    pair_df.to_csv(REPORT_DIR / "_03_near_duplicate_pairs.csv", index=False)
+    pair_df.to_parquet(
+        OUTPUT_DIR / "_03_dup_pairs" / "_03_near_duplicate_pairs.parquet", index=False
+    )
+    pair_df.to_csv(OUTPUT_DIR / "_03_dup_pairs" / "_03_near_duplicate_pairs.csv", index=False)
 
     # ----------------------------
     # Report
     # ----------------------------
-    with open(REPORT_DIR / "_03_near_deduplication_report.txt", "w") as f:
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write("=== Parallel Tree-sitter + MinHash NEAR-DEDUP REPORT ===\n\n")
         for ds in sorted(initial_counts.keys()):
             start = initial_counts[ds]
@@ -434,8 +437,6 @@ def run_step_03():
             reduction = 100 * (1 - end / start) if start > 0 else 0
             f.write(f"{ds}: {start} -> {end} ({reduction:.2f}% reduction)\n")
 
-        f.write("\nPair lookup files:\n")
-        f.write(f"- {REPORT_DIR / '_03_near_duplicate_pairs.parquet'}\n")
-        f.write(f"- {REPORT_DIR / '_03_near_duplicate_pairs.csv'}\n")
+        print(f"Report written to: {REPORT_PATH}")
 
     print("Step 03 complete.")

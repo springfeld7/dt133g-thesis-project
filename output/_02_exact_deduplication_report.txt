@@ -1,0 +1,54 @@
+=== GLOBAL DEDUPLICATION REPORT ===
+
+Global Totals: 1008026 -> 984090
+Total Unique Logic Samples: 984090
+Global Reduction: 2.37%
+
+--- PER-DATASET BREAKDOWN ---
+CODET_M4:
+  Initial: 494321
+  Final:   481006
+  Removed: 13315 (2.69%)
+  Top losses to:
+    - codet_m4: 13631
+
+  Language distribution:
+    python: 174234
+    java: 169466
+    cpp: 137306
+
+  Label distribution:
+    0: 241305
+    1: 239701
+
+  Language-label distribution:
+    python: human=94540, ai=79694
+
+    java: human=87794, ai=81672
+
+    cpp: human=58971, ai=78335
+
+DROIDCOLLECTION:
+  Initial: 513705
+  Final:   503084
+  Removed: 10621 (2.07%)
+  Top losses to:
+    - codet_m4: 9781
+    - droidcollection: 841
+
+  Language distribution:
+    cpp: 77081
+    python: 244280
+    java: 181723
+
+  Label distribution:
+    1: 190488
+    0: 312596
+
+  Language-label distribution:
+    cpp: human=34669, ai=42412
+
+    python: human=146392, ai=97888
+
+    java: human=131535, ai=50188
+

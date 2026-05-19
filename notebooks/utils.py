@@ -3,12 +3,14 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     precision_recall_fscore_support,
     roc_auc_score,
 )
+from tqdm.auto import tqdm
 from transformers import (
     AutoModelForSequenceClassification,
     AutoModelForCausalLM,
@@ -168,7 +170,7 @@ def format_labels(dataset, tokenizer, model_type, window):
 def load_tokenizer(model_name):
     """Load a tokenizer and ensure a usable pad token is set and configured."""
     if model_name.startswith("data"):
-        model_name == model_name[len("data/models/") :]
+        model_name = model_name[len("data/models/") :]
     tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
     # Handle specific model padding requirements
@@ -319,54 +321,102 @@ def generate_predictions(model, tokenizer, dataset, model_type, device="cuda"):
             return 1
         return -1
 
-    h_id = tokenizer.encode("H", add_special_tokens=False)[0]
-    m_id = tokenizer.encode("M", add_special_tokens=False)[0]
+    def eval_collate_fn(batch):
+        return {
+            "input_ids": torch.tensor([item["input_ids"] for item in batch], dtype=torch.long),
+            "attention_mask": torch.tensor(
+                [item["attention_mask"] for item in batch], dtype=torch.long
+            ),
+            "class_label": torch.tensor([item["class_label"] for item in batch], dtype=torch.long),
+            "raw_code": [item["raw_code"] for item in batch] if "raw_code" in batch[0] else None,
+        }
 
     model.to(device)
     model.eval()
+
     preds = []
     labels = []
 
-    for sample in dataset:
-        if model_type == "causal":
-            prompt = (
+    loader = DataLoader(dataset, batch_size=16, collate_fn=eval_collate_fn)
+
+    if model_type == "causal":
+        h_id = tokenizer.encode("H", add_special_tokens=False)[0]
+        m_id = tokenizer.encode("M", add_special_tokens=False)[0]
+
+        for batch in tqdm(loader, desc="Evaluating (causal, batched)"):
+            prompts = [
                 "Classify the following code (output either HUMAN_GENERATED or MACHINE_GENERATED):\n\n"
-                + sample["raw_code"]
+                + raw
+                for raw in batch["raw_code"]
+            ]
+            inputs = tokenizer(prompts, return_tensors="pt", padding="longest", truncation=True).to(
+                device
             )
-            inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
             with torch.inference_mode():
                 outputs = model(**inputs)
-                last_token_logits = outputs.logits[0, -1, :]
-                if last_token_logits[h_id] > last_token_logits[m_id]:
-                    pred_label = 0  # HUMAN
-                else:
-                    pred_label = 1  # MACHINE
-        elif model_type == "seq2seq":
-            inputs = {
-                "input_ids": torch.tensor([sample["input_ids"]], dtype=torch.long, device=device),
-                "attention_mask": torch.tensor(
-                    [sample["attention_mask"]], dtype=torch.long, device=device
-                ),
-            }
-            label_texts = [("HUMAN_GENERATED", 0), ("MACHINE_GENERATED", 1)]
-            scores = []
-            with torch.no_grad():
-                for text, label_id in label_texts:
-                    label_ids = tokenizer(text, return_tensors="pt").input_ids.to(device)
-                    out = model(**inputs, labels=label_ids)
-                    scores.append((out.loss.item(), label_id))
-            scores.sort(key=lambda x: x[0])
-            pred_label = scores[0][1]
-            pred_text = f"score_h={scores[0][0]:.4f}, score_m={scores[1][0]:.4f}"
-        else:
-            inputs = tokenizer("classify: " + sample["raw_code"], return_tensors="pt").to(device)
-            with torch.no_grad():
-                out = model.generate(**inputs, max_new_tokens=10)
-            pred_text = tokenizer.decode(out[0], skip_special_tokens=True).strip()
-            pred_label = parse_label(pred_text)
+                logits = outputs.logits[:, -1, :]
 
-        preds.append(pred_label)
-        labels.append(sample.get("class_label", sample["labels"]))
+            for i in range(logits.size(0)):
+                pred_label = 0 if logits[i, h_id] > logits[i, m_id] else 1
+                preds.append(pred_label)
+
+            labels.extend(batch["class_label"].tolist())
+
+            del inputs
+            del outputs
+            del logits
+            torch.cuda.empty_cache()
+
+        return preds, labels
+
+    if model_type == "seq2seq":
+        h_id = tokenizer("HUMAN_GENERATED", return_tensors="pt").input_ids.to(device)
+        m_id = tokenizer("MACHINE_GENERATED", return_tensors="pt").input_ids.to(device)
+
+        with torch.no_grad():
+            for batch in tqdm(loader, desc="Evaluating (seq2seq, batched)"):
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+
+                labels_h = h_id.repeat(input_ids.size(0), 1)
+                labels_m = m_id.repeat(input_ids.size(0), 1)
+
+                out_h = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels_h)
+
+                out_m = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels_m)
+
+                batch_preds = (out_m.loss < out_h.loss).long().tolist()
+                if isinstance(batch_preds, int):
+                    batch_preds = [batch_preds]
+
+                preds.extend(batch_preds)
+
+                labels.extend(batch["class_label"].tolist())
+
+                del out_h, out_m
+                del input_ids, attention_mask, labels_h, labels_m
+                torch.cuda.empty_cache()
+
+        return preds, labels
+
+    for batch in tqdm(loader, desc="Evaluating (encoder, batched)"):
+        prompts = ["classify: " + raw for raw in batch["raw_code"]]
+        inputs = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(device)
+
+        with torch.no_grad():
+            outs = model.generate(**inputs, max_new_tokens=10)
+
+        for out in outs:
+            pred_text = tokenizer.decode(out, skip_special_tokens=True).strip()
+            pred_label = parse_label(pred_text)
+            preds.append(pred_label)
+
+        labels.extend(batch["class_label"].tolist())
+
+        del outs
+        del inputs
+        torch.cuda.empty_cache()
 
     return preds, labels
 

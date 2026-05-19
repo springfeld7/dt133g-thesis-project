@@ -194,6 +194,7 @@ def load_model(model_name, tokenizer, device):
 
     if "codet5" in model_name_lower:
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True).to(device)
+        model.config.use_cache = False
     elif "deepseek" in model_name_lower:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -341,7 +342,12 @@ def generate_predictions(model, tokenizer, dataset, model_type, device="cuda"):
                 else:
                     pred_label = 1  # MACHINE
         elif model_type == "seq2seq":
-            inputs = tokenizer("classify: " + sample["raw_code"], return_tensors="pt").to(device)
+            inputs = {
+                "input_ids": torch.tensor([sample["input_ids"]], dtype=torch.long, device=device),
+                "attention_mask": torch.tensor(
+                    [sample["attention_mask"]], dtype=torch.long, device=device
+                ),
+            }
             label_texts = [("HUMAN_GENERATED", 0), ("MACHINE_GENERATED", 1)]
             scores = []
             with torch.no_grad():

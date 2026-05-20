@@ -27,7 +27,7 @@ from . import dataflow_match
 
 def calc_code_bleu(original_code: list[str], mutated_code: str, language: str) -> dict[str, float]:
     """
-    Calculates the CodeBLEU metric score for a single prediction snippet 
+    Calculates the CodeBLEU metric score for a single prediction snippet
     against a list of valid reference code snippets.
 
     Args:
@@ -36,8 +36,8 @@ def calc_code_bleu(original_code: list[str], mutated_code: str, language: str) -
         language (str): The programming language of the snippets (e.g., 'python').
 
     Returns:
-        dict[str, float]: A dictionary containing the composite codebleu score and 
-            the individual sub-scores (ngram_match_score, weighted_ngram_match_score, 
+        dict[str, float]: A dictionary containing the composite codebleu score and
+            the individual sub-scores (ngram_match_score, weighted_ngram_match_score,
             syntax_match_score, dataflow_match_score).
     """
     lang = language
@@ -95,10 +95,13 @@ def calc_code_bleu(original_code: list[str], mutated_code: str, language: str) -
         "ngram_match_score": float(ngram_match_score),
         "weighted_ngram_match_score": float(weighted_ngram_match_score),
         "syntax_match_score": float(syntax_match_score),
-        "dataflow_match_score": float(dataflow_match_score)
+        "dataflow_match_score": float(dataflow_match_score),
     }
 
-def calc_dataset_average_codebleu(references: list[str], predictions: list[str], lang: str) -> dict[str, float]:
+
+def calc_dataset_average_codebleu(
+    references: list[str], predictions: list[str], lang: str
+) -> dict[str, float]:
     """
     Computes CodeBLEU for each 1:1 pair individually and returns the arithmetic mean.
 
@@ -111,23 +114,21 @@ def calc_dataset_average_codebleu(references: list[str], predictions: list[str],
         dict[str, float]: The average of all sub-scores across the dataset.
     """
     assert len(references) == len(predictions), "Data arrays must be a strict 1:1 length match."
-    
+
     total_scores = {
         "codebleu": 0.0,
         "ngram_match_score": 0.0,
         "weighted_ngram_match_score": 0.0,
         "syntax_match_score": 0.0,
-        "dataflow_match_score": 0.0
+        "dataflow_match_score": 0.0,
     }
-    
+
     successful_pairs = 0
 
     for ref_snippet, pred_snippet in zip(references, predictions):
         try:
             pair_score = calc_code_bleu(
-                original_code=[ref_snippet],
-                mutated_code=pred_snippet, 
-                language=lang
+                original_code=[ref_snippet], mutated_code=pred_snippet, language=lang
             )
 
             # Extract scores from the print/return layout of your single function
@@ -136,9 +137,9 @@ def calc_dataset_average_codebleu(references: list[str], predictions: list[str],
             total_scores["weighted_ngram_match_score"] += pair_score["weighted_ngram_match_score"]
             total_scores["syntax_match_score"] += pair_score["syntax_match_score"]
             total_scores["dataflow_match_score"] += pair_score["dataflow_match_score"]
-            
+
             successful_pairs += 1
-            
+
         except Exception as e:
             # If a mutation creates completely invalid syntax that tree-sitter crashes on,
             # we log it and keep going so the whole notebook doesn't die.

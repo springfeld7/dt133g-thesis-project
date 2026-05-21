@@ -71,6 +71,28 @@ class MutationEngine:
         self.manifest = manifest
         return manifest
 
+    def apply_mutations_batch(self, csts: list[Node]) -> list[MutationManifest]:
+        """Apply all mutation rules to a batch of CSTs.
+
+        Returns a list of MutationManifest objects aligned with the input CSTs.
+        """
+        manifests = [MutationManifest() for _ in csts]
+        self.context.reset()
+
+        ordered_rules = self._order_rules()
+
+        for rule in ordered_rules:
+            precompute = getattr(rule, "precompute_batch", None)
+            if callable(precompute):
+                precompute(csts, self.context)
+
+            for index, cst in enumerate(csts):
+                local_changes = rule.apply(cst, self.context)
+                self._merge_to_manifest(manifests[index], local_changes, rule.name)
+
+        self.manifest = manifests[-1] if manifests else MutationManifest()
+        return manifests
+
     def _order_rules(self) -> List[MutationRule]:
         """Order rules using dependency constraints (topological sort).
 

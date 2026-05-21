@@ -34,7 +34,7 @@ def test_output_manager_writes_manifest_and_dataset(tmp_path):
         str(tmp_path), max_rows_per_shard=0, compress_output=False
     ) as manager:
         manager.write_manifest(0, "row_0", [{"node_id": [0, 0], "history": [], "metadata": {}}])
-        manager.write_dataset_row(0, "row_0", "original", "mutated", "python")
+        manager.write_dataset_row(0, "row_0", "original", "mutated", "python", 0)
 
     manifest_file = tmp_path / "manifest.jsonl"
     dataset_file = tmp_path / "augmented_dataset.parquet"
@@ -66,6 +66,7 @@ def test_output_manager_writes_mutated_cst(tmp_path):
             "original",
             "mutated",
             "python",
+            0,
             mutated_cst=mutated_cst,
         )
 

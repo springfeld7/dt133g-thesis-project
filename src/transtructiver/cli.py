@@ -105,32 +105,33 @@ def _build_rule_registry() -> dict[str, type[MutationRule]]:
 
 RULE_REGISTRY: dict[str, type[MutationRule]] = _build_rule_registry()
 
+
 def _pipeline_worker_task(batch_items, rules, rule_params, verifier_options_dict):
     """Worker task for processing a batch of snippets in parallel."""
     # Lazy initialize components per process to avoid overhead if process is reused
     global _worker_engine, _worker_parser, _worker_verifier
-    if '_worker_engine' not in globals():
+    if "_worker_engine" not in globals():
         _worker_engine = _build_engine(rules, rule_params)
         _worker_parser = Parser()
         _worker_verifier = SIVerifier(
-            strictness=verifier_options_dict.get('strictness', 'strict'),
-            max_errors=verifier_options_dict.get('max_errors')
+            strictness=verifier_options_dict.get("strictness", "strict"),
+            max_errors=verifier_options_dict.get("max_errors"),
         )
 
     results = []
-    cst_pairs = [] # (orig, mut)
-    
+    cst_pairs = []  # (orig, mut)
+
     for item in batch_items:
-        code = item['code']
-        lang = item['language']
-        
-        if item.get('mutated_cst_json'):
-            orig_cst = Node.from_json(item['mutated_cst_json'])
+        code = item["code"]
+        lang = item["language"]
+
+        if item.get("mutated_cst_json"):
+            orig_cst = Node.from_json(item["mutated_cst_json"])
         else:
             orig_cst, _ = _worker_parser.parse(code, lang)
-            
+
         if orig_cst is None:
-            results.append({'idx': item['idx'], 'skipped': True})
+            results.append({"idx": item["idx"], "skipped": True})
             cst_pairs.append(None)
         else:
             mut_cst = orig_cst.clone()
@@ -138,22 +139,32 @@ def _pipeline_worker_task(batch_items, rules, rule_params, verifier_options_dict
 
     valid_mut_csts = [pair[1] for pair in cst_pairs if pair is not None]
     manifests = _worker_engine.apply_mutations_batch(valid_mut_csts) if valid_mut_csts else []
-    
+
     m_idx = 0
     for i, item in enumerate(batch_items):
-        if cst_pairs[i] is None: continue
+        if cst_pairs[i] is None:
+            continue
         orig, mut = cst_pairs[i]
         manifest = manifests[m_idx]
         m_idx += 1
         verified = _worker_verifier.verify(orig, mut, manifest)
-        results.append({
-            'idx': item['idx'], 'snippet_id': f"row_{item['idx']}", 'skipped': False,
-            'manifest_dict': manifest.to_dict(), 'is_manifest_empty': manifest.is_empty(),
-            'original_code': orig.to_code(), 'mutated_code': mut.to_code(),
-            'mutated_cst_json': mut.to_json(), 'verified': verified,
-            'errors': list(_worker_verifier.errors), 'row': item['row']
-        })
+        results.append(
+            {
+                "idx": item["idx"],
+                "snippet_id": f"row_{item['idx']}",
+                "skipped": False,
+                "manifest_dict": manifest.to_dict(),
+                "is_manifest_empty": manifest.is_empty(),
+                "original_code": orig.to_code(),
+                "mutated_code": mut.to_code(),
+                "mutated_cst_json": mut.to_json(),
+                "verified": verified,
+                "errors": list(_worker_verifier.errors),
+                "row": item["row"],
+            }
+        )
     return results
+
 
 _RULE_PARAM_PROPAGATIONS = {
     "rename-identifier": {
@@ -347,7 +358,7 @@ def run_pipeline(
 
     # Initialize engine once to inspect rules and for use in sequential path
     engine = _build_engine(rules, rule_params)
-    
+
     # Find RenameIdentifiersRule to determine if we need to batch snippets (Level 1 MLM)
     rename_rule = next(
         (
@@ -379,10 +390,17 @@ def run_pipeline(
                 stats.parsed_ok += 1
                 snippet_id = res["snippet_id"]
                 outputs.write_manifest(idx, snippet_id, res["manifest_dict"])
-                
+
                 row = res["row"]
                 metadata = dict(row)
-                for key in ["code", "language", "label", "mutated_cst", "mutated_code", "original_code"]:
+                for key in [
+                    "code",
+                    "language",
+                    "label",
+                    "mutated_cst",
+                    "mutated_code",
+                    "original_code",
+                ]:
                     metadata.pop(key, None)
 
                 outputs.write_dataset_row(
@@ -432,13 +450,15 @@ def run_pipeline(
             """Yields contiguous batches of snippet data for parallel or sequential processing."""
             current_batch = []
             for idx, row in snippets:
-                current_batch.append({
-                    "idx": idx,
-                    "language": row.get("language"),
-                    "code": row.get("code") or row.get("mutated_code"),
-                    "mutated_cst_json": row.get("mutated_cst"),
-                    "row": row,
-                })
+                current_batch.append(
+                    {
+                        "idx": idx,
+                        "language": row.get("language"),
+                        "code": row.get("code") or row.get("mutated_code"),
+                        "mutated_cst_json": row.get("mutated_cst"),
+                        "row": row,
+                    }
+                )
                 if len(current_batch) >= worker_batch_size:
                     yield current_batch
                     current_batch = []
@@ -448,17 +468,30 @@ def run_pipeline(
         if pipeline_options.workers > 1:
             # Process batches in parallel using order-preserving map
             worker_fn = functools.partial(
-                _pipeline_worker_task, rules=rules, rule_params=rule_params, verifier_options_dict=v_opt
+                _pipeline_worker_task,
+                rules=rules,
+                rule_params=rule_params,
+                verifier_options_dict=v_opt,
             )
             with ProcessPoolExecutor(max_workers=pipeline_options.workers) as executor:
-                total_batches = (loader.num_rows - start_index + worker_batch_size - 1) // worker_batch_size
-                for batch_results in tqdm(executor.map(worker_fn, batch_generator()), total=total_batches, desc="Processing Batches"):
+                total_batches = (
+                    loader.num_rows - start_index + worker_batch_size - 1
+                ) // worker_batch_size
+                for batch_results in tqdm(
+                    executor.map(worker_fn, batch_generator()),
+                    total=total_batches,
+                    desc="Processing Batches",
+                ):
                     for res in batch_results:
                         handle_res(res)
         else:
             # Sequential processing using the same task logic for consistency
-            total_batches = (loader.num_rows - start_index + worker_batch_size - 1) // worker_batch_size
-            for batch_items in tqdm(batch_generator(), total=total_batches, desc="Processing Batches"):
+            total_batches = (
+                loader.num_rows - start_index + worker_batch_size - 1
+            ) // worker_batch_size
+            for batch_items in tqdm(
+                batch_generator(), total=total_batches, desc="Processing Batches"
+            ):
                 for res in _pipeline_worker_task(batch_items, rules, rule_params, v_opt):
                     handle_res(res)
 

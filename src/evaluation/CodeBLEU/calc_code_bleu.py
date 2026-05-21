@@ -25,42 +25,36 @@ from . import dataflow_match
 # args = parser.parse_args()
 
 
-def calc_code_bleu(original_code: list[str], mutated_code: str, language: str):
+def calc_code_bleu(original_code: list[str], mutated_code: str, language: str) -> dict[str, float]:
+    """
+    Calculates the CodeBLEU metric score for a single prediction snippet
+    against a list of valid reference code snippets.
+
+    Args:
+        original_code (list[str]): A list of reference strings representing valid solutions.
+        mutated_code (str): The mutated or generated code string to evaluate.
+        language (str): The programming language of the snippets (e.g., 'python').
+
+    Returns:
+        dict[str, float]: A dictionary containing the composite codebleu score and
+            the individual sub-scores (ngram_match_score, weighted_ngram_match_score,
+            syntax_match_score, dataflow_match_score).
+    """
     lang = language
     params = "0.25,0.25,0.25,0.25"
     alpha, beta, gamma, theta = [float(x) for x in params.split(",")]
 
-    # preprocess inputs
-    # pre_references = [
-    #     [x.strip() for x in open(file, "r", encoding="utf-8").readlines()] for file in args.refs
-    # ]
-    pre_references = [[x.strip() for x in code.splitlines()] for code in original_code]
-    # hypothesis = [x.strip() for x in open(args.hyp, "r", encoding="utf-8").readlines()]
-    hypothesis = [x.strip() for x in mutated_code.splitlines()]
+    # Preprocess inputs as clean, monolithic text blocks
+    hypothesis = [mutated_code.strip()]
+    references = [[ref.strip() for ref in original_code]]
 
-    for i in range(len(pre_references)):
-        assert len(hypothesis) == len(pre_references[i])
-
-    references = []
-
-    for i in range(len(hypothesis)):
-        ref_for_instance = []
-        for j in range(len(pre_references)):
-            ref_for_instance.append(pre_references[j][i])
-        references.append(ref_for_instance)
-    assert len(references) == len(pre_references) * len(hypothesis)
-
-    # calculate ngram match (BLEU)
+    # Clean whitespace tokenization for standard n-gram matching
     tokenized_hyps = [x.split() for x in hypothesis]
     tokenized_refs = [[x.split() for x in reference] for reference in references]
 
     ngram_match_score = bleu.corpus_bleu(tokenized_refs, tokenized_hyps)
 
-    # calculate weighted ngram match
-    # from os import listdir
-    # from os.path import isfile, join
-    # onlyfiles = [f for f in listdir("./keywords") if isfile(join("keywords", f))]
-    # print(onlyfiles)
+    # Calculate weighted ngram match using keyword tables
     keywords = [
         x.strip()
         for x in open(
@@ -85,17 +79,9 @@ def calc_code_bleu(original_code: list[str], mutated_code: str, language: str):
         tokenized_refs_with_weights, tokenized_hyps
     )
 
-    # calculate syntax match
+    # Calculate syntax tree and dataflow graph matches
     syntax_match_score = syntax_match.corpus_syntax_match(references, hypothesis, lang)
-
-    # calculate dataflow match
     dataflow_match_score = dataflow_match.corpus_dataflow_match(references, hypothesis, lang)
-
-    print(
-        "ngram match: {0}, weighted ngram match: {1}, syntax_match: {2}, dataflow_match: {3}".format(
-            ngram_match_score, weighted_ngram_match_score, syntax_match_score, dataflow_match_score
-        )
-    )
 
     code_bleu_score = (
         alpha * ngram_match_score
@@ -104,4 +90,64 @@ def calc_code_bleu(original_code: list[str], mutated_code: str, language: str):
         + theta * dataflow_match_score
     )
 
-    print("CodeBLEU score: ", code_bleu_score)
+    return {
+        "codebleu": float(code_bleu_score),
+        "ngram_match_score": float(ngram_match_score),
+        "weighted_ngram_match_score": float(weighted_ngram_match_score),
+        "syntax_match_score": float(syntax_match_score),
+        "dataflow_match_score": float(dataflow_match_score),
+    }
+
+
+def calc_dataset_average_codebleu(
+    references: list[str], predictions: list[str], lang: str
+) -> dict[str, float]:
+    """
+    Computes CodeBLEU for each 1:1 pair individually and returns the arithmetic mean.
+
+    Args:
+        references (list[str]): List of original code snippets.
+        predictions (list[str]): List of mutated code snippets (must align 1:1 with references).
+        lang (str): Target language string ('python').
+
+    Returns:
+        dict[str, float]: The average of all sub-scores across the dataset.
+    """
+    assert len(references) == len(predictions), "Data arrays must be a strict 1:1 length match."
+
+    total_scores = {
+        "codebleu": 0.0,
+        "ngram_match_score": 0.0,
+        "weighted_ngram_match_score": 0.0,
+        "syntax_match_score": 0.0,
+        "dataflow_match_score": 0.0,
+    }
+
+    successful_pairs = 0
+
+    for ref_snippet, pred_snippet in zip(references, predictions):
+        try:
+            pair_score = calc_code_bleu(
+                original_code=[ref_snippet], mutated_code=pred_snippet, language=lang
+            )
+
+            # Extract scores from the print/return layout of your single function
+            total_scores["codebleu"] += pair_score["codebleu"]
+            total_scores["ngram_match_score"] += pair_score["ngram_match_score"]
+            total_scores["weighted_ngram_match_score"] += pair_score["weighted_ngram_match_score"]
+            total_scores["syntax_match_score"] += pair_score["syntax_match_score"]
+            total_scores["dataflow_match_score"] += pair_score["dataflow_match_score"]
+
+            successful_pairs += 1
+
+        except Exception as e:
+            # If a mutation creates completely invalid syntax that tree-sitter crashes on,
+            # we log it and keep going so the whole notebook doesn't die.
+            print(f"Skipping a pair due to processing error: {e}")
+            continue
+
+    if successful_pairs == 0:
+        return {k: 0.0 for k in total_scores}
+
+    # Calculate final arithmetic mean
+    return {metric: total / successful_pairs for metric, total in total_scores.items()}

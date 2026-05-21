@@ -22,6 +22,7 @@ NUMERIC_TYPES = (
     "decimal_integer_literal",
     "decimal_floating_point",
 )
+GLUE_OPERATORS = {".", "::", "->"}
 
 
 class WhitespaceNormalizationRule(MutationRule):
@@ -170,8 +171,12 @@ class WhitespaceNormalizationRule(MutationRule):
             return records
 
         # Space after comma/operator, or before an operator
-        is_trigger_before = getattr(next_node, "field", None) == "operator"
-        is_trigger_after = (child.type == ",") or (getattr(child, "field", None) == "operator")
+        is_trigger_before = (
+            getattr(next_node, "field", None) == "operator" and next_node.type not in GLUE_OPERATORS
+        )
+        is_trigger_after = (child.type == ",") or (
+            getattr(child, "field", None) == "operator" and child.type not in GLUE_OPERATORS
+        )
 
         # Skip inserting a space if the previous node is '-' and next node is numeric
         if child.type == "-" and self.is_numeric(next_node):

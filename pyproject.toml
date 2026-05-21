@@ -31,6 +31,7 @@ dependencies = [
     "torchaudio",
     "annoy>=1.17.3",
     "datasketch>=1.10.0",
+    "tensorboard>=2.20.0",
 ]
 
 [project.scripts]

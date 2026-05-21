@@ -198,6 +198,7 @@ def process_dataset(item) -> dict:
         "kept": 0,
         "dropped_lang": 0,
         "dropped_label": 0,
+        "dropped_code": 0,
     }
 
     lang_counter = defaultdict(int)
@@ -213,6 +214,7 @@ def process_dataset(item) -> dict:
             label = _extract_label(entry)
 
             if not isinstance(code, str) or str(code).strip() == "":
+                stats["dropped_code"] += 1
                 continue
 
             norm_lang = _normalize_language(lang)
@@ -307,7 +309,7 @@ def write_report(results: list[dict]):
             f.write(f"Kept samples: {s['kept']}\n")
             f.write(f"Dropped (language): {s['dropped_lang']}\n")
             f.write(f"Dropped (label): {s['dropped_label']}\n")
-
+            f.write(f"Dropped (code): {s['dropped_code']}\n")
             f.write("Language distribution:\n")
             for k, v in r["lang"].items():
                 f.write(f"  {k}: {v}\n")

@@ -11,6 +11,10 @@ Outputs written per run (inside ``--output-dir``):
 
 # Python version precheck
 import sys
+import itertools
+import functools
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Any
 
 from tqdm import tqdm
 
@@ -29,6 +33,7 @@ from .data_loading.data_loader import DataLoader
 from .parsing.parser import Parser
 from .config import load_config, resolve_enabled_rules, get_rule_params
 from .mutation.mutation_engine import MutationEngine
+from .mutation.rules.identifier_renaming.rename_identifiers import RenameIdentifiersRule
 from .mutation.rules.mutation_rule import MutationRule
 from .node import Node
 from .reporting import summary_logger
@@ -100,6 +105,67 @@ def _build_rule_registry() -> dict[str, type[MutationRule]]:
 
 RULE_REGISTRY: dict[str, type[MutationRule]] = _build_rule_registry()
 
+
+def _pipeline_worker_task(batch_items, rules, rule_params, verifier_options_dict):
+    """Worker task for processing a batch of snippets in parallel."""
+    # Lazy initialize components per process to avoid overhead if process is reused
+    global _worker_engine, _worker_parser, _worker_verifier
+    if "_worker_engine" not in globals():
+        _worker_engine = _build_engine(rules, rule_params)
+        _worker_parser = Parser()
+        _worker_verifier = SIVerifier(
+            strictness=verifier_options_dict.get("strictness", "strict"),
+            max_errors=verifier_options_dict.get("max_errors"),
+        )
+
+    results = []
+    cst_pairs = []  # (orig, mut)
+
+    for item in batch_items:
+        code = item["code"]
+        lang = item["language"]
+
+        if item.get("mutated_cst_json"):
+            orig_cst = Node.from_json(item["mutated_cst_json"])
+        else:
+            orig_cst, _ = _worker_parser.parse(code, lang)
+
+        if orig_cst is None:
+            results.append({"idx": item["idx"], "skipped": True})
+            cst_pairs.append(None)
+        else:
+            mut_cst = orig_cst.clone()
+            cst_pairs.append((orig_cst, mut_cst))
+
+    valid_mut_csts = [pair[1] for pair in cst_pairs if pair is not None]
+    manifests = _worker_engine.apply_mutations_batch(valid_mut_csts) if valid_mut_csts else []
+
+    m_idx = 0
+    for i, item in enumerate(batch_items):
+        if cst_pairs[i] is None:
+            continue
+        orig, mut = cst_pairs[i]
+        manifest = manifests[m_idx]
+        m_idx += 1
+        verified = _worker_verifier.verify(orig, mut, manifest)
+        results.append(
+            {
+                "idx": item["idx"],
+                "snippet_id": f"row_{item['idx']}",
+                "skipped": False,
+                "manifest_dict": manifest.to_dict(),
+                "is_manifest_empty": manifest.is_empty(),
+                "original_code": orig.to_code(),
+                "mutated_code": mut.to_code(),
+                "mutated_cst_json": mut.to_json(),
+                "verified": verified,
+                "errors": list(_worker_verifier.errors),
+                "row": item["row"],
+            }
+        )
+    return results
+
+
 _RULE_PARAM_PROPAGATIONS = {
     "rename-identifier": {
         "control-structure-substitution": {
@@ -141,6 +207,7 @@ class PipelineOptions:
     resume: bool = False
     max_rows_per_shard: int = 0
     compress_output: bool = False
+    workers: int = 1
 
 
 def _prototype_log(message: str) -> None:
@@ -278,6 +345,7 @@ def run_pipeline(
     """
     os.makedirs(output_dir, exist_ok=True)
     pipeline_options = pipeline_options or PipelineOptions()
+    verifier_options = verifier_options or VerifierOptions()
     # Use DataLoader abstraction; implementation is chosen internally.
     loader = DataLoader(filepath, checkpoint_path=pipeline_options.checkpoint_path)
     start_index = loader.load_checkpoint(pipeline_options.resume)
@@ -288,8 +356,20 @@ def run_pipeline(
     if unsupported_rules:
         raise ValueError(f"Arguments contain unsupported mutation rule: {unsupported_rules}")
 
+    # Initialize engine once to inspect rules and for use in sequential path
     engine = _build_engine(rules, rule_params)
-    verifier = SIVerifier()
+
+    # Find RenameIdentifiersRule to determine if we need to batch snippets (Level 1 MLM)
+    rename_rule = next(
+        (
+            rule
+            for rule in engine.rules
+            if isinstance(rule, RenameIdentifiersRule) and rule.level == 1
+        ),
+        None,
+    )
+    batch_snippets = rename_rule.batch_snippets if rename_rule else 0
+
     stats = RunStats()
     processed_since_checkpoint = 0
 
@@ -298,98 +378,122 @@ def run_pipeline(
         max_rows_per_shard=pipeline_options.max_rows_per_shard,
         compress_output=pipeline_options.compress_output,
     ) as outputs:
-        index = 0
+        index = start_index
 
-        for idx, row in tqdm(
-            loader.iter_snippets(
-                batch_size=pipeline_options.batch_size,
-                start_index=start_index,
-            ),
-            total=loader.num_rows,
-        ):
+        def handle_res(res):
+            nonlocal processed_since_checkpoint, index
+            idx = res["idx"]
             index = idx
-            snippet_id = f"row_{idx}"
-            code = row.get("code") or row.get("mutated_code")
-            language = row.get("language")
-
-            _prototype_log(f"\n[{snippet_id}] Parsing...")
-            if not code or not language:
-                continue
-
-            cached_cst = row.get("mutated_cst")
-            if cached_cst:
-                orig_cst = Node.from_json(cached_cst)
-                parse_err = None
-            else:
-                orig_cst, parse_err = parser.parse(code, language)
-
-            if orig_cst is None:
+            if res.get("skipped"):
                 stats.parse_skipped += 1
-                _prototype_log(f"  Skipped ({parse_err})")
-                processed_since_checkpoint += 1
-                if (
-                    pipeline_options.checkpoint_every > 0
-                    and processed_since_checkpoint >= pipeline_options.checkpoint_every
-                ):
-                    loader.save_checkpoint(idx + 1, stats)
-                    processed_since_checkpoint = 0
-                continue
-
-            stats.parsed_ok += 1
-            _prototype_pretty("Original tree:", orig_cst)
-
-            # Clone before mutation so we keep the clean original for comparison
-            mut_cst = orig_cst.clone()
-
-            engine.apply_mutations(mut_cst)
-            _prototype_pretty("\nMutated code:", mut_cst)
-
-            # Write manifest for this snippet
-            outputs.write_manifest(idx, snippet_id, engine.manifest.to_dict())
-
-            # Write original/mutated code pair
-            original_code = orig_cst.to_code()
-            mutated_code = mut_cst.to_code()
-
-            # Keep all other metadata fields from the original row, except code/language which we handle separately
-            metadata = dict(row)
-            metadata.pop("code", None)
-            metadata.pop("language", None)
-            is_mutated = engine.manifest.is_empty() is False
-            outputs.write_dataset_row(
-                idx,
-                snippet_id,
-                original_code,
-                mutated_code,
-                language,
-                has_mutation_applied=not engine.manifest.is_empty(),
-                metadata=metadata,
-                mutated_cst=mut_cst,
-            )
-
-            # Verify semantic preservation and append to summary log
-            verified = verifier.verify(orig_cst, mut_cst, engine.manifest)
-            if verified:
-                stats.verified_ok += 1
             else:
-                stats.verified_fail += 1
+                stats.parsed_ok += 1
+                snippet_id = res["snippet_id"]
+                outputs.write_manifest(idx, snippet_id, res["manifest_dict"])
 
-            summary_logger.write_summary(
-                snippet_id=snippet_id,
-                verified=verified,
-                errors=verifier.errors,
-                writer=outputs.summary_writer,
-            )
+                row = res["row"]
+                metadata = dict(row)
+                for key in [
+                    "code",
+                    "language",
+                    "label",
+                    "mutated_cst",
+                    "mutated_code",
+                    "original_code",
+                ]:
+                    metadata.pop(key, None)
 
-            _prototype_log(f'\nRow {idx}: {"PASS" if verified else "FAIL"}')
+                outputs.write_dataset_row(
+                    idx,
+                    snippet_id,
+                    res["original_code"],
+                    res["mutated_code"],
+                    row.get("language"),
+                    row.get("label"),
+                    has_mutation_applied=not res["is_manifest_empty"],
+                    metadata=metadata,
+                    mutated_cst=Node.from_json(res["mutated_cst_json"]),
+                )
+
+                if res["verified"]:
+                    stats.verified_ok += 1
+                else:
+                    stats.verified_fail += 1
+
+                summary_logger.write_summary(
+                    snippet_id=snippet_id,
+                    verified=res["verified"],
+                    errors=res["errors"],
+                    writer=outputs.summary_writer,
+                )
+
             processed_since_checkpoint += 1
-
             if (
                 pipeline_options.checkpoint_every > 0
                 and processed_since_checkpoint >= pipeline_options.checkpoint_every
             ):
                 loader.save_checkpoint(idx + 1, stats)
                 processed_since_checkpoint = 0
+
+        snippets = loader.iter_snippets(
+            batch_size=pipeline_options.batch_size,
+            start_index=start_index,
+        )
+        v_opt = {
+            "strictness": verifier_options.strictness,
+            "max_errors": verifier_options.max_errors,
+        }
+
+        worker_batch_size = max(batch_snippets, 50) if batch_snippets > 0 else 100
+
+        def batch_generator():
+            """Yields contiguous batches of snippet data for parallel or sequential processing."""
+            current_batch = []
+            for idx, row in snippets:
+                current_batch.append(
+                    {
+                        "idx": idx,
+                        "language": row.get("language"),
+                        "code": row.get("code") or row.get("mutated_code"),
+                        "mutated_cst_json": row.get("mutated_cst"),
+                        "row": row,
+                    }
+                )
+                if len(current_batch) >= worker_batch_size:
+                    yield current_batch
+                    current_batch = []
+            if current_batch:
+                yield current_batch
+
+        if pipeline_options.workers > 1:
+            # Process batches in parallel using order-preserving map
+            worker_fn = functools.partial(
+                _pipeline_worker_task,
+                rules=rules,
+                rule_params=rule_params,
+                verifier_options_dict=v_opt,
+            )
+            with ProcessPoolExecutor(max_workers=pipeline_options.workers) as executor:
+                total_batches = (
+                    loader.num_rows - start_index + worker_batch_size - 1
+                ) // worker_batch_size
+                for batch_results in tqdm(
+                    executor.map(worker_fn, batch_generator()),
+                    total=total_batches,
+                    desc="Processing Batches",
+                ):
+                    for res in batch_results:
+                        handle_res(res)
+        else:
+            # Sequential processing using the same task logic for consistency
+            total_batches = (
+                loader.num_rows - start_index + worker_batch_size - 1
+            ) // worker_batch_size
+            for batch_items in tqdm(
+                batch_generator(), total=total_batches, desc="Processing Batches"
+            ):
+                for res in _pipeline_worker_task(batch_items, rules, rule_params, v_opt):
+                    handle_res(res)
 
         if processed_since_checkpoint > 0:
             loader.save_checkpoint(index + 1, stats)
@@ -403,16 +507,6 @@ def run_pipeline(
         )
 
         manifest_path, dataset_path, summary_path = outputs.output_paths_summary()
-
-    _prototype_log(f"\nManifest written to:        {manifest_path}")
-    _prototype_log(f"Augmented dataset written to: {dataset_path}")
-    _prototype_log(f"Summary log written to:       {summary_path}")
-    _prototype_log(
-        "Summary metrics: "
-        f"processed={stats.processed}, "
-        f"parse_skipped={stats.parse_skipped}, "
-        f"success_rate={stats.success_rate:.2%}"
-    )
 
 
 ####################################################################
@@ -429,8 +523,8 @@ def main():
         --output-dir: Directory for output files (default: output).
 
     Example:
-        uv run proto-cli src\\transtructiver\\prototype\\data_load\\sample.parquet
-        uv run proto-cli dataset.parquet --rules rename-identifier --output-dir results
+        uv run cli src\\transtructiver\\prototype\\data_load\\sample.parquet
+        uv run cli dataset.parquet --rules rename-identifier --output-dir results
     """
     argparser = argparse.ArgumentParser(
         prog="TranStructIVer", description="Run the TranStructIVer pipeline on a dataset file."
@@ -479,6 +573,12 @@ def main():
         action="store_true",
         default=None,
         help="Compress output files using gzip.",
+    )
+    argparser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of parallel worker processes (default: 1)",
     )
     argparser.add_argument(
         "--rule-param",
@@ -532,6 +632,7 @@ def main():
         resume=_coalesce(args.resume, "resume", False),
         max_rows_per_shard=_coalesce(args.max_rows_per_shard, "max_rows_per_shard", 0),
         compress_output=_coalesce(args.compress_output, "compress_output", False),
+        workers=_coalesce(args.workers, "workers", 1),
     )
 
     # Start with config-based params

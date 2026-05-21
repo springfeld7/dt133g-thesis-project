@@ -179,6 +179,7 @@ class OutputManager:
                 ("mutated_code", pa.string()),
                 ("mutated_cst", pa.string()),
                 ("language", pa.string()),
+                ("label", pa.int32()),
                 ("has_mutation_applied", pa.bool_()),
             ]
         )
@@ -218,6 +219,7 @@ class OutputManager:
         original_code: str,
         mutated_code: str,
         language: str,
+        label: int,
         has_mutation_applied: bool = False,
         metadata: dict | None = None,
         mutated_cst: Node | None = None,
@@ -230,8 +232,9 @@ class OutputManager:
             original_code (str): Original code string.
             mutated_code (str): Mutated code string.
             language (str): Programming language of the snippet.
+            label (int): Label for model prediction.
             has_mutation_applied (bool): Whether any mutation was applied.
-            metadata (dict | None): Additional dataset metadata (e.g., char_count, lloc, label).
+            metadata (dict | None): Additional dataset metadata (e.g., char_count, lloc).
             mutated_cst (Node | None): Original CST to cache for later tiers.
         """
 
@@ -242,6 +245,7 @@ class OutputManager:
             "mutated_code": [mutated_code],
             "mutated_cst": [mutated_cst.to_json() if mutated_cst else None],
             "language": [language],
+            "label": [label],
             "has_mutation_applied": [has_mutation_applied],
         }
 

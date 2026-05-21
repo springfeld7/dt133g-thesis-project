@@ -67,7 +67,6 @@ def _get_candidate_pool(
     # Mask only the specific sub-word in context
     masked_code = context_code.replace(word, tokenizer.mask_token)
     inputs = tokenizer(masked_code, return_tensors="pt", truncation=True, max_length=512).to(device)
-
     mask_idx = torch.where(inputs.input_ids == tokenizer.mask_token_id)[1]
     if mask_idx.numel() == 0:
         return [word]
@@ -134,6 +133,8 @@ def _build_substitute_name(node: Node, language: str, context: Optional[Mutation
     code_string = context_node.to_code()
     original = node.text
     original_words = split_words(original)
+    if not original_words:
+        return original
 
     word_pool = []
     for word in original_words:

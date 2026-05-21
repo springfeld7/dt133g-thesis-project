@@ -65,17 +65,21 @@ class RenameIdentifiersRule(MutationRule):
         "attribute",
     }
 
-    def __init__(self, level: int = 0, targets: list[str] | None = None) -> None:
+    def __init__(
+        self, level: int = 0, targets: list[str] | None = None, batch_snippets: int = 50
+    ) -> None:
         """Initialize the rule configuration and helper components.
 
         Args:
             level: Naming strategy level passed to :class:`NameGenerator`.
             targets: Optional rename target keywords such as ``variable``,
                 ``parameter``, ``property``, ``function``, or ``class``.
+            batch_snippets: Optional snippet batching size for Level 1 processing.
         """
         super().__init__()
         self.level = level
         self.targets = targets or []
+        self.batch_snippets = batch_snippets
         # Precompute rename filters and helper objects used during apply().
         self.allowed_labels = self._resolve_target_labels(self.targets)
         self.context = None

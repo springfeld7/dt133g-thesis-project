@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader
 from sklearn.metrics import (
     accuracy_score,
@@ -16,7 +17,9 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
+    T5EncoderModel,
 )
+from transformers.modeling_outputs import SequenceClassifierOutput
 
 
 LABEL_ID = {
@@ -190,13 +193,25 @@ def load_tokenizer(model_name):
     return tokenizer
 
 
-def load_model(model_name, tokenizer, device):
+def load_model(model_name, tokenizer, device, architecture=None):
     """Load appropriate model architecture based on name."""
     model_name_lower = model_name.lower()
 
-    if "codet5" in model_name_lower:
+    if architecture == "codet5_encoder_only":
+        T5EncoderModel._keys_to_ignore_on_load_unexpected = ["decoder.*"]
+        base_encoder = T5EncoderModel.from_pretrained(
+            model_name, torch_dtype=torch.bfloat16, trust_remote_code=True
+        )
+        hidden_dim = base_encoder.config.d_model  # Automatically pulls 1024 for 770m
+        model = codeT5Authorship(base_encoder, dimensionality=hidden_dim)
+        model = model.to(device)
+        model.config.use_cache = False
+        model.config.pad_token_id = tokenizer.pad_token_id
+
+    elif "codet5" in model_name_lower:
         model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True).to(device)
         model.config.use_cache = False
+
     elif "deepseek" in model_name_lower:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -205,6 +220,7 @@ def load_model(model_name, tokenizer, device):
             trust_remote_code=True,
         ).to(device)
         model.config.use_cache = False
+
     else:
         # CodeBERT, GraphCodeBERT, UniXcoder
         model = AutoModelForSequenceClassification.from_pretrained(
@@ -328,7 +344,7 @@ def generate_predictions(model, tokenizer, dataset, model_type, device="cuda"):
 
     if model_type == "seq2seq":
         return generate_seq2seq_pred(model, tokenizer, loader, device)
-    
+
     preds = []
     labels = []
 
@@ -448,3 +464,112 @@ def compute_f1(preds, labels):
     )
 
     return {"accuracy": acc, "precision": precision, "recall": recall, "f1": f1}
+
+
+# Adapted from:
+# https://github.com/LLMauthorbench/LLMauthorbench/blob/main/scripts/5_CodeT5-Authorship_5-class_google_colab.ipynb
+#
+# Original implementation:
+# - 5-class authorship classification
+#
+# Modifications:
+# - Adapted for binary classification
+# - Added Hugging Face Trainer compatibility
+# - Added attention_mask/padding_mask flexibility
+# - Added standardized SequenceClassifierOutput handling
+# - Integrated detached encoder loading workflow
+class codeT5Authorship(torch.nn.Module):
+    """
+    Binary code authorship classifier built on top of a detached CodeT5 encoder.
+
+    This module wraps a pretrained ``T5EncoderModel`` and attaches a lightweight
+    classification head for binary code authorship detection.
+
+    Architecture:
+        1. Extract contextual token representations from the CodeT5 encoder.
+        2. Select the hidden representation of the first token.
+        3. Apply a linear projection layer.
+        4. Apply GELU activation and dropout regularization.
+        5. Produce binary classification logits.
+
+    The ``forward`` method returns a ``SequenceClassifierOutput`` object,
+    enabling compatibility with Hugging Face ``Trainer`` pipelines during
+    training, evaluation, and prediction.
+
+    Args:
+        pretrained_encoder (T5EncoderModel):
+            Pretrained detached CodeT5 encoder backbone.
+
+        dimensionality (int, optional):
+            Hidden-state dimensionality of the encoder outputs.
+            Defaults to ``1024``.
+
+    Attributes:
+        modelBase (T5EncoderModel):
+            Underlying pretrained encoder model.
+
+        pre_classifier (torch.nn.Linear):
+            Projection layer applied to the pooled encoder representation.
+
+        activation (torch.nn.GELU):
+            Nonlinear GELU activation layer.
+
+        dropout (torch.nn.Dropout):
+            Dropout regularization layer.
+
+        classifier (torch.nn.Linear):
+            Final binary classification layer producing logits for two classes.
+
+        loss_fn (torch.nn.CrossEntropyLoss):
+            Cross-entropy loss function used during supervised training.
+    """
+
+    def __init__(self, pretrained_encoder, dimensionality=1024):
+        super(codeT5Authorship, self).__init__()
+        self.modelBase = pretrained_encoder
+        self.config = pretrained_encoder.config
+
+        # Exact layer sequence and dimensions from the reference code
+        self.pre_classifier = torch.nn.Linear(dimensionality, 768, dtype=torch.bfloat16)
+        self.activation = torch.nn.GELU()
+        self.dropout = torch.nn.Dropout(0.2)
+        self.classifier = torch.nn.Linear(
+            768, 2, dtype=torch.bfloat16
+        )  # Binary classification head
+        self.loss_fn = CrossEntropyLoss()
+
+    def forward(self, input_ids, attention_mask=None, padding_mask=None, labels=None, **kwargs):
+        """Forward pass matching author logic while accepting standard Trainer inputs.
+
+        Args:
+            input_ids: Encoded token IDs.
+            attention_mask: Standard attention mask from Hugging Face Trainer.
+            padding_mask: Alternative mask keyword used in reference code.
+            labels: Optional ground-truth target tensors.
+
+        Returns:
+            SequenceClassifierOutput containing loss and prediction logits.
+        """
+        # Capture whichever mask name the data collator passes in
+        mask = attention_mask if attention_mask is not None else padding_mask
+
+        output_1 = self.modelBase(input_ids=input_ids, attention_mask=mask)
+        hidden_state = output_1[0]
+
+        # Reference implementation pull: Grab the very first token position
+        cls_output = hidden_state[:, 0]
+
+        # Ensure tensor matches the bfloat16 linear layers
+        if cls_output.dtype != torch.bfloat16:
+            cls_output = cls_output.to(torch.bfloat16)
+
+        pooler = self.pre_classifier(cls_output)
+        afterActivation = self.activation(pooler)
+        pooler_after_act = self.dropout(afterActivation)
+        logits = self.classifier(pooler_after_act)
+
+        loss = None
+        if labels is not None:
+            loss = self.loss_fn(logits.view(-1, 2), labels.view(-1))
+
+        return SequenceClassifierOutput(loss=loss, logits=logits)

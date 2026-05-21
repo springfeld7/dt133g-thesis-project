@@ -1,5 +1,6 @@
 {
   "model_name": "Salesforce/codet5p-770m",
+  "architecture": "codet5_encoder_only",
   "cv_folds": 3,
   "window": 512,
   "params": {

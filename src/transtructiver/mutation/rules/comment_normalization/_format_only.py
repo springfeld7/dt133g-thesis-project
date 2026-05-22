@@ -19,17 +19,36 @@ def _is_normalized_character(character: str) -> bool:
     return category.startswith(("L", "N", "P")) or character.isspace()
 
 
-def _normalize_written_content(text: str) -> str:
-    """Remove non-text symbols and normalize spacing while preserving newlines."""
+def _normalize_written_content(text: str, preserve_leading: bool = False) -> str:
+    """Remove non-text symbols and normalize spacing while preserving newlines.
+
+    If `preserve_leading` is True, leading whitespace on each non-empty line
+    is preserved (useful for block comments where indentation matters).
+    """
 
     def _normalize_line(line: str) -> str:
         without_symbols = "".join(
             character for character in line if _is_normalized_character(character)
         )
         normalized = re.sub(r"\s+", " ", without_symbols).strip()
-        return re.sub(r"\s+([!?.,;:)\]\}])", r"\1", normalized)
+        punct_normalized = re.sub(r"\s+([!?.,;:)\]\}])", r"\1", normalized)
 
-    lines = textwrap.wrap(text, width=80)
+        if preserve_leading:
+            leading = re.match(r"^(\s*)", line)
+            leading_text = leading.group(1) if leading else ""
+            if not punct_normalized:
+                return f"{leading_text}"
+            return f"{leading_text}{punct_normalized}"
+
+        if not punct_normalized:
+            return ""
+
+        return punct_normalized
+
+    if preserve_leading:
+        lines = text.split("\n")
+    else:
+        lines = textwrap.wrap(text, width=80)
     if len(lines) <= 1:
         return _normalize_line(text)
 
@@ -58,6 +77,7 @@ def _replace_format_only(node: Node, _ancestor: Node) -> str:
     if label.startswith("block_"):
         for start, end in _BLOCK_DELIMITERS:
             if new_text.startswith(start) and new_text.endswith(end):
-                return f"\n{_normalize_written_content(new_text[len(start) : -len(end)])}\n"
+                content = new_text[len(start) : -len(end)]
+                return f"\n{_normalize_written_content(content, preserve_leading=True)}"
 
     return new_text

@@ -125,10 +125,7 @@ def _pipeline_worker_task(batch_items, rules, rule_params, verifier_options_dict
         code = item["code"]
         lang = item["language"]
 
-        if item.get("mutated_cst_json"):
-            orig_cst = Node.from_json(item["mutated_cst_json"])
-        else:
-            orig_cst, _ = _worker_parser.parse(code, lang)
+        orig_cst, _ = _worker_parser.parse(code, lang)
 
         if orig_cst is None:
             results.append({"idx": item["idx"], "skipped": True})

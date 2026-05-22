@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+import textwrap
 
 from ....node import Node
 
@@ -28,7 +29,7 @@ def _normalize_written_content(text: str) -> str:
         normalized = re.sub(r"\s+", " ", without_symbols).strip()
         return re.sub(r"\s+([!?.,;:)\]\}])", r"\1", normalized)
 
-    lines = text.splitlines()
+    lines = textwrap.wrap(text, width=80)
     if len(lines) <= 1:
         return _normalize_line(text)
 
@@ -38,21 +39,25 @@ def _normalize_written_content(text: str) -> str:
 
 def _replace_format_only(node: Node, _ancestor: Node) -> str:
     """Return the comment's written content with normalized spacing and symbols."""
-
     if not node.text:
-        return ""
+        if not node.semantic_label == "block_comment":
+            return ""
 
-    stripped_text = node.text.strip()
+    if node.semantic_label == "block_comment" and len(node.children) > 0:
+        new_text = "".join(n.text for n in node.children if n.text)
+    else:
+        new_text = node.text if node.text else ""
+
     label = node.semantic_label or ""
 
     if label.startswith("line_"):
         for delimiter in _LINE_DELIMITERS:
-            if stripped_text.startswith(delimiter):
-                return _normalize_written_content(stripped_text[len(delimiter) :].lstrip())
+            if new_text.startswith(delimiter):
+                return _normalize_written_content(new_text[len(delimiter) :].lstrip())
 
     if label.startswith("block_"):
         for start, end in _BLOCK_DELIMITERS:
-            if stripped_text.startswith(start) and stripped_text.endswith(end):
-                return _normalize_written_content(stripped_text[len(start) : -len(end)].strip())
+            if new_text.startswith(start) and new_text.endswith(end):
+                return f"\n{_normalize_written_content(new_text[len(start) : -len(end)])}\n"
 
-    return stripped_text
+    return new_text

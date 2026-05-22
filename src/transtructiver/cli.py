@@ -106,11 +106,25 @@ def _build_rule_registry() -> dict[str, type[MutationRule]]:
 RULE_REGISTRY: dict[str, type[MutationRule]] = _build_rule_registry()
 
 
+def _reset_worker_state() -> None:
+    """Clear cached per-process worker objects.
+
+    This prevents cross-run state bleed when multiple pipeline runs happen in the
+    same Python process (for example, test suites with monkeypatched classes).
+    """
+    for name in ("_worker_engine", "_worker_parser", "_worker_verifier"):
+        if name in globals():
+            del globals()[name]
+
+
 def _pipeline_worker_task(batch_items, rules, rule_params, verifier_options_dict):
     """Worker task for processing a batch of snippets in parallel."""
     # Lazy initialize components per process to avoid overhead if process is reused
     global _worker_engine, _worker_parser, _worker_verifier
-    if "_worker_engine" not in globals():
+    # Initialize all worker-singletons together. This guards against partial
+    if not all(
+        name in globals() for name in ("_worker_engine", "_worker_parser", "_worker_verifier")
+    ):
         _worker_engine = _build_engine(rules, rule_params)
         _worker_parser = Parser()
         _worker_verifier = SIVerifier(
@@ -125,10 +139,7 @@ def _pipeline_worker_task(batch_items, rules, rule_params, verifier_options_dict
         code = item["code"]
         lang = item["language"]
 
-        if item.get("mutated_cst_json"):
-            orig_cst = Node.from_json(item["mutated_cst_json"])
-        else:
-            orig_cst, _ = _worker_parser.parse(code, lang)
+        orig_cst, _ = _worker_parser.parse(code, lang)
 
         if orig_cst is None:
             results.append({"idx": item["idx"], "skipped": True})
@@ -344,6 +355,7 @@ def run_pipeline(
         ValueError: If any rule name is not registered in RULE_REGISTRY.
     """
     os.makedirs(output_dir, exist_ok=True)
+    _reset_worker_state()
     pipeline_options = pipeline_options or PipelineOptions()
     verifier_options = verifier_options or VerifierOptions()
     # Use DataLoader abstraction; implementation is chosen internally.

@@ -47,7 +47,7 @@ def _replace_format_only(node: Node, _ancestor: Node) -> str:
         new_text = "".join(n.text for n in node.children if n.text)
     else:
         new_text = node.text if node.text else ""
-    
+
     label = node.semantic_label or ""
 
     if label.startswith("line_"):

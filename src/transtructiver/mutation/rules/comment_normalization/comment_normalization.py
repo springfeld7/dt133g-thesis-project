@@ -202,7 +202,6 @@ class CommentNormalizationRule(MutationRule):
 
                 if stripped_text.startswith(start) and stripped_text.endswith(end):
                     lines = new_text.splitlines()
-                    print(lines)
                     new_lines = []
                     prefix = " "
 

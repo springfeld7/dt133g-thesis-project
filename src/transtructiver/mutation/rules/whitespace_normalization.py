@@ -23,6 +23,10 @@ NUMERIC_TYPES = (
     "decimal_floating_point",
 )
 GLUE_OPERATORS = {".", "::", "->"}
+NO_SPACE_AFTER_OPERATOR_PARENTS = {
+    "update_expression",
+    "pointer_expression",
+}
 
 
 class WhitespaceNormalizationRule(MutationRule):
@@ -106,21 +110,41 @@ class WhitespaceNormalizationRule(MutationRule):
         Returns:
             int: The normalized indentation length.
         """
-        remainder = indent_length % base_unit
+        if indent_length == 0:
+            return 0
 
-        # If it's already a multiple, no change needed
-        if remainder == 0:
-            return indent_length
+        # Determine what level this line was trying to be in the original code
+        # (e.g., 2 spaces in a 2-space file = level 1. 4 spaces in a 2-space file = level 2)
+        indent_level = round(indent_length / self.sample_indent_unit)
 
-        # Determine the distance to the "grid lines"
-        distance_up = base_unit - remainder
-        distance_down = remainder
+        # Output perfectly scaled to your target base unit (e.g., level 2 * 4 = 8 spaces)
+        return indent_level * DEFAULT_BASE_UNIT
 
-        # Snap to the closest multiple
-        if distance_up <= distance_down:
-            return indent_length + distance_up
-        else:
-            return indent_length - distance_down
+    def detect_indent_unit(self, root: Node) -> str:
+        """
+        Scans the tree for the first whitespace node that starts at column 0
+        and has a length greater than 0.
+
+        This method is used to auto-detect the indentation unit, fallbacks to 4 spaces if none is found.
+
+        Args:
+            root (Node): The root of the CST to scan for indentation patterns.
+
+        Returns:
+            str: The detected indentation unit (e.g. "    " for 4 spaces) or a default if none found.
+        """
+        # Traverse to find the first 'indentation' whitespace with a length > 0
+        for node in root.traverse():
+            if (
+                node.type == "whitespace"
+                and node.start_point[1] == 0
+                and node.text
+                and len(node.text) > 0
+            ):
+                if all(c in (" ", "\t") for c in node.text):
+                    expanded_text = node.text.replace("\t", " " * DEFAULT_BASE_UNIT)
+                    return len(expanded_text)
+        return DEFAULT_BASE_UNIT
 
     def _is_padding_to_strip(self, node: Node) -> bool:
         """
@@ -163,24 +187,27 @@ class WhitespaceNormalizationRule(MutationRule):
         """
         records = []
         if idx + 1 >= len(root.children):
-            return records
+            return records, None
 
         next_node = root.children[idx + 1]
 
         if next_node.type in ("++", "--"):
-            return records
+            return records, None
 
         # Space after comma/operator, or before an operator
         is_trigger_before = (
             getattr(next_node, "field", None) == "operator" and next_node.type not in GLUE_OPERATORS
         )
         is_trigger_after = (child.type == ",") or (
-            getattr(child, "field", None) == "operator" and child.type not in GLUE_OPERATORS
+            getattr(child, "field", None) == "operator"
+            and child.type not in GLUE_OPERATORS
+            and root.type not in NO_SPACE_AFTER_OPERATOR_PARENTS
         )
 
         # Skip inserting a space if the previous node is '-' and next node is numeric
         if child.type == "-" and self.is_numeric(next_node):
-            return records
+            if root.type in ("unary_expression", "update_expression", "pointer_expression"):
+                return records, None
 
         # Insert a space if needed and not already present
         if (is_trigger_before or is_trigger_after) and next_node.type != "whitespace":
@@ -191,7 +218,7 @@ class WhitespaceNormalizationRule(MutationRule):
                 text=" ",
             )
             new_ws.parent = root
-            root.children.insert(idx + 1, new_ws)
+            # root.children.insert(idx + 1, new_ws)
 
             records.append(
                 self.record_insert(
@@ -201,7 +228,9 @@ class WhitespaceNormalizationRule(MutationRule):
                     new_type="whitespace",
                 )
             )
-        return records
+            return records, new_ws
+
+        return records, None
 
     def _normalize_whitespace(self, node: Node) -> List[MutationRecord]:
         """
@@ -302,7 +331,17 @@ class WhitespaceNormalizationRule(MutationRule):
         Returns:
             List[MutationRecord]: A list of all mutation records generated during traversal.
         """
-        records, to_delete = self._apply_collect(root, context)
+        self.sample_indent_unit = self.detect_indent_unit(root)
+        (
+            records,
+            to_delete,
+            to_insert,
+        ) = self._apply_collect(root, context)
+
+        for parent, ref_node, new_node in to_insert:
+            if parent and ref_node in parent.children:
+                ref_idx = parent.children.index(ref_node)
+                parent.children.insert(ref_idx + 1, new_node)
 
         for node in to_delete:
             if node.parent:
@@ -312,15 +351,23 @@ class WhitespaceNormalizationRule(MutationRule):
 
     def _apply_collect(
         self, root: Node, context: MutationContext
-    ) -> tuple[List[MutationRecord], List[Node]]:
+    ) -> tuple[List[MutationRecord], List[Node], List[tuple[Node, Node, Node]]]:
         """
-        Collects mutation records and nodes to delete without mutating the tree during traversal.
+        Collects mutation records, nodes to delete, and nodes to insert without mutating the tree.
+
+        Args:
+            root (Node): The current node being inspected.
+            context (MutationContext): The mutation context for tracking state across rules.
 
         Returns:
-            (records, to_delete)
+            tuple: (records, to_delete, to_insert)
+                - records (List[MutationRecord]): Accumulated formatting records.
+                - to_delete (List[Node]): Nodes marked for deletion.
+                - to_insert (List[tuple[Node, Node, Node]]): Tuples of (parent, ref_node, new_node) scheduled for injection.
         """
         records: List[MutationRecord] = []
         to_delete: List[Node] = []
+        to_insert: List[tuple[Node, Node, Node]] = []
 
         children = list(root.children)
         for idx, child in enumerate(children):
@@ -331,10 +378,18 @@ class WhitespaceNormalizationRule(MutationRule):
             elif child.type == "newline" and self._level >= 1:
                 to_delete.extend(self._handle_newline_node(child, idx, root.children))
             else:
-                records.extend(self._handle_structural_spacing(root, child, idx, context))
+                spacing_records, new_node = self._handle_structural_spacing(
+                    root, child, idx, context
+                )
+                records.extend(spacing_records)
 
-            records_child, delete_child = self._apply_collect(child, context)
+                if new_node is not None:
+                    to_insert.append((root, child, new_node))
+
+            records_child, delete_child, insert_child = self._apply_collect(child, context)
+
             records.extend(records_child)
             to_delete.extend(delete_child)
+            to_insert.extend(insert_child)
 
-        return records, to_delete
+        return records, to_delete, to_insert

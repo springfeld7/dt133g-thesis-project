@@ -218,7 +218,11 @@ def convert_node(
 
     code_len = len(source_bytes)
 
-    if ts_node.child_count == 0 or ts_node.is_error:
+    if (
+        ts_node.child_count == 0
+        or ts_node.is_error
+        or any(n.type == "escape_sequence" for n in ts_node.children)
+    ):
         text = source_bytes[ts_node.start_byte : ts_node.end_byte].decode("utf8")
         children = []
     else:

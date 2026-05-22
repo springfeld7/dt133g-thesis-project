@@ -5,7 +5,7 @@ Step 07 of experiments: Cumulatively apply transformation tiers.
 """
 
 from .utils import env_init
-from operator import indexOf
+from .utils.resource_manager import ResourceManager
 from pathlib import Path
 import subprocess
 
@@ -47,10 +47,12 @@ EXPERIMENTS = [
     {
         "name": "tier_2",
         "rules": [
+            "whitespace-normalization",
             "rename-identifier",
             "comment-normalization",
         ],
         "params": {
+            "whitespace-normalization": {"level": 0},
             "rename-identifier": {"level": 1},
             "comment-normalization": {"level": 1},
         },
@@ -61,12 +63,16 @@ EXPERIMENTS = [
     {
         "name": "tier_3",
         "rules": [
+            "whitespace-normalization",
             "rename-identifier",
+            "comment-normalization",
             "dead-code-insertion",
             "control-structure-substitution",
         ],
         "params": {
+            "whitespace-normalization": {"level": 0},
             "rename-identifier": {"level": 2},
+            "comment-normalization": {"level": 1},
             "dead-code-insertion": {"level": 0},
         },
     },
@@ -78,12 +84,15 @@ EXPERIMENTS = [
         "rules": [
             "whitespace-normalization",
             "rename-identifier",
+            "comment-normalization",
             "dead-code-insertion",
+            "control-structure-substitution",
             "comment-deletion",
         ],
         "params": {
             "whitespace-normalization": {"level": 1},
             "rename-identifier": {"level": 3},
+            "comment-normalization": {"level": 1},
             "dead-code-insertion": {"level": 1},
         },
     },
@@ -120,21 +129,11 @@ def run_experiment(exp: dict):
             print("\n-------------------------------")
             return
 
-        _INPUT = file
-
-        exp_idx = indexOf(EXPERIMENTS, exp)
-        if exp_idx >= 0:
-            # get saved file with previous tier mutations to avoid reapplying them
-            prev_tier_file = base_dir / f"tier_{exp_idx}" / "augmented_dataset.parquet"
-            if prev_tier_file.exists():
-                _INPUT = prev_tier_file
-                print(f"\n  Fetched previous tier dataset from {prev_tier_file}\n")
-
         cmd = [
             "uv",
             "run",
             "cli",
-            str(_INPUT),
+            str(file),
             *exp["rules"],
             "--output-dir",
             str(output_dir),
@@ -144,7 +143,7 @@ def run_experiment(exp: dict):
         params = exp.get("params", {})
         for rule, rule_params in params.items():
             for key, value in rule_params.items():
-                cmd += ["--rule-param", f"{rule}:{key}={value}"]
+                cmd += ["--rule-param", f"{rule}:{key}={value}", "--workers", f"{ResourceManager.get_cpu_limit()//2}"]
 
         print(" ".join(cmd))
         print("\n-------------------------------\n")

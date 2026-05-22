@@ -143,7 +143,12 @@ def run_experiment(exp: dict):
         params = exp.get("params", {})
         for rule, rule_params in params.items():
             for key, value in rule_params.items():
-                cmd += ["--rule-param", f"{rule}:{key}={value}", "--workers", f"{ResourceManager.get_cpu_limit()//2}"]
+                cmd += [
+                    "--rule-param",
+                    f"{rule}:{key}={value}",
+                    "--workers",
+                    f"{ResourceManager.get_cpu_limit()//2}",
+                ]
 
         print(" ".join(cmd))
         print("\n-------------------------------\n")

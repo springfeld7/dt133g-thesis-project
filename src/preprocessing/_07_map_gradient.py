@@ -85,7 +85,6 @@ EXPERIMENTS = [
         "rules": [
             "whitespace-normalization",
             "rename-identifier",
-            "comment-normalization",
             "dead-code-insertion",
             "control-structure-substitution",
             "comment-deletion",
@@ -93,7 +92,6 @@ EXPERIMENTS = [
         "params": {
             "whitespace-normalization": {"level": 1},
             "rename-identifier": {"level": 3},
-            "comment-normalization": {"level": 1},
             "dead-code-insertion": {"level": 1},
             "control-structure-substitution": {"level": 3},
             "comment-deletion": {"level": 3},
@@ -162,12 +160,12 @@ def run_experiment(exp: dict):
 def main():
     BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("\n=== STEP 08: MAPPING GRADIENT ===\n")
+    print("\n=== STEP 07: MAPPING GRADIENT ===\n")
 
     for exp in EXPERIMENTS:
         run_experiment(exp)
 
-    print("\n=== STEP 08 COMPLETE ===")
+    print("\n=== STEP 07 COMPLETE ===")
 
 
 if __name__ == "__main__":

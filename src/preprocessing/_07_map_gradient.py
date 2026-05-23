@@ -74,6 +74,7 @@ EXPERIMENTS = [
             "rename-identifier": {"level": 2},
             "comment-normalization": {"level": 1},
             "dead-code-insertion": {"level": 0},
+            "control-structure-substitution": {"level": 3},
         },
     },
     # -----------------------------------
@@ -94,6 +95,8 @@ EXPERIMENTS = [
             "rename-identifier": {"level": 3},
             "comment-normalization": {"level": 1},
             "dead-code-insertion": {"level": 1},
+            "control-structure-substitution": {"level": 3},
+            "comment-deletion": {"level": 3},
         },
     },
 ]

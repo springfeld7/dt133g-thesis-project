@@ -1,0 +1,62 @@
+{
+    "codet_m4": {
+        "tier_1": {
+            "codebleu": 0.5399508225351605,
+            "ngram_match_score": 0.4610097566769911,
+            "weighted_ngram_match_score": 0.4865184389036662,
+            "syntax_match_score": 0.3514052997305727,
+            "dataflow_match_score": 0.8608697948294073
+        },
+        "tier_2": {
+            "codebleu": 0.46882448905296026,
+            "ngram_match_score": 0.3568772542069163,
+            "weighted_ngram_match_score": 0.38794266998800647,
+            "syntax_match_score": 0.39148065045721225,
+            "dataflow_match_score": 0.7389973815597127
+        },
+        "tier_3": {
+            "codebleu": 0.5598093859614932,
+            "ngram_match_score": 0.4039533838475681,
+            "weighted_ngram_match_score": 0.5034834190596355,
+            "syntax_match_score": 0.6273727878127484,
+            "dataflow_match_score": 0.7044279531260242
+        },
+        "tier_4": {
+            "codebleu": 0.4832745649448565,
+            "ngram_match_score": 0.3455166401826004,
+            "weighted_ngram_match_score": 0.4264552433028892,
+            "syntax_match_score": 0.5226403714919758,
+            "dataflow_match_score": 0.6384860048019698
+        }
+    },
+    "droidcollection": {
+        "tier_1": {
+            "codebleu": 0.55273293931065,
+            "ngram_match_score": 0.4925037770664147,
+            "weighted_ngram_match_score": 0.5068142044476959,
+            "syntax_match_score": 0.3991423675357882,
+            "dataflow_match_score": 0.8124714081926946
+        },
+        "tier_2": {
+            "codebleu": 0.4979890098507042,
+            "ngram_match_score": 0.4061732716109111,
+            "weighted_ngram_match_score": 0.4261947397751521,
+            "syntax_match_score": 0.4455278414887801,
+            "dataflow_match_score": 0.714060186527978
+        },
+        "tier_3": {
+            "codebleu": 0.531189631639479,
+            "ngram_match_score": 0.40099587055737984,
+            "weighted_ngram_match_score": 0.478158919959136,
+            "syntax_match_score": 0.551709635310088,
+            "dataflow_match_score": 0.6938941007313318
+        },
+        "tier_4": {
+            "codebleu": 0.4746523367966632,
+            "ngram_match_score": 0.35983532283602976,
+            "weighted_ngram_match_score": 0.4212947477389521,
+            "syntax_match_score": 0.48851339856429665,
+            "dataflow_match_score": 0.6289658780473817
+        }
+    }
+}

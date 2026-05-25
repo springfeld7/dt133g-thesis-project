@@ -478,7 +478,10 @@ class TestParserLanguageSupport:
     def test_parse_unsupported_language(self, parser):
         """Test that unsupported language raises ValueError."""
         code = "some code"
-        with pytest.raises(ValueError, match="Unsupported language"):
+        with pytest.raises(
+            ValueError,
+            match="Language 'nonexistent_language' is not supported or missing required package.",
+        ):
             parser.parse(code, "nonexistent_language")
 
     def test_parse_case_insensitive_language(self, parser):

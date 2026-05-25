@@ -7,12 +7,12 @@ authors = [
     { name = "Loviza Sahlén", email = "losa2300@student.miun.se" },
     { name = "Thomas Springfeldt", email = "thsp1900@student.miun.se" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 dependencies = [
     "gdown>=6.0.0",
-    "pandas>=3.0.1",
-    "pyarrow>=23.0.1",
-    "pyyaml>=6.0.2",
+    "pandas>=2.3.3",
+    "pyarrow>=24.0.0",
+    "pyyaml>=6.0.3",
     "tqdm>=4.67.3",
     "torch",
     "transformers>=5.8.0",
@@ -24,12 +24,7 @@ dependencies = [
 
 [project.scripts]
 transtructiver = "transtructiver:main"
-proto-mutate = "transtructiver.prototype.mutation.mutate:main"
-proto-parse = "transtructiver.prototype.parsing.parse:main"
-proto-verify = "transtructiver.prototype.verification.verify:main"
-proto-cli = "transtructiver.prototype.cli:main"
 cli = "transtructiver.cli:main"
-parser = "transtructiver.parsing.parser:main"
 
 [tool.black]
 line-length = 100

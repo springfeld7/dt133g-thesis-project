@@ -16,14 +16,14 @@ class TestReplaceFormatOnly:
     """Direct tests for the level 0 replacement strategy."""
 
     def test_line_comment_normalizes_spacing_without_rewriting_content(self):
-        node = _make_node("line_comment", "   //keep this text   ", "line_comment")
+        node = _make_node("line_comment", "//keep this text   ", "line_comment")
 
         assert _replace_format_only(node, node) == "keep this text"
 
     def test_block_comment_preserves_written_content(self):
         node = _make_node("block_comment", "/* keep  this  text */", "block_comment")
 
-        assert _replace_format_only(node, node) == "keep this text"
+        assert _replace_format_only(node, node) == "\n keep this text"
 
     def test_block_comment_normalizes_newlines_and_symbols(self):
         node = _make_node(
@@ -32,7 +32,7 @@ class TestReplaceFormatOnly:
             "block_comment",
         )
 
-        assert _replace_format_only(node, node) == "hello,\nworld!"
+        assert _replace_format_only(node, node) == "\n hello,\nworld!"
 
     def test_line_comment_normalizes_emojis_and_punctuation(self):
         node = _make_node("line_comment", "// Hi there 😀!", "line_comment")
@@ -48,6 +48,15 @@ class TestReplaceFormatOnly:
 
         assert _replace_format_only(node, node) == "keep-this_value, please"
 
+    def test_line_comment_preserves_decomposed_letters(self):
+        node = _make_node(
+            "line_comment",
+            "// cafe\u0301 is open",
+            "line_comment",
+        )
+
+        assert _replace_format_only(node, node) == "cafe is open"
+
     def test_block_comment_keeps_hyphens_and_underscores(self):
         node = _make_node(
             "block_comment",
@@ -55,7 +64,7 @@ class TestReplaceFormatOnly:
             "block_comment",
         )
 
-        assert _replace_format_only(node, node) == "build-step_value, ready"
+        assert _replace_format_only(node, node) == "\n build-step_value, ready"
 
     def test_empty_comment_text_returns_empty_string(self):
         node = _make_node("line_comment", "", "line_comment")

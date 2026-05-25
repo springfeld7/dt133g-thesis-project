@@ -2,19 +2,19 @@
 
 TranStructIVer (Transformation and Structural Isomorphism Verification) is a modular framework for code mutation, semantic annotation, and verification across multiple programming languages.
 
-> **Note:** This project requires Python 3.14 or higher. You can check your version with:
+> **Note:** This project requires Python 3.10. You can check your version with:
 > ```sh
 > python --version
 > ```
-> If you have an older version, download Python 3.14 from [python.org](https://www.python.org/downloads/).
+> You can download Python 3.10 from [python.org](https://www.python.org/downloads/release/python-31011/).
 
 ## Quickstart
 
-1. Install Python 3.14 (see note above).
+1. Install Python 3.10 (see note above).
 2. Clone the repository:
 	```sh
-	git clone https://github.com/your-org/dt002g-group5.git
-	cd dt002g-group5
+	git clone https://github.com/springfeld7/TranStructIVer.git
+	cd transtructiver
 	```
 3. Install dependencies:
 	- **A. Using [uv](https://github.com/astral-sh/uv) (recommended):**
@@ -33,9 +33,7 @@ TranStructIVer (Transformation and Structural Isomorphism Verification) is a mod
 			```
 		2. Install dependencies:
 			```sh
-			pip install .
-			# If you want to include dev dependencies:
-			pip install .[dev]
+			pip install -e .
 			```
 
 ## Usage
@@ -76,7 +74,7 @@ Run all tests:
 
 - **With uv:**
 	```sh
-	uv run -m pytest tests/
+	uv run pytest tests/
 	```
 - **With pip/venv:**
 	```sh
@@ -93,12 +91,12 @@ Run all tests:
 
 ## Troubleshooting
 
-- If you see errors about Python version, ensure you are using Python 3.14 or higher.
+- If you see errors about Python version, ensure you are using Python 3.10.
 - If you see import errors, check that you installed dependencies and activated your virtual environment.
 - If tests fail to collect, check for interpreter compatibility and standardized import patterns.
 
 ## CI and Local Parity
 
-Continuous Integration (CI) runs on Python 3.14. For reproducible results, use Python 3.14 locally.
+Continuous Integration (CI) runs on Python 3.10. For reproducible results, use Python 3.10 locally.
 
 ---

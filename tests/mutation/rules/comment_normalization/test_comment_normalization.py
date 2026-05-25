@@ -451,7 +451,7 @@ class TestCommentNormalizationMutationRecord:
         assert record.node_id == comment.start_point
         assert "new_val" in record.metadata
         assert record.metadata.get("new_val") != comment_text
-        assert str(record.metadata.get("new_val")).startswith("/**\n *")
+        assert str(record.metadata.get("new_val")) == "/**\n  doc comment*/"
 
 
 @pytest.mark.parametrize("level", [0, 1, 2])

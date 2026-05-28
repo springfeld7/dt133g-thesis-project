@@ -73,22 +73,6 @@ def _load_json(path: str) -> dict[str, Any]:
     return data or {}
 
 
-def _load_toml(path: str) -> dict[str, Any]:
-    """Load a TOML config file into a dict.
-
-    Args:
-        path (str): Path to the TOML file.
-
-    Returns:
-        dict[str, Any]: Parsed TOML data as a dictionary.
-    """
-    import tomllib
-
-    with open(path, "rb") as fh:
-        data = tomllib.load(fh)
-    return data or {}
-
-
 def load_config(path: str | None) -> AppConfig:
     """Load and normalize external config from *path*.
 
@@ -104,8 +88,6 @@ def load_config(path: str | None) -> AppConfig:
     suffix = Path(path).suffix.lower()
     if suffix == ".json":
         raw = _load_json(path)
-    elif suffix == ".toml":
-        raw = _load_toml(path)
     else:
         raw = _load_yaml(path)
 

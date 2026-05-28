@@ -11,15 +11,13 @@ Outputs written per run (inside ``--output-dir``):
 
 # Python version precheck
 import sys
-import itertools
 import functools
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Any
+from concurrent.futures import ProcessPoolExecutor
 
 from tqdm import tqdm
 
-if sys.version_info < (3, 14):
-    sys.exit("Error: Python 3.14 or higher is required. Please upgrade your interpreter.")
+if sys.version_info < (3, 10):
+    sys.exit("Error: Python 3.10 is required. Please change your interpreter.")
 
 import argparse
 import importlib

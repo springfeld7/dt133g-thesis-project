@@ -372,9 +372,12 @@ def test_no_space_between_minus_and_number(whitespace_rule, mutation_context):
     )
 
 
-def test_snap_to_grid_logic(whitespace_rule):
+def test_snap_to_grid_logic(whitespace_rule, mutation_context):
     """Verify that _snap_to_grid correctly rounds up, down, and handles exact multiples."""
     base = 4
+    tree = make_indentation_tree()
+    whitespace_rule.apply(tree, mutation_context)
+    whitespace_rule.sample_indent_unit = base
 
     # Already a multiple (remainder 0)
     assert whitespace_rule._snap_to_grid(8, base) == 8

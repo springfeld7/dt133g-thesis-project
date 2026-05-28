@@ -55,11 +55,14 @@ def mutation_context():
 @pytest.fixture
 def mock_registry():
     """Mocks both lexicon and strategy registries."""
-    with patch(
-        "transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion.get_lexicon"
-    ) as m_lex, patch(
-        "transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion.get_strategy"
-    ) as m_strat:
+    with (
+        patch(
+            "transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion.get_lexicon"
+        ) as m_lex,
+        patch(
+            "transtructiver.mutation.rules.dead_code_insertion.dead_code_insertion.get_strategy"
+        ) as m_strat,
+    ):
 
         # Lexicon Setup
         lex_inst = MagicMock()

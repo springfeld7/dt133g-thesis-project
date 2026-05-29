@@ -63,7 +63,7 @@ def test_classvars_populated(lexicon):
         ("", 'std::string v = "";'),
         (123, "int v = 123;"),
         (-1, "int v = -1;"),
-        (3.14, "double v = 3.14;"),
+        (3.10, "double v = 3.1;"),
     ],
 )
 def test_get_assignment_statement_quotes(lexicon, value, expected):

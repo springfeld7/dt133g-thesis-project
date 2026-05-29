@@ -188,10 +188,7 @@ class Parser:
         Raises:
             ValueError: If the specified language is not supported.
         """
-        try:
-            ts_language = get_language(language)
-        except ValueError as e:
-            raise ValueError(f"Unsupported language: {language}") from e
+        ts_language = get_language(language)
 
         try:
             code.encode("utf-8")

@@ -24,7 +24,7 @@ class Node:
         end_point: tuple[int, int],
         type: str,
         text: Optional[str] = None,
-        children: Optional[List[Node]] = None,
+        children: Optional[List["Node"]] = None,
     ) -> None:
         """
         Initialize a new Node.
@@ -43,7 +43,7 @@ class Node:
         self.text = text
         self.children = children or []
         # Links populated during adaptation and annotation for tree navigation.
-        self.parent: Optional[Node] = None
+        self.parent: Optional["Node"] = None
         self.semantic_label: Optional[str] = None
         self.context_type: Optional[str] = None
         self.field: Optional[str] = None
@@ -51,7 +51,7 @@ class Node:
         self.builtin: bool = False
         self.is_named: bool = True
 
-    def add_child(self, child: Node) -> None:
+    def add_child(self, child: "Node") -> None:
         """
         Add a child node to this node.
 
@@ -60,7 +60,7 @@ class Node:
         """
         self.children.append(child)
 
-    def remove_child(self, child: Node) -> None:
+    def remove_child(self, child: "Node") -> None:
         """
         Remove a child node from this node.
 
@@ -72,7 +72,7 @@ class Node:
         """
         self.children.remove(child)
 
-    def traverse(self) -> Iterator[Node]:
+    def traverse(self) -> Iterator["Node"]:
         """
         Yield all nodes in the tree using preorder traversal.
 
@@ -86,7 +86,7 @@ class Node:
         for child in self.children:
             yield from child.traverse()
 
-    def traverse_up(self) -> Iterator[Node]:
+    def traverse_up(self) -> Iterator["Node"]:
         """
         Yields ancestors of the current node, starting from the parent
         up to the root of the tree.
@@ -99,7 +99,7 @@ class Node:
             yield curr
             curr = curr.parent
 
-    def clone(self, parent: Optional[Node] = None) -> Node:
+    def clone(self, parent: Optional["Node"] = None) -> "Node":
         """
         Creates a deep copy of this node and its entire subtree.
 
@@ -151,7 +151,7 @@ class Node:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any], parent: Optional[Node] = None) -> Node:
+    def from_dict(cls, payload: dict[str, Any], parent: Optional["Node"] = None) -> "Node":
         """Rebuild a node tree from :meth:`to_dict` output."""
         node = cls(
             start_point=tuple(payload["start_point"]),
@@ -180,7 +180,7 @@ class Node:
         return json.dumps(self.to_dict(), ensure_ascii=False)
 
     @classmethod
-    def from_json(cls, payload: str) -> Node:
+    def from_json(cls, payload: str) -> "Node":
         """Deserialize a JSON string produced by :meth:`to_json`."""
 
         return cls.from_dict(json.loads(payload))

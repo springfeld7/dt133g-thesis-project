@@ -31,14 +31,17 @@ def get_language(language_name: str) -> Language:
         tree_sitter.Language: The Language instance for the specified language.
 
     Raises:
-        ValueError: If the language is not supported or not installed.
+        ValueError: If the language is invalid, not supported or not installed.
     """
+    if not language_name:
+        raise ValueError("Language name cannot be empty or None.")
+
     lang_key = language_name.lower()
+
     language = None
     if lang_key in _LANGUAGE_MAP:
         language: object = _LANGUAGE_MAP[lang_key]
 
     if language:
         return Language(language)
-
     raise ValueError(f"Language '{language_name}' is not supported or missing required package.")

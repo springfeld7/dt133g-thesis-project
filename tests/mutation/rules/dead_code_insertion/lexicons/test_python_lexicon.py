@@ -62,7 +62,7 @@ def test_classvars_populated(lexicon):
         ("", "v = ''"),
         (123, "v = 123"),
         (-1, "v = -1"),
-        (3.14, "v = 3.14"),
+        (3.10, "v = 3.1"),
     ],
 )
 def test_get_assignment_statement_quotes(lexicon, value, expected):

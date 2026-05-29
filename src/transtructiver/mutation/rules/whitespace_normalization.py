@@ -6,7 +6,7 @@ indentation style and cleans up inline and trailing whitespace to ensure
 uniform code formatting.
 """
 
-from typing import List
+from typing import List, Optional
 
 from ...mutation.mutation_context import MutationContext
 from .mutation_rule import MutationRule, MutationRecord
@@ -120,7 +120,7 @@ class WhitespaceNormalizationRule(MutationRule):
         # Output perfectly scaled to your target base unit (e.g., level 2 * 4 = 8 spaces)
         return indent_level * DEFAULT_BASE_UNIT
 
-    def detect_indent_unit(self, root: Node) -> str:
+    def detect_indent_unit(self, root: Node) -> int:
         """
         Scans the tree for the first whitespace node that starts at column 0
         and has a length greater than 0.
@@ -172,7 +172,7 @@ class WhitespaceNormalizationRule(MutationRule):
 
     def _handle_structural_spacing(
         self, root: Node, child: Node, idx: int, context: MutationContext
-    ) -> List[MutationRecord]:
+    ) -> tuple[list[MutationRecord], Optional[Node]]:
         """
         Handles missing spaces after commas and around operators by injection.
 

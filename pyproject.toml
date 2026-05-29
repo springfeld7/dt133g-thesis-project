@@ -7,15 +7,15 @@ authors = [
     { name = "Loviza Sahlén", email = "losa2300@student.miun.se" },
     { name = "Thomas Springfeldt", email = "thsp1900@student.miun.se" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 dependencies = [
     "datasets>=4.8.5",
     "matplotlib>=3.10.8",
     "gdown>=6.0.0",
-    "pandas>=3.0.1",
-    "pyarrow>=23.0.1",
+    "pandas>=2.3.3",
+    "pyarrow>=24.0.0",
     "python-dotenv>=1.2.2",
-    "pyyaml>=6.0.2",
+    "pyyaml>=6.0.3",
     "seaborn>=0.13.2",
     "torch",
     "transformers>=5.5.4",
@@ -24,24 +24,15 @@ dependencies = [
     "tree-sitter-cpp>=0.23.4",
     "tree-sitter-java>=0.23.5",
     "tree-sitter-python>=0.25.0",
-    "scipy>=1.17.1",
     "accelerate>=1.13.0",
-    "scikit-learn>=1.8.0",
-    "torchvision",
-    "torchaudio",
-    "annoy>=1.17.3",
+    "scikit-learn>=1.7.2",
     "datasketch>=1.10.0",
     "tensorboard>=2.20.0",
 ]
 
 [project.scripts]
-transtructiver = "transtructiver:main" 
-proto-mutate = "transtructiver.prototype.mutation.mutate:main"
-proto-parse = "transtructiver.prototype.parsing.parse:main"
-proto-verify = "transtructiver.prototype.verification.verify:main"
-proto-cli = "transtructiver.prototype.cli:main"
+transtructiver = "transtructiver:main"
 cli = "transtructiver.cli:main"
-parser = "transtructiver.parsing.parser:main"
 
 # Preprocessing scripts
 verify-login = "preprocessing.utils.dataset_manager:main"
@@ -72,11 +63,6 @@ exclude = '''
 torch = [
   { index = "pytorch-cu128" },
 ]
-torchvision = [
-  { index = "pytorch-cu128" },
-]
-torchaudio = [
-  { index = "pytorch-cu128" }]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

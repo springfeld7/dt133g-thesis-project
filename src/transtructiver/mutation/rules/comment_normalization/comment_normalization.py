@@ -209,7 +209,8 @@ class CommentNormalizationRule(MutationRule):
                         if len(line) > 0:
                             new_lines.append(f"{prefix}{line}")
 
-                    return f'{start}\n{"\n".join(new_lines)}{end}'
+                    joined_lines = "\n".join(new_lines)
+                    return start + "\n" + f"{joined_lines}{end}"
 
             else:  # Line Style
                 if stripped_text.startswith(d):

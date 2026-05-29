@@ -128,12 +128,12 @@ profile = build_profile(entries, types, separator)
 # Save to file
 # -----------------------------
 path = f"src/transtructiver/parsing/annotation/profiles/{language}/"
-# Ensure the profile directory exists (create the language directory itself).
+# Ensure the profile directory exists.
 os.makedirs(path, exist_ok=True)
 
 # Persist profile to a file. The filename includes the language and an
 # optional version marker to distinguish profiles for different doc
-# releases. This is a convenience step for maintainers.
+# releases.
 with open(path + f"{language}{version if version else ' '}_builtin_profile.json", "w") as f:
     json.dump(profile, f, indent=2)
 

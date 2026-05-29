@@ -1,4 +1,4 @@
-"""Unit tests for experiments/sample_selection/analysis.py
+"""Unit tests for preprocessing/sample_selection/analysis.py
 
 Validates that SampleAnalyzer correctly computes stylistic and structural
 metrics from a manually constructed Tree-sitter-shaped node tree.
@@ -7,7 +7,7 @@ metrics from a manually constructed Tree-sitter-shaped node tree.
 import pytest
 from tree_sitter import Point
 
-from experiments.utils.analysis import SampleAnalyzer
+from preprocessing.utils.analysis import SampleAnalyzer
 
 
 # ===== Helpers =====

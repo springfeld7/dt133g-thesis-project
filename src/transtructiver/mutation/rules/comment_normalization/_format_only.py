@@ -78,6 +78,9 @@ def _replace_format_only(node: Node, _ancestor: Node) -> str:
         for start, end in _BLOCK_DELIMITERS:
             if new_text.startswith(start) and new_text.endswith(end):
                 content = new_text[len(start) : -len(end)]
-                return f"\n{' ' * node.start_point[1]}{_normalize_written_content(content, preserve_leading=True)}"
+                indent = node.parent.start_point[1] if node.parent else 0
+                return (
+                    f"\n{' ' * indent}{_normalize_written_content(content, preserve_leading=True)}"
+                )
 
     return new_text

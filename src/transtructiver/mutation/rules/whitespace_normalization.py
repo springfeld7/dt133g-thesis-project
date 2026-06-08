@@ -99,7 +99,7 @@ class WhitespaceNormalizationRule(MutationRule):
         # Check if there is a next sibling and if it is a newline
         return (idx + 1 < len(children)) and (children[idx + 1].type == "newline")
 
-    def _snap_to_grid(self, indent_length: int, base_unit: int) -> int:
+    def _snap_to_grid(self, node: Node, indent_length: int, base_unit: int) -> int:
         """
         Rounds the indentation length to the nearest multiple of the base unit.
 
@@ -117,8 +117,14 @@ class WhitespaceNormalizationRule(MutationRule):
         # (e.g., 2 spaces in a 2-space file = level 1. 4 spaces in a 2-space file = level 2)
         indent_level = round(indent_length / self.sample_indent_unit)
 
+        if indent_level < (indent_length / self.sample_indent_unit):
+            for p in node.traverse_up():
+                if p.semantic_label and "scope" in p.semantic_label:
+                    indent_level += 1
+                    break
+
         # Output perfectly scaled to your target base unit (e.g., level 2 * 4 = 8 spaces)
-        return indent_level * DEFAULT_BASE_UNIT
+        return indent_level * base_unit
 
     def detect_indent_unit(self, root: Node) -> int:
         """
@@ -252,7 +258,7 @@ class WhitespaceNormalizationRule(MutationRule):
         if self._is_indentation(node):
             # Handle Indentation: Expand tabs and snap to grid
             expanded_len = len(original_text.expandtabs(self.base_unit))
-            new_text = " " * self._snap_to_grid(expanded_len, self.base_unit)
+            new_text = " " * self._snap_to_grid(node, expanded_len, self.base_unit)
 
         elif self._is_trailing_whitespace(node) or self._is_padding_to_strip(node):
             # Handle Trailing/Padding: Remove

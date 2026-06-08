@@ -6,6 +6,8 @@ trailing whitespace removal, padding removal around brackets, and insertion
 of structural spaces around commas and operators.
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 from src.transtructiver.mutation.rules.whitespace_normalization import WhitespaceNormalizationRule
 from src.transtructiver.mutation.rules.mutation_rule import MutationRecord
@@ -377,20 +379,21 @@ def test_snap_to_grid_logic(whitespace_rule, mutation_context):
     base = 4
     tree = make_indentation_tree()
     whitespace_rule.apply(tree, mutation_context)
+    node = MagicMock()
     whitespace_rule.sample_indent_unit = base
 
     # Already a multiple (remainder 0)
-    assert whitespace_rule._snap_to_grid(8, base) == 8
+    assert whitespace_rule._snap_to_grid(node, 8, base) == 8
 
     # Round down: remainder 1 (distance_down 1 < distance_up 3)
-    assert whitespace_rule._snap_to_grid(5, base) == 4
+    assert whitespace_rule._snap_to_grid(node, 5, base) == 4
 
     # Round up: remainder 3 (distance_up 1 < distance_down 3)
-    assert whitespace_rule._snap_to_grid(7, base) == 8
+    assert whitespace_rule._snap_to_grid(node, 7, base) == 8
 
     # Halfway case: remainder 2 (distance_up 2 == distance_down 2)
     # Your logic snaps UP: indent + distance_up (6 + 2 = 8)
-    assert whitespace_rule._snap_to_grid(6, base) == 8
+    assert whitespace_rule._snap_to_grid(node, 6, base) == 8
 
 
 def test_nested_structural_spacing(whitespace_rule, mutation_context):

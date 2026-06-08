@@ -48,7 +48,7 @@ def _normalize_written_content(text: str, preserve_leading: bool = False) -> str
     if preserve_leading:
         lines = text.split("\n")
     else:
-        lines = textwrap.wrap(text, width=80)
+        lines = [text]
     if len(lines) <= 1:
         return _normalize_line(text)
 

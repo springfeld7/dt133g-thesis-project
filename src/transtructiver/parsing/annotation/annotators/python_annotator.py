@@ -30,6 +30,7 @@ class PythonAnnotator(BaseAnnotator):
     parent_type_labels: Mapping[str, str] = {
         "class_definition": "class_name",
         "function_definition": "function_name",
+        "call": "function_name",
         "parameters": "parameter_name",
         "typed_parameter": "parameter_name",
         "default_parameter": "parameter_name",

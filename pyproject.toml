@@ -28,11 +28,13 @@ dependencies = [
     "scikit-learn>=1.7.2",
     "datasketch>=1.10.0",
     "tensorboard>=2.20.0",
+    "unidecode>=1.4.0",
 ]
 
 [project.scripts]
 transtructiver = "transtructiver:main"
 cli = "transtructiver.cli:main"
+mutate = "transtructiver.mutate:main"
 
 # Preprocessing scripts
 verify-login = "preprocessing.utils.dataset_manager:main"

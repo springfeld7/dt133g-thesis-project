@@ -6,8 +6,8 @@ from transtructiver.mutation.rules.comment_normalization._format_only import (
 )
 
 
-def _make_node(node_type: str, text: str, semantic_label: str) -> Node:
-    node = Node((1, 0), (1, len(text)), node_type, text=text)
+def _make_node(node_type: str, text: str, semantic_label: str, start=(1, 0), children=[]) -> Node:
+    node = Node(start, (1, len(text)), node_type, text=text, children=children)
     node.semantic_label = semantic_label
     return node
 
@@ -20,19 +20,38 @@ class TestReplaceFormatOnly:
 
         assert _replace_format_only(node, node) == "keep this text"
 
-    def test_block_comment_preserves_written_content(self):
-        node = _make_node("block_comment", "/* keep  this  text */", "block_comment")
+    def test_block_comment_normalizes_unicode_and_symbols(self):
+        content = _make_node(
+            "string_content",
+            """This function computes ΔE between χ_i and χ_j.  
+    Result must be ≥ 0.
+    🚀🚀🚀
+""",
+            "",
+        )
+        start = _make_node("string_start", '"""', "")
+        end = _make_node("string_end", '"""', "")
 
-        assert _replace_format_only(node, node) == "\n keep this text"
+        node = _make_node(
+            "string", "", "block_comment", start=(1, 4), children=[start, content, end]
+        )
+
+        assert (
+            _replace_format_only(node, node)
+            == """
+    This function computes DE between kh_i and kh_j.
+    Result must be >= 0.
+    """
+        )
 
     def test_block_comment_normalizes_newlines_and_symbols(self):
         node = _make_node(
             "block_comment",
-            "/* hello,\nworld 🚀! */",
+            "/* hello,\nworld🚀!! */",
             "block_comment",
         )
 
-        assert _replace_format_only(node, node) == "\n hello,\nworld!"
+        assert _replace_format_only(node, node) == "\n hello,\nworld!\n"
 
     def test_line_comment_normalizes_emojis_and_punctuation(self):
         node = _make_node("line_comment", "// Hi there 😀!", "line_comment")
@@ -64,7 +83,7 @@ class TestReplaceFormatOnly:
             "block_comment",
         )
 
-        assert _replace_format_only(node, node) == "\n build-step_value, ready"
+        assert _replace_format_only(node, node) == "\n build-step_value, ready\n"
 
     def test_empty_comment_text_returns_empty_string(self):
         node = _make_node("line_comment", "", "line_comment")

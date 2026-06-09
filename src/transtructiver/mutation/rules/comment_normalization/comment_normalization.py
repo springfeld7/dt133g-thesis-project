@@ -203,14 +203,16 @@ class CommentNormalizationRule(MutationRule):
                 if stripped_text.startswith(start) and stripped_text.endswith(end):
                     lines = new_text.splitlines()
                     new_lines = []
-                    prefix = " "
+                    prefix = " *" if "**" in start else ""
 
                     for line in lines:
                         if len(line) > 0:
                             new_lines.append(f"{prefix}{line}")
 
                     joined_lines = "\n".join(new_lines)
-                    return start + "\n" + f"{joined_lines}{end}"
+                    start += "\n" if "/*" in start else ""
+                    end = "\n " + end if "/*" in start else ""
+                    return f"{start}{joined_lines}{end}"
 
             else:  # Line Style
                 if stripped_text.startswith(d):

@@ -16,6 +16,7 @@ This module is private to the comment normalization rule and may change without 
 """
 
 import re
+import textwrap
 
 from ....node import Node
 
@@ -337,7 +338,10 @@ def _get_label_and_context(node: Node, words: int) -> tuple[str, str]:
             j = ", "
             return label, f"'{j.join(operands)}'"
 
-    return label, " ".join(_get_values_for_context(node)[:1])
+    context = " ".join(context_values[:1])
+    if context in ["f'", "'", 'f"', '"']:
+        context = "string"
+    return label, context
 
 
 def _label_contains(node: Node, text: str) -> bool:
@@ -491,8 +495,13 @@ def _replace_context_mapping(node: Node, ancestor: Node) -> str:
         elif n != node and n.end_point[0] == start_row:
             on_same_row += 1
 
+    if not node.text:
+        text = node.children[1].text
+    else:
+        text = node.text
+
     search_row: int = start_row if on_same_row > 0 else end_row + 1
-    words: int = len(re.findall(r"\w+", node.text)) if node.text else 0
+    words: int = len(re.findall(r"\w+", text)) if text else 0
 
     comment_template = (
         _get_comment_template(node.semantic_label, words)
@@ -507,4 +516,6 @@ def _replace_context_mapping(node: Node, ancestor: Node) -> str:
     else:
         template = comment_template["todo"]
 
-    return template.format(context=context)
+    new_text = template.format(context=context)
+
+    return new_text

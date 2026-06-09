@@ -38,10 +38,8 @@ class TestReplaceFormatOnly:
 
         assert (
             _replace_format_only(node, node)
-            == """
-    This function computes DE between kh_i and kh_j.
-    Result must be >= 0.
-    """
+            == """This function computes DE between kh_i and kh_j.
+    Result must be >= 0."""
         )
 
     def test_block_comment_normalizes_newlines_and_symbols(self):
@@ -51,7 +49,7 @@ class TestReplaceFormatOnly:
             "block_comment",
         )
 
-        assert _replace_format_only(node, node) == "\n hello,\nworld!\n"
+        assert _replace_format_only(node, node) == "hello,\nworld!"
 
     def test_line_comment_normalizes_emojis_and_punctuation(self):
         node = _make_node("line_comment", "// Hi there 😀!", "line_comment")
@@ -83,7 +81,7 @@ class TestReplaceFormatOnly:
             "block_comment",
         )
 
-        assert _replace_format_only(node, node) == "\n build-step_value, ready\n"
+        assert _replace_format_only(node, node) == "build-step_value, ready"
 
     def test_empty_comment_text_returns_empty_string(self):
         node = _make_node("line_comment", "", "line_comment")

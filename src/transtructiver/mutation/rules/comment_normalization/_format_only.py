@@ -7,7 +7,7 @@ from unidecode import unidecode
 
 from ....node import Node
 
-_LINE_DELIMITERS = ("//", "#", "--")
+_LINE_DELIMITERS = ("//", "#")
 _BLOCK_DELIMITERS = (("/**", "*/"), ("/*", "*/"), ('"""', '"""'), ("'''", "'''"))
 
 
@@ -47,9 +47,9 @@ def _normalize_written_content(text: str, preserve_leading: bool = False) -> str
     lines = text.split("\n")
     normalized_lines = [_normalize_line(line) for line in lines]
     new_text = "\n".join(normalized_lines)
-    new_text = re.sub(r"\n+", "\n", new_text)
+    new_text = re.sub(r"^\n+", "\n", new_text)
 
-    return new_text.rstrip()
+    return new_text.strip()
 
 
 def _replace_format_only(node: Node, _ancestor: Node) -> str:
@@ -59,7 +59,7 @@ def _replace_format_only(node: Node, _ancestor: Node) -> str:
             return ""
 
     if node.semantic_label == "block_comment" and len(node.children) > 0:
-        new_text = "".join(n.text for n in node.children if n.text)
+        new_text = "".join(n.text for n in node.children if n.text).lstrip()
     else:
         new_text = node.text if node.text else ""
 
@@ -68,13 +68,13 @@ def _replace_format_only(node: Node, _ancestor: Node) -> str:
     if label.startswith("line_"):
         for delimiter in _LINE_DELIMITERS:
             if new_text.startswith(delimiter):
-                return _normalize_written_content(new_text[len(delimiter) :].lstrip())
+                return _normalize_written_content(new_text[len(delimiter) :])
 
     if label.startswith("block_"):
         for start, end in _BLOCK_DELIMITERS:
             if new_text.startswith(start) and new_text.endswith(end):
                 content = new_text[len(start) : -len(end)]
-                indent = node.start_point[1]
-                return f"\n{' ' * indent}{_normalize_written_content(content, preserve_leading=True)}\n{' ' * indent}"
+
+                return _normalize_written_content(content, preserve_leading=True)
 
     return new_text

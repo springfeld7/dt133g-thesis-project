@@ -10,6 +10,7 @@ Each modification generates a MutationRecord capturing the original coordinates
 and content of the comment for downstream verification and manifest generation.
 """
 
+import textwrap
 from typing import List
 
 from ....utils.scope_manager import ScopeManager
@@ -33,8 +34,16 @@ class CommentNormalizationRule(MutationRule):
 
     # Comment markers of supported programming languages
     _DELIMITERS = {
-        "line_comment": ["//", "#", "--"],
-        "block_comment": [("/**", "*/"), ("/*", "*/"), ('"""', '"""'), ("'''", "'''")],
+        "line_comment": {
+            "java": "//",
+            "cpp": "//",
+            "python": "#",
+        },
+        "block_comment": {
+            "java": [("/**", "*/"), ("/*", "*/")],
+            "cpp": [("/**", "*/"), ("/*", "*/")],
+            "python": [('"""', '"""'), ("'''", "'''")],
+        },
     }
 
     # Semantic labels that introduce a fresh naming scope during traversal.
@@ -98,6 +107,28 @@ class CommentNormalizationRule(MutationRule):
 
         return self._replacer.get_replacement(node, ancestor)
 
+    def _resolve_delimiters(self, node: Node, label: str, language: str) -> str | tuple:
+        all_delimiters = self._DELIMITERS.get(label)
+
+        if not all_delimiters or not language in all_delimiters:
+            return ""
+
+        all_dels = all_delimiters[language]
+
+        for t in all_dels:
+            if isinstance(t, tuple):
+                if len(node.children) > 0:
+                    n = node.children[0].text
+                    if n and n.startswith(t[0]):
+                        return t
+                else:
+                    if node.text and node.text.startswith(t[0]):
+                        return t
+            else:
+                return all_dels
+
+        return ""
+
     def apply(self, root: Node, context: MutationContext) -> List[MutationRecord]:
         """Apply the CommentNormalization mutation rule to the CST.
 
@@ -151,21 +182,18 @@ class CommentNormalizationRule(MutationRule):
                     stack.append((child, False))
                 continue
 
-            label = node.semantic_label
-            delimiters = self._DELIMITERS.get(label) if label else None
+            label = node.semantic_label if node.semantic_label else ""
+            delimiters = self._resolve_delimiters(node, label, language)
 
             if delimiters:
-                # Handle nested block comments (needed for Python triple-quoted docstrings)
+                new_text = self._resolve_content(node)
+                new_text = self._format(node, new_text, delimiters)
+
                 if len(node.children) > 0:
-                    for sub in node.children:
-                        if sub.type == "string_content":
-                            new_text = self._resolve_content(node)
-                            if new_text == node.text:
-                                continue
-                            records.append(self._update_text(sub, new_text))
-                # Handle leaf node comments (line comments or block comments without nested content)
-                else:
-                    new_text = self._format(node, delimiters)
+                    if new_text == node.children[1].text:
+                        continue
+                    records.append(self._update_text(node.children[1], new_text))
+                elif node.text:
                     if new_text == node.text:
                         continue
                     records.append(self._update_text(node, new_text))
@@ -176,7 +204,7 @@ class CommentNormalizationRule(MutationRule):
         self._scope.reset()
         return records
 
-    def _format(self, node: Node, delimiters: list) -> str:
+    def _format(self, node: Node, text: str, delimiters) -> str:
         """Replaces text while preserving comment delimiters.
 
         This method checks the provided text against known comment delimiters and
@@ -190,35 +218,27 @@ class CommentNormalizationRule(MutationRule):
         Returns:
             str: The normalized comment text with original delimiters and replaced content.
         """
-        if not node.text:
-            return ""
+        if isinstance(delimiters, tuple):  # Block Style
+            start, end = delimiters
 
-        new_text = self._resolve_content(node)
+            indent = (
+                (node.start_point[1] + len(start))
+                if "*" in start
+                else node.children[0].start_point[1]
+            )
+            if text.startswith("* "):
+                indent -= 1
 
-        stripped_text = node.text.strip()
-        for d in delimiters:
-            if isinstance(d, tuple):  # Block Style
-                start, end = d
+            if len(text.splitlines()) == 1 and len(text) > 70:
+                text = "\n".join(textwrap.wrap(text, subsequent_indent=" " * indent))
 
-                if stripped_text.startswith(start) and stripped_text.endswith(end):
-                    lines = new_text.splitlines()
-                    new_lines = []
-                    prefix = " *" if "**" in start else ""
+            if len(node.children) > 0:
+                return f"\n{' ' * indent}{text}\n{' ' * indent}"
+            else:
+                return f"{start}\n{' ' * indent}{text}\n{' ' * indent}{end}"
 
-                    for line in lines:
-                        if len(line) > 0:
-                            new_lines.append(f"{prefix}{line}")
-
-                    joined_lines = "\n".join(new_lines)
-                    start += "\n" if "/*" in start else ""
-                    end = "\n " + end if "/*" in start else ""
-                    return f"{start}{joined_lines}{end}"
-
-            else:  # Line Style
-                if stripped_text.startswith(d):
-                    return f"{d} {new_text}"
-
-        return node.text
+        else:  # Line Style
+            return f"{delimiters} {text}"
 
     def _update_text(self, node: Node, new_text: str) -> MutationRecord:
         """Updates the text of a node and returns a MutationRecord describing the change.

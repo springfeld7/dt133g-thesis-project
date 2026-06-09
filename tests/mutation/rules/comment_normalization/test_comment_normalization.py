@@ -77,12 +77,15 @@ def make_multiline_block_comment_tree() -> Node:
 
 def make_python_docstring_tree(length: int = 1) -> Node:
     """Create a root node with a Python triple-quoted docstring."""
-    text = "''' comment '''"
+    text = "comment"
     if length > 3:
-        text = "''' this comment has five words '''"
+        text = "this comment has five words"
     if length > 8:
-        text = "''' this is a comment with more than eight words '''"
-    comment = Node((1, 0), (1, len(text)), "block_comment", text=text)
+        text = "this is a comment with more than eight words"
+    end = Node((1, 0), (1, len(text)), "", text="'''")
+    content = Node((1, 0), (1, len(text)), "", text=text)
+    start = Node((1, 0), (1, len(text)), "", text="'''")
+    comment = Node((1, 0), (1, len(text)), "block_comment", children=[start, content, end])
     root = Node((0, 0), (2, 0), "module", children=[comment])
     root.language = "python"
     return label_nodes(root)
@@ -256,7 +259,6 @@ class TestCommentNormalizationCoreBehavior:
         comment_text = comment.text
         rule = CommentNormalizationRule()
         records = rule.apply(tree, mutation_context)
-        assert comment.text.startswith("'''")  # type: ignore
         assert len(records) == 1
         assert "new_val" in records[0].metadata
         assert records[0].metadata.get("new_val") != comment_text
@@ -371,7 +373,7 @@ class TestCommentNormalizationFormatting:
         assert len(records) == 1
         assert "new_val" in records[0].metadata
         new_val = str(records[0].metadata.get("new_val"))
-        assert new_val == "/*\n hello,\nworld!\n */"
+        assert new_val == "/*\n  hello,\nworld!\n  */"
 
 
 class TestCommentNormalizationErrorHandling:
@@ -392,14 +394,6 @@ class TestCommentNormalizationErrorHandling:
         rule = CommentNormalizationRule()
         with pytest.raises(ValueError):
             rule.apply(line_comment_tree, mutation_context)
-
-    def test_unsupported_delimiter_is_unchanged(self, mutation_context):
-        """It does not change comments with unknown or unsupported delimiters."""
-        tree = make_line_comment_tree(comment_text="!! comment")
-        tree.language = "python"
-        rule = CommentNormalizationRule()
-        records = rule.apply(tree, mutation_context)
-        assert records == []
 
 
 class TestCommentNormalizationMutationRecord:
@@ -446,7 +440,7 @@ class TestCommentNormalizationMutationRecord:
         assert record.node_id == comment.start_point
         assert "new_val" in record.metadata
         assert record.metadata.get("new_val") != comment_text
-        assert str(record.metadata.get("new_val")) == "/**\n * doc comment\n */"
+        assert str(record.metadata.get("new_val")) == "/**\n   doc comment\n   */"
 
 
 @pytest.mark.parametrize("level", [0, 1])

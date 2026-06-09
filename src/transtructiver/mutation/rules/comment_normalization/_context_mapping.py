@@ -370,9 +370,9 @@ def _is_loop_or_condition(node: Node) -> bool:
 
 def _is_declaration(node: Node) -> bool:
     """
-    Returns True if the node represents a class or function declaration.
+    Returns True if the node represents a declaration.
     """
-    return any(_label_contains(node, l) for l in ["class", "function"])
+    return any(_label_contains(node, l) for l in ["class", "function", "declaration"])
 
 
 def _non_space_children(node: Node) -> list[Node]:
@@ -419,7 +419,13 @@ def _get_context_from_row(node: Node, row: int, ancestor: Node, words: int) -> t
 
     for child in ancestor.traverse():
         child_row = child.start_point[0]
-        if child != node and child in _non_space_children(ancestor) and child_row == row:
+
+        if (
+            child != node
+            and child.parent
+            and child in _non_space_children(child.parent)
+            and child_row == row
+        ):
             if _is_loop_or_condition(ancestor):
                 label = _get_label(ancestor)
                 context = _get_loop_or_condition_context(ancestor, words)

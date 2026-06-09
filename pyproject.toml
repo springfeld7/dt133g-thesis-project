@@ -20,11 +20,13 @@ dependencies = [
     "tree-sitter-cpp>=0.23.4",
     "tree-sitter-java>=0.23.5",
     "tree-sitter-python>=0.25.0",
+    "unidecode>=1.4.0",
 ]
 
 [project.scripts]
 transtructiver = "transtructiver:main"
 cli = "transtructiver.cli:main"
+mutate = "transtructiver.mutate:main"
 
 [tool.black]
 line-length = 100

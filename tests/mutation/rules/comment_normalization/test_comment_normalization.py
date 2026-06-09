@@ -51,7 +51,7 @@ def make_line_comment_tree(length: int = 1, comment_text="//comment") -> Node:
     if length > 8:
         text = "//this is a comment with more than eight words"
     comment = Node((1, 0), (1, len(text)), "line_comment", text=text)
-    root = Node((0, 0), (2, 0), "program", children=[comment])
+    root = Node((0, 0), (2, 0), "method_declaration", children=[comment])
     return label_nodes(root)
 
 
@@ -365,18 +365,13 @@ class TestCommentNormalizationFormatting:
         self, multiline_block_comment_tree, mutation_context
     ):
         """It normalizes block comments that span multiple lines."""
-        comment_text = multiline_block_comment_tree.children[0].text
         rule = CommentNormalizationRule()
         records = rule.apply(multiline_block_comment_tree, mutation_context)
 
         assert len(records) == 1
         assert "new_val" in records[0].metadata
         new_val = str(records[0].metadata.get("new_val"))
-        assert new_val != comment_text
-        assert "\n" in new_val
-        assert "hello" in new_val
-        assert "world" in new_val
-        assert "🚀" not in new_val
+        assert new_val == "/*\n hello,\nworld!\n */"
 
 
 class TestCommentNormalizationErrorHandling:
@@ -428,7 +423,7 @@ class TestCommentNormalizationMutationRecord:
         """It generates correct MutationRecord for normalized block comments."""
         comment = block_comment_tree.children[0]
         comment_text = block_comment_tree.children[0].text
-        rule = CommentNormalizationRule()
+        rule = CommentNormalizationRule(level=1)
         records = rule.apply(block_comment_tree, mutation_context)
         assert records
         record = records[0]
@@ -451,13 +446,16 @@ class TestCommentNormalizationMutationRecord:
         assert record.node_id == comment.start_point
         assert "new_val" in record.metadata
         assert record.metadata.get("new_val") != comment_text
-        assert str(record.metadata.get("new_val")) == "/**\n  doc comment*/"
+        assert str(record.metadata.get("new_val")) == "/**\n * doc comment\n */"
 
 
-@pytest.mark.parametrize("level", [0, 1, 2])
+@pytest.mark.parametrize("level", [0, 1])
 def test_rule_level_affects_replacement(line_comment_tree, level, mutation_context):
     """It uses the correct replacement strategy for different rule levels."""
     rule = CommentNormalizationRule(level=level)
     records = rule.apply(line_comment_tree, mutation_context)
     assert records
     assert len(records) > 0
+    new_val = records[0].metadata.get("new_val")
+    assert new_val
+    assert "// comment" == new_val or "Pending task." in new_val

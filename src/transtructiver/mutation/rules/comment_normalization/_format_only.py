@@ -2,7 +2,8 @@
 
 import re
 import unicodedata
-import textwrap
+
+from unidecode import unidecode
 
 from ....node import Node
 
@@ -10,50 +11,45 @@ _LINE_DELIMITERS = ("//", "#", "--")
 _BLOCK_DELIMITERS = (("/**", "*/"), ("/*", "*/"), ('"""', '"""'), ("'''", "'''"))
 
 
-def _is_normalized_character(character: str) -> bool:
-    """Allow letters, numbers, whitespace, and ordinary punctuation."""
-    if character in {"\ufe0f", "\u200d"}:
-        return False
-
-    category = unicodedata.category(character)
-    return category.startswith(("L", "N", "P")) or character.isspace()
-
-
 def _normalize_written_content(text: str, preserve_leading: bool = False) -> str:
-    """Remove non-text symbols and normalize spacing while preserving newlines.
+    """Normalize unicode and spacing"""
 
-    If `preserve_leading` is True, leading whitespace on each non-empty line
-    is preserved (useful for block comments where indentation matters).
-    """
+    def normalize_unicode(s: str) -> str:
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(unidecode(c) for c in s)
+        s = "".join(c for c in s if not unicodedata.combining(c))
+        return s
 
     def _normalize_line(line: str) -> str:
-        without_symbols = "".join(
-            character for character in line if _is_normalized_character(character)
-        )
-        normalized = re.sub(r"\s+", " ", without_symbols).strip()
-        punct_normalized = re.sub(r"\s+([!?.,;:)\]\}])", r"\1", normalized)
+        original = line
+        line = normalize_unicode(line)
+        line = re.sub(r"[\u200B-\u200D\uFEFF\\]", "", line)
+        line = re.sub(r"(\s+:)|(:{3,})", ":", line)
+        line = re.sub(r"(\s+;)|(;{2,})", ";", line)
+        line = re.sub(r"(\s+!)|(!{2,})", "!", line)
+        line = re.sub(r"(\s+\?)|(\?{2,})", "?", line)
+        line = re.sub(r"\s+", " ", line)
+        line = re.sub(r"[-+,.]{2,}", "", line)
+        line = re.sub(r"[-=+,.]{3,}", "", line)
+        line = re.sub(r"^\s+[-=+,.]+$", "", line)
 
         if preserve_leading:
-            leading = re.match(r"^(\s*)", line)
-            leading_text = leading.group(1) if leading else ""
-            if not punct_normalized:
-                return f"{leading_text}"
-            return f"{leading_text}{punct_normalized}"
+            m = re.match(r"^(\s*)", original)
+            leading = m.group(1) if m else ""
+            stripped = line.strip()
+            return leading + stripped
+        else:
+            stripped = line.strip()
+            line = stripped if stripped else ""
 
-        if not punct_normalized:
-            return ""
+        return line
 
-        return punct_normalized
-
-    if preserve_leading:
-        lines = text.split("\n")
-    else:
-        lines = [text]
-    if len(lines) <= 1:
-        return _normalize_line(text)
-
+    lines = text.split("\n")
     normalized_lines = [_normalize_line(line) for line in lines]
-    return "\n".join(line for line in normalized_lines if line)
+    new_text = "\n".join(normalized_lines)
+    new_text = re.sub(r"\n+", "\n", new_text)
+
+    return new_text.rstrip()
 
 
 def _replace_format_only(node: Node, _ancestor: Node) -> str:
@@ -78,9 +74,9 @@ def _replace_format_only(node: Node, _ancestor: Node) -> str:
         for start, end in _BLOCK_DELIMITERS:
             if new_text.startswith(start) and new_text.endswith(end):
                 content = new_text[len(start) : -len(end)]
-                indent = node.parent.start_point[1] if node.parent else 0
-                return (
-                    f"\n{' ' * indent}{_normalize_written_content(content, preserve_leading=True)}"
-                )
+                print(f"Content: {content}")
+                indent = node.start_point[1]
+                print(indent)
+                return f"\n{' ' * indent}{_normalize_written_content(content, preserve_leading=True)}\n{' ' * indent}"
 
     return new_text

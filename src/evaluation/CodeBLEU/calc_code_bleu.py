@@ -25,7 +25,7 @@ from . import dataflow_match
 # args = parser.parse_args()
 
 
-def calc_code_bleu(original_code: list[str], mutated_code: str, language: str) -> dict[str, float]:
+def calc_code_bleu(original_code, mutated_code, language) -> dict[str, float]:
     """
     Calculates the CodeBLEU metric score for a single prediction snippet
     against a list of valid reference code snippets.
@@ -44,13 +44,29 @@ def calc_code_bleu(original_code: list[str], mutated_code: str, language: str) -
     params = "0.25,0.25,0.25,0.25"
     alpha, beta, gamma, theta = [float(x) for x in params.split(",")]
 
-    # Preprocess inputs as clean, monolithic text blocks
+    # preprocess inputs
+    # pre_references = [
+    #     [x.strip() for x in open(file, "r", encoding="utf-8").readlines()] for file in args.refs
+    # ]
+    references = [[original_code.strip()]]
+    # hypothesis = [x.strip() for x in open(args.hyp, "r", encoding="utf-8").readlines()]
     hypothesis = [mutated_code.strip()]
-    references = [[ref.strip() for ref in original_code]]
 
-    # Clean whitespace tokenization for standard n-gram matching
+    # for i in range(len(pre_references)):
+    #     assert len(hypothesis) == len(pre_references[i])
+
+    # references = []
+
+    # for i in range(len(hypothesis)):
+    #     ref_for_instance = []
+    #     for j in range(len(pre_references)):
+    #         ref_for_instance.append(pre_references[j][i])
+    #     references.append(ref_for_instance)
+    # assert len(references) == len(pre_references) * len(hypothesis)
+
+    # calculate ngram match (BLEU)
     tokenized_hyps = [x.split() for x in hypothesis]
-    tokenized_refs = [[x.split() for x in reference] for reference in references]
+    tokenized_refs = [[x.split() for x in ref] for ref in references]
 
     ngram_match_score = bleu.corpus_bleu(tokenized_refs, tokenized_hyps)
 
@@ -97,57 +113,3 @@ def calc_code_bleu(original_code: list[str], mutated_code: str, language: str) -
         "syntax_match_score": float(syntax_match_score),
         "dataflow_match_score": float(dataflow_match_score),
     }
-
-
-def calc_dataset_average_codebleu(
-    references: list[str], predictions: list[str], lang: str
-) -> dict[str, float]:
-    """
-    Computes CodeBLEU for each 1:1 pair individually and returns the arithmetic mean.
-
-    Args:
-        references (list[str]): List of original code snippets.
-        predictions (list[str]): List of mutated code snippets (must align 1:1 with references).
-        lang (str): Target language string ('python').
-
-    Returns:
-        dict[str, float]: The average of all sub-scores across the dataset.
-    """
-    assert len(references) == len(predictions), "Data arrays must be a strict 1:1 length match."
-
-    total_scores = {
-        "codebleu": 0.0,
-        "ngram_match_score": 0.0,
-        "weighted_ngram_match_score": 0.0,
-        "syntax_match_score": 0.0,
-        "dataflow_match_score": 0.0,
-    }
-
-    successful_pairs = 0
-
-    for ref_snippet, pred_snippet in zip(references, predictions):
-        try:
-            pair_score = calc_code_bleu(
-                original_code=[ref_snippet], mutated_code=pred_snippet, language=lang
-            )
-
-            # Extract scores from the print/return layout of your single function
-            total_scores["codebleu"] += pair_score["codebleu"]
-            total_scores["ngram_match_score"] += pair_score["ngram_match_score"]
-            total_scores["weighted_ngram_match_score"] += pair_score["weighted_ngram_match_score"]
-            total_scores["syntax_match_score"] += pair_score["syntax_match_score"]
-            total_scores["dataflow_match_score"] += pair_score["dataflow_match_score"]
-
-            successful_pairs += 1
-
-        except Exception as e:
-            # If a mutation creates completely invalid syntax that tree-sitter crashes on,
-            # we log it and keep going so the whole notebook doesn't die.
-            print(f"Skipping a pair due to processing error: {e}")
-            continue
-
-    if successful_pairs == 0:
-        return {k: 0.0 for k in total_scores}
-
-    # Calculate final arithmetic mean
-    return {metric: total / successful_pairs for metric, total in total_scores.items()}

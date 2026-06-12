@@ -1,7 +1,14 @@
 import json
+import re
 import pandas as pd
+from tqdm import tqdm
+
+from ..transtructiver.mutation.rules.comment_deletion import CommentDeletionRule
+from transtructiver.parsing.parser import Parser
+from transtructiver.mutation.mutation_engine import MutationEngine
 
 from .CodeBLEU.calc_code_bleu import calc_code_bleu
+from .CodeBLEU.parser.utils import remove_comments_and_docstrings
 from .varclr.models.encoders import Encoder
 
 
@@ -30,21 +37,76 @@ def get_varsim_score(manifest_path: str = "output/manifest.jsonl"):
                 model.score(originals, renamed)
 
 
-def get_code_bleu_score(parquet_path: str = "output/augmented_dataset.parquet"):
+def collapse_to_one_line(code: str, lang: str) -> str:
+    if lang == "python":
+        code = code.replace("\n", ";")
+    else:
+        code = code.replace("\n", " ")
+    return code
+
+
+def strip_cpp_imports(code):
+    cleaned = []
+    for line in code.split("\n"):
+        s = line.strip()
+        if s.startswith("#include"):
+            continue
+        if s.startswith("#define"):
+            continue
+        if s.startswith("#ifdef") or s.startswith("#ifndef") or s.startswith("#endif"):
+            continue
+        if s.startswith("using namespace"):
+            continue
+        if s.startswith("using std::"):
+            continue
+        cleaned.append(line)
+    return "\n".join(cleaned)
+
+
+def get_code_bleu_score(parquet_path):
     """Compute CodeBLEU per language from the augmented dataset parquet file."""
-    df: pd.DataFrame = pd.read_parquet(parquet_path)
+    df = pd.read_parquet(parquet_path)
+    tier = parquet_path.parent.name
+    dataset_name = parquet_path.parent.parent.name
 
-    lang_original_df: pd.Series[list[str]] = df.groupby("language").apply(
-        lambda x: x["original_code"].to_list()
-    )
-    lang_mutated_df: pd.Series[list[str]] = df.groupby("language").apply(
-        lambda x: x["mutated_code"].to_list()
-    )
+    results = []
+    no_data_flow = []
 
-    for lang in lang_original_df.keys():
-        original_df: list[str] | None = lang_original_df.get(lang)
-        mutated_df: list[str] | None = lang_mutated_df.get(lang)
+    for row in tqdm(
+        df.itertuples(),
+        total=len(df),
+        desc=f"Scoring snippets [{dataset_name.replace('_', '-').upper()} - {tier.replace('_', ' ').title()}]",
+    ):
+        try:
+            ref_lines = remove_comments_and_docstrings(str(row.original_code), str(row.language))
+            hyp_lines = remove_comments_and_docstrings(str(row.mutated_code), str(row.language))
+        except Exception as e:
+            no_data_flow.append(row)
+            ref_lines = str(row.original_code)
+            hyp_lines = str(row.mutated_code)
 
-        if original_df and mutated_df:
-            for idx, code in enumerate(original_df):
-                calc_code_bleu([code], mutated_df[idx], lang)
+        if row.language == "cpp":
+            ref_lines = strip_cpp_imports(ref_lines)
+            hyp_lines = strip_cpp_imports(hyp_lines)
+
+        ref_one_line = collapse_to_one_line(ref_lines, str(row.language))
+        hyp_one_line = collapse_to_one_line(hyp_lines, str(row.language))
+
+        scores = calc_code_bleu(ref_one_line, hyp_one_line, str(row.language))
+
+        if scores.get("dataflow_match_score") == 0:
+            no_data_flow.append(row)
+
+        res = {
+            "dataset": dataset_name,
+            "tier": tier,
+            "snippet_id": str(row.snippet_id),
+            "language": str(row.language),
+        }
+
+        for k, v in scores.items():
+            res[k] = str(v)
+
+        results.append(res)
+
+    return results, no_data_flow

@@ -4,8 +4,8 @@ Step 08 of experiments: Transform a single tier using a 'leave‑one‑out' abla
 
 """
 
-from ..preprocessing.utils import env_init
-from ..preprocessing.utils.resource_manager import ResourceManager
+from .utils import env_init
+from .utils.resource_manager import ResourceManager
 from pathlib import Path
 import subprocess
 
@@ -16,8 +16,6 @@ import subprocess
 
 INPUT_DIR = Path("data/_06_generated_splits")
 BASE_OUTPUT_DIR = Path("data/transformations")
-
-PYTHON_CMD = "python"
 
 # -----------------------------
 # EXPERIMENT MATRIX

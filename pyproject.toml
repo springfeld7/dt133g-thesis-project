@@ -46,6 +46,7 @@ step04 = "preprocessing._04_extract_stats:run_step_04"
 step05 = "preprocessing._05_filter_datasets:run_step_05"
 step06 = "preprocessing._06_generate_splits:run_step_06"
 step07 = "preprocessing._07_map_gradient:main"
+step08 = "preprocessing._08_ablation_single_tier:main"
 
 [tool.black]
 line-length = 100
